@@ -6,12 +6,10 @@ export default function Hero() {
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_20%,rgba(122,6,56,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(0,0,0,0.05),transparent_30%)]" />
       <div className="relative max-w-4xl mx-auto text-center space-y-4">
         <p className="text-sm font-semibold text-[#7a0638] uppercase tracking-wide">Connectura</p>
-        <h1 className="text-4xl md:text-5xl font-bold leading-tight">
+        <h1 className="text-3xl md:text-4xl font-bold leading-snug">
           Need an insurance agent who speaks your language?
           <br />
-          We’ll find the right match near you.
-          <br />
-          Start chatting, calling, or video-calling a licensed pro today.
+          We’ll match you nearby for chat, call, or video today.
         </h1>
         <p className="text-slate-700 text-lg">
           Search by language, state, or name. Start a voice/video call and co-create your insurance profile together.
