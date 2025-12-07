@@ -7,17 +7,21 @@ export default function Hero() {
       <div className="relative max-w-4xl mx-auto text-center space-y-4">
         <p className="text-sm font-semibold text-[#7a0638] uppercase tracking-wide">Connectura</p>
         <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-          Match with bilingual, licensed agents and build your insurance profile together.
+          Need an insurance agent who speaks your language?
+          <br />
+          We’ll find the right match near you.
+          <br />
+          Start chatting, calling, or video-calling a licensed pro today.
         </h1>
         <p className="text-slate-700 text-lg">
-          Search by language, state, or name. Start a voice/video call and co-create your profile together.
+          Search by language, state, or name. Start a voice/video call and co-create your insurance profile together.
         </p>
         <div className="flex flex-wrap justify-center gap-3 pt-2">
           <Link className="rounded-full bg-[#7a0638] text-white px-6 py-3 font-semibold shadow hover:bg-[#5f042c]" to="/agents">
             Find an agent
           </Link>
           <Link className="rounded-full border border-[#7a0638]/20 px-6 py-3 font-semibold text-[#7a0638] hover:bg-white" to="/profile/create">
-            Create profile
+            Create Insurance Profile
           </Link>
         </div>
       </div>

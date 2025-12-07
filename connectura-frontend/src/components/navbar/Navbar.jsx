@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import AuthModal from './AuthModal'
-import toast from 'react-hot-toast'
 
 export default function Navbar() {
-  const { user, logout } = useAuth()
-  const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -33,32 +28,17 @@ export default function Navbar() {
 
           <nav className="hidden items-center gap-5 text-sm md:flex">
             <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]">
-              Agents
+              Find Agents
             </Link>
             <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]">
-              Profile builder
+              Build Your Insurance Profile
             </Link>
-            <Link to="/dashboard" className="text-slate-700 hover:text-[#7a0638]">
-              Dashboard
+            <Link to="/careers" className="text-slate-700 hover:text-[#7a0638]">
+              For Agents
             </Link>
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600 hidden lg:inline">{user.email}</span>
-                <button
-                  onClick={() => {
-                    logout()
-                    toast.success('Logged out')
-                  }}
-                  className="rounded-full border border-slate-200 px-3 py-1.5 hover:border-[#7a0638]/40 hover:text-[#7a0638]"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setOpen(true)} className="rounded-full bg-[#7a0638] px-4 py-2 text-white shadow hover:bg-[#5f042c]">
-                Login / Sign up
-              </button>
-            )}
+            <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]">
+              About Us
+            </Link>
           </nav>
         </div>
 
@@ -66,41 +46,21 @@ export default function Navbar() {
           <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
               <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Agents
+                Find Agents
               </Link>
               <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Profile builder
+                Build Your Insurance Profile
               </Link>
-              <Link to="/dashboard" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Dashboard
+              <Link to="/careers" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
+                For Agents
               </Link>
-              {user ? (
-                <button
-                  onClick={() => {
-                    logout()
-                    toast.success('Logged out')
-                    setMenuOpen(false)
-                  }}
-                  className="rounded-full border border-slate-200 px-3 py-2 text-left hover:border-[#7a0638]/40 hover:text-[#7a0638]"
-                >
-                  Logout
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setOpen(true)
-                    setMenuOpen(false)
-                  }}
-                  className="rounded-full bg-[#7a0638] px-4 py-2 text-white shadow hover:bg-[#5f042c]"
-                >
-                  Login / Sign up
-                </button>
-              )}
+              <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
+                About Us
+              </Link>
             </div>
           </div>
         )}
       </header>
-      <AuthModal open={open} onClose={() => setOpen(false)} />
     </>
   )
 }
