@@ -1,0 +1,48 @@
+<div class="form-card">
+  <div class="card-title">Coverages &amp; Limits</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="gl-occ-limit"><span class="required">*</span> Each Occurrence Limit:</label>
+    <div class="field-control">
+      <select id="gl-occ-limit" name="gl-occ-limit">
+        <option value="">Select</option><option>$1,000,000</option><option>$2,000,000</option><option>$5,000,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-agg-limit"><span class="required">*</span> General Aggregate:</label>
+    <div class="field-control">
+      <select id="gl-agg-limit" name="gl-agg-limit">
+        <option value="">Select</option><option>$2,000,000</option><option>$4,000,000</option><option>$5,000,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-products-limit">Products/Completed Ops Aggregate:</label>
+    <div class="field-control"><input id="gl-products-limit" name="gl-products-limit" type="text" /></div>
+
+    <label class="field-label" for="gl-medpay">Medical Payments Limit:</label>
+    <div class="field-control">
+      <select id="gl-medpay" name="gl-medpay">
+        <option value="">Select</option><option>$5,000</option><option>$10,000</option><option>$25,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-deductible">Liability Deductible:</label>
+    <div class="field-control">
+      <select id="gl-deductible" name="gl-deductible">
+        <option value="">Select</option><option>$0</option><option>$1,000</option><option>$2,500</option><option>$5,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-ai">Additional Insureds / Waivers:</label>
+    <div class="field-control"><textarea id="gl-ai" name="gl-ai" rows="3" placeholder="List entities and form requirements"></textarea></div>
+
+    <label class="field-label" for="gl-tenant">Premises Exposure:</label>
+    <div class="field-control">
+      <select id="gl-tenant" name="gl-tenant">
+        <option value="">Select</option><option>Owner</option><option>Tenant</option><option>Mobile Operations</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-sqft">Total Area (sq ft):</label>
+    <div class="field-control"><input id="gl-sqft" name="gl-sqft" type="number" min="0" /></div>
+  </div>
+</div>

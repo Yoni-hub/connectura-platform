@@ -1,0 +1,45 @@
+<div class="form-card">
+  <div class="card-title">Coverage Selections</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="tr-trip-cancel"><span class="required">*</span> Trip Cancellation/Interruption Limit:</label>
+    <div class="field-control"><input id="tr-trip-cancel" name="tr-trip-cancel" type="number" min="0" placeholder="Usually equal to prepaid cost" /></div>
+
+    <label class="field-label" for="tr-med-limit"><span class="required">*</span> Travel Medical Limit:</label>
+    <div class="field-control">
+      <select id="tr-med-limit" name="tr-med-limit">
+        <option value="">Select</option><option>$50,000</option><option>$100,000</option><option>$250,000</option><option>$500,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="tr-evac">Emergency Evacuation:</label>
+    <div class="field-control">
+      <select id="tr-evac" name="tr-evac">
+        <option value="">Select</option><option>$100,000</option><option>$250,000</option><option>$500,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="tr-baggage">Baggage/Personal Effects:</label>
+    <div class="field-control"><input id="tr-baggage" name="tr-baggage" type="number" min="0" /></div>
+
+    <label class="field-label" for="tr-sports">Adventure Sports Coverage:</label>
+    <div class="field-control">
+      <select id="tr-sports" name="tr-sports">
+        <option value="">Select</option><option>Not Needed</option><option>Yes - include hazardous sports</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="tr-preexist">Pre-existing Condition Waiver within look-back?</label>
+    <div class="field-control">
+      <select id="tr-preexist" name="tr-preexist">
+        <option value="">Select</option><option>Yes - within waiver window</option><option>No</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="tr-primary">Primary or Excess Medical:</label>
+    <div class="field-control">
+      <select id="tr-primary" name="tr-primary">
+        <option value="">Select</option><option>Primary</option><option>Excess</option>
+      </select>
+    </div>
+  </div>
+</div>

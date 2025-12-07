@@ -1,0 +1,48 @@
+
+<div class="form-card">
+  <div class="card-title">Coverages</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="ho-dwelling"><span class="required">*</span> Dwelling Coverage:</label>
+    <div class="field-control"><input id="ho-dwelling" name="ho-dwelling" type="number" min="0" placeholder="250000" /></div>
+
+    <label class="field-label" for="ho-other-structures">Other Structures:</label>
+    <div class="field-control"><input id="ho-other-structures" name="ho-other-structures" type="number" min="0" placeholder="10% of dwelling" /></div>
+
+    <label class="field-label" for="ho-personal-property">Personal Property:</label>
+    <div class="field-control"><input id="ho-personal-property" name="ho-personal-property" type="number" min="0" placeholder="50% of dwelling" /></div>
+
+    <label class="field-label" for="ho-loss-of-use">Loss of Use:</label>
+    <div class="field-control"><input id="ho-loss-of-use" name="ho-loss-of-use" type="number" min="0" placeholder="20% of dwelling" /></div>
+
+    <label class="field-label" for="ho-liability"><span class="required">*</span> Personal Liability:</label>
+    <div class="field-control">
+      <select id="ho-liability" name="ho-liability">
+        <option value="">Select</option><option>$100,000</option><option>$300,000</option><option>$500,000</option><option>$1,000,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ho-medpay">Medical Payments:</label>
+    <div class="field-control">
+      <select id="ho-medpay" name="ho-medpay">
+        <option value="">Select</option><option>$1,000</option><option>$2,500</option><option>$5,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ho-deductible"><span class="required">*</span> Deductible:</label>
+    <div class="field-control">
+      <select id="ho-deductible" name="ho-deductible">
+        <option value="">Select</option><option>$500</option><option>$1,000</option><option>$2,500</option><option>$5,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ho-wind-deductible">Wind/Hail Deductible:</label>
+    <div class="field-control">
+      <select id="ho-wind-deductible" name="ho-wind-deductible">
+        <option value="">Select</option><option>1%</option><option>2%</option><option>5%</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ho-additional">Optional Coverages:</label>
+    <div class="field-control"><input id="ho-additional" name="ho-additional" type="text" placeholder="Water backup, jewelry, ordinance or law" /></div>
+  </div>
+</div>

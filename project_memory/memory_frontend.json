@@ -1,0 +1,8 @@
+{
+  "long_term_memory": "",
+  "messages": [],
+  "docs_index": {
+    "embedding_model": "text-embedding-3-small",
+    "chunks": []
+  }
+}

@@ -1,0 +1,87 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  role      String    @default("CUSTOMER")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  agent     Agent?
+  customer  Customer?
+}
+
+model Agent {
+  id           Int        @id @default(autoincrement())
+  userId       Int        @unique
+  name         String
+  bio          String
+  photo        String
+  languages    String
+  states       String
+  specialty    String
+  producerNumber String?
+  address        String?
+  zip            String?
+  products       String   @default("[]")
+  availability String
+  rating       Float
+  reviews      String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  customers    Customer[] @relation("AgentCustomers")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Customer {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @unique
+  name             String
+  preferredLangs   String
+  priorInsurance   String
+  coverages        String
+  sharedWithAgent  Boolean   @default(false)
+  preferredAgent   Agent?    @relation("AgentCustomers", fields: [preferredAgentId], references: [id])
+  preferredAgentId Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  drivers          Driver[]
+  vehicles         Vehicle[]
+  profileData      String    @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Driver {
+  id           Int      @id @default(autoincrement())
+  customerId   Int
+  name         String
+  licenseNo    String
+  birthDate    DateTime
+  relationship String
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Vehicle {
+  id         Int    @id @default(autoincrement())
+  customerId Int
+  year       Int
+  make       String
+  model      String
+  vin        String
+  primaryUse String
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}

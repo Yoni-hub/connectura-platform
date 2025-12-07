@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color: #0f172a;
+    background: #f5f1ed;
+  }
+
+  body {
+    @apply min-h-screen text-slate-900;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-image: linear-gradient(180deg, #f7f4f1 0%, #f2ede8 60%, #f7f4f1 100%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-slate-900;
+  }
+
+  a {
+    @apply text-[#0866ff] hover:text-[#0654d4];
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .surface {
+    @apply bg-white border border-slate-200 shadow-sm rounded-2xl;
+  }
+
+  .glass {
+    @apply surface;
+  }
+
+  .pill-btn {
+    @apply rounded-full px-4 py-2 text-sm font-semibold transition shadow-sm;
+  }
+
+  .pill-btn-primary {
+    @apply pill-btn bg-[#7a0638] text-white hover:bg-[#5f042c];
+  }
+
+  .pill-btn-ghost {
+    @apply pill-btn border border-slate-200 text-slate-700 hover:text-[#7a0638] hover:border-[#7a0638]/40;
+  }
+}

@@ -1,0 +1,27 @@
+
+<div class="form-card">
+  <div class="card-title">Loss History</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="ho-prior-carrier">Current/Last Carrier:</label>
+    <div class="field-control"><input id="ho-prior-carrier" name="ho-prior-carrier" type="text" /></div>
+
+    <label class="field-label" for="ho-prior-expiration">Expiration Date:</label>
+    <div class="field-control"><input id="ho-prior-expiration" name="ho-prior-expiration" type="date" /></div>
+
+    <label class="field-label" for="ho-claims"><span class="required">*</span> Any claims in past 5 years?</label>
+    <div class="field-control">
+      <select id="ho-claims" name="ho-claims">
+        <option value="">Select</option><option>No</option><option>Yes</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ho-claims-count">Number of claims:</label>
+    <div class="field-control"><input id="ho-claims-count" name="ho-claims-count" type="number" min="0" /></div>
+
+    <label class="field-label" for="ho-last-claim-date">Most recent claim date:</label>
+    <div class="field-control"><input id="ho-last-claim-date" name="ho-last-claim-date" type="date" /></div>
+
+    <label class="field-label" for="ho-claim-details">Claim details:</label>
+    <div class="field-control"><textarea id="ho-claim-details" name="ho-claim-details" rows="4" placeholder="Type of loss, amount paid, status"></textarea></div>
+  </div>
+</div>

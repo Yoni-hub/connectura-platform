@@ -1,0 +1,41 @@
+<div class="form-card">
+  <div class="card-title">Location &amp; Building Details</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="cp-location-name"><span class="required">*</span> Location Name/Number:</label>
+    <div class="field-control"><input id="cp-location-name" name="cp-location-name" type="text" /></div>
+
+    <label class="field-label" for="cp-address"><span class="required">*</span> Address:</label>
+    <div class="field-control"><input id="cp-address" name="cp-address" type="text" /></div>
+
+    <label class="field-label" for="cp-city"><span class="required">*</span> City:</label>
+    <div class="field-control"><input id="cp-city" name="cp-city" type="text" /></div>
+
+    <label class="field-label" for="cp-state"><span class="required">*</span> State:</label>
+    <div class="field-control"><input id="cp-state" name="cp-state" type="text" /></div>
+
+    <label class="field-label" for="cp-zip"><span class="required">*</span> Zip:</label>
+    <div class="field-control"><input id="cp-zip" name="cp-zip" type="text" /></div>
+
+    <label class="field-label" for="cp-occupancy"><span class="required">*</span> Occupancy:</label>
+    <div class="field-control"><input id="cp-occupancy" name="cp-occupancy" type="text" placeholder="Office, retail, warehouse, habitational, manufacturing" /></div>
+
+    <label class="field-label" for="cp-year-built"><span class="required">*</span> Year Built:</label>
+    <div class="field-control"><input id="cp-year-built" name="cp-year-built" type="number" min="1800" max="2100" /></div>
+
+    <label class="field-label" for="cp-stories">Stories:</label>
+    <div class="field-control"><input id="cp-stories" name="cp-stories" type="number" min="1" /></div>
+
+    <label class="field-label" for="cp-sqft"><span class="required">*</span> Total Square Footage:</label>
+    <div class="field-control"><input id="cp-sqft" name="cp-sqft" type="number" min="0" /></div>
+
+    <label class="field-label" for="cp-construction"><span class="required">*</span> Construction Type:</label>
+    <div class="field-control">
+      <select id="cp-construction" name="cp-construction">
+        <option value="">Select</option><option>Frame</option><option>Joisted Masonry</option><option>Non-Combustible</option><option>Masonry Non-Combustible</option><option>Modified Fire Resistive</option><option>Fire Resistive</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="cp-roof">Roof Type:</label>
+    <div class="field-control"><input id="cp-roof" name="cp-roof" type="text" placeholder="Metal, membrane, asphalt, tile" /></div>
+  </div>
+</div>

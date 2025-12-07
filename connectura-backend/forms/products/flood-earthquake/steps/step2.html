@@ -1,0 +1,33 @@
+<div class="form-card">
+  <div class="card-title">Building Details</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="fe-year-built"><span class="required">*</span> Year Built:</label>
+    <div class="field-control"><input id="fe-year-built" name="fe-year-built" type="number" min="1800" max="2100" /></div>
+
+    <label class="field-label" for="fe-stories">Number of Stories:</label>
+    <div class="field-control"><input id="fe-stories" name="fe-stories" type="number" min="1" /></div>
+
+    <label class="field-label" for="fe-foundation"><span class="required">*</span> Foundation Type:</label>
+    <div class="field-control">
+      <select id="fe-foundation" name="fe-foundation">
+        <option value="">Select</option><option>Slab</option><option>Crawlspace</option><option>Basement</option><option>Post/Pier</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="fe-construction">Construction:</label>
+    <div class="field-control"><input id="fe-construction" name="fe-construction" type="text" placeholder="Frame, masonry, steel, etc." /></div>
+
+    <label class="field-label" for="fe-basement">Basement?</label>
+    <div class="field-control">
+      <select id="fe-basement" name="fe-basement">
+        <option value="">Select</option><option>No</option><option>Yes - finished</option><option>Yes - unfinished</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="fe-replacement-cost">Replacement Cost:</label>
+    <div class="field-control"><input id="fe-replacement-cost" name="fe-replacement-cost" type="number" min="0" /></div>
+
+    <label class="field-label" for="fe-mitigation">Mitigation Features:</label>
+    <div class="field-control"><input id="fe-mitigation" name="fe-mitigation" type="text" placeholder="Flood vents, elevation, seismic retrofit, bracing, strapping" /></div>
+  </div>
+</div>

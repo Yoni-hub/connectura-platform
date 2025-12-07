@@ -1,0 +1,27 @@
+# Secrets and env
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+credentials*
+*secrets*
+config.local*
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# Node / build artifacts
+node_modules/
+dist/
+build/
+uploads/
+*.db
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

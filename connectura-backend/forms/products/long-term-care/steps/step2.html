@@ -1,0 +1,35 @@
+<div class="form-card">
+  <div class="card-title">Coverage Design</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="ltc-daily"><span class="required">*</span> Daily/Monthly Benefit:</label>
+    <div class="field-control"><input id="ltc-daily" name="ltc-daily" type="number" min="0" placeholder="e.g., $150 per day" /></div>
+
+    <label class="field-label" for="ltc-benefit-period"><span class="required">*</span> Benefit Period:</label>
+    <div class="field-control">
+      <select id="ltc-benefit-period" name="ltc-benefit-period">
+        <option value="">Select</option><option>2 Years</option><option>3 Years</option><option>5 Years</option><option>Lifetime</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ltc-elimination"><span class="required">*</span> Elimination Period:</label>
+    <div class="field-control">
+      <select id="ltc-elimination" name="ltc-elimination">
+        <option value="">Select</option><option>30 Days</option><option>60 Days</option><option>90 Days</option><option>180 Days</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ltc-inflation">Inflation Protection:</label>
+    <div class="field-control">
+      <select id="ltc-inflation" name="ltc-inflation">
+        <option value="">Select</option><option>None</option><option>3% Simple</option><option>3% Compound</option><option>5% Compound</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ltc-shared">Shared Care Benefit:</label>
+    <div class="field-control">
+      <select id="ltc-shared" name="ltc-shared">
+        <option value="">Select</option><option>Yes</option><option>No</option>
+      </select>
+    </div>
+  </div>
+</div>

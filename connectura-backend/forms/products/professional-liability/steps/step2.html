@@ -1,0 +1,37 @@
+<div class="form-card">
+  <div class="card-title">Coverage Details</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="pl-retro-date">Retroactive Date:</label>
+    <div class="field-control"><input id="pl-retro-date" name="pl-retro-date" type="date" /></div>
+
+    <label class="field-label" for="pl-limit"><span class="required">*</span> Limit of Liability:</label>
+    <div class="field-control">
+      <select id="pl-limit" name="pl-limit">
+        <option value="">Select</option><option>$1,000,000 / $1,000,000</option><option>$1,000,000 / $2,000,000</option><option>$2,000,000 / $2,000,000</option><option>$5,000,000</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="pl-deductible"><span class="required">*</span> Deductible/Retention:</label>
+    <div class="field-control"><input id="pl-deductible" name="pl-deductible" type="text" placeholder="$2,500 / $5,000 / $10,000" /></div>
+
+    <label class="field-label" for="pl-defense">Defense Costs:</label>
+    <div class="field-control">
+      <select id="pl-defense" name="pl-defense">
+        <option value="">Select</option><option>Inside Limits</option><option>Outside Limits</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="pl-contracts">Use of Engagement Letters/Contracts:</label>
+    <div class="field-control">
+      <select id="pl-contracts" name="pl-contracts">
+        <option value="">Select</option><option>Always</option><option>Most engagements</option><option>Rarely</option><option>Never</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="pl-clients">Key Client Industries:</label>
+    <div class="field-control"><input id="pl-clients" name="pl-clients" type="text" /></div>
+
+    <label class="field-label" for="pl-project-size">Largest Project/Engagement Value:</label>
+    <div class="field-control"><input id="pl-project-size" name="pl-project-size" type="number" min="0" /></div>
+  </div>
+</div>

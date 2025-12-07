@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Driver License Scanner</title>
+  <style>
+    :root {
+      --bg: #f6f4ef;
+      --panel: #ffffff;
+      --border: #c8c2b6;
+      --text: #2b2620;
+      --accent: #6b6257;
+      --muted: #6d6459;
+      --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(135deg, #f6f4ef 0%, #ede7da 100%);
+      color: var(--text);
+    }
+    .page {
+      max-width: 1080px;
+      margin: 32px auto;
+      padding: 0 18px 28px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 18px 20px;
+      box-shadow: var(--shadow);
+    }
+    h1 {
+      margin: 0 0 8px;
+      color: var(--accent);
+      letter-spacing: 0.2px;
+    }
+    p.lead {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    label {
+      font-weight: 600;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="file"] {
+      width: 100%;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid #9f9380;
+      background: #c6b9a2;
+      color: #1f1b17;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 6px;
+      min-width: 120px;
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    textarea, input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fbf9f4;
+      font-size: 14px;
+      color: var(--text);
+    }
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    .results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #efe8dc;
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px solid var(--border);
+      margin-left: 8px;
+    }
+    .status {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .hidden { display: none; }
+    .preview,
+    video.preview {
+      margin-top: 8px;
+      max-height: 260px;
+      width: 100%;
+      object-fit: cover;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      background: #fbf9f4;
+    }
+    .qr-box {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: #fbf9f4;
+      min-height: 210px;
+      width: 210px;
+      justify-content: center;
+    }
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    @media (max-width: 640px) {
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <h1>Driver License Scanner</h1>
+      <p class="lead">Upload a driver license photo, run OCR locally via open-source Tesseract.js, and extract key details with light heuristics.</p>
+      <div class="row">
+        <div>
+          <label for="videoPreview">Live Camera</label>
+          <video id="videoPreview" class="preview hidden" autoplay playsinline muted></video>
+          <canvas id="frameCanvas" class="hidden"></canvas>
+          <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn" id="startCamBtn" type="button">Start Camera</button>
+            <button class="btn" id="scanBtn" type="button">Capture &amp; Scan</button>
+          </div>
+        </div>
+        <div>
+          <label for="langCode">OCR Language (ISO code)</label>
+          <input type="text" id="langCode" value="eng" />
+          <small style="color: var(--muted);">Defaults to English; add traineddata to improve other locales.</small>
+        </div>
+      </div>
+      <div class="row" style="align-items: start;">
+        <div>
+          <label>Scan with your phone</label>
+          <div class="qr-box">
+            <div id="qrCode"></div>
+            <div id="qrLink" class="subtle"></div>
+          </div>
+          <label for="qrHost" class="subtle" style="margin-top: 8px; display:block;">Network host for QR</label>
+          <input type="text" id="qrHost" placeholder="e.g. 172.20.52.133:5080" style="width:100%; padding:8px; border:1px solid #c8c2b6; border-radius:6px; background:#fbf9f4;" />
+          <div class="subtle">Phone and PC must be on the same network.</div>
+        </div>
+        <div>
+          <label>Mobile upload → process here</label>
+          <button class="btn" id="fetchMobileBtn" type="button" style="margin-top: 6px;">Fetch last mobile upload &amp; scan</button>
+          <div class="subtle">1) Scan QR on phone, upload license.<br>2) Click this to pull the latest photo and extract.</div>
+        </div>
+      </div>
+      <div class="row" style="align-items: end;">
+        <div>
+          <span class="pill">Open Source: Tesseract.js MIT</span>
+        </div>
+      </div>
+      <div id="status" class="status"></div>
+      <div class="results">
+        <div class="field">
+          <label for="name">Name</label>
+          <input type="text" id="name" placeholder="Detected full name" />
+        </div>
+        <div class="field">
+          <label for="licenseNumber">License Number</label>
+          <input type="text" id="licenseNumber" placeholder="Detected license number" />
+        </div>
+        <div class="field">
+          <label for="dob">Date of Birth</label>
+          <input type="text" id="dob" placeholder="MM/DD/YYYY" />
+        </div>
+        <div class="field">
+          <label for="address">Address</label>
+          <textarea id="address" placeholder="Street, City, State, ZIP"></textarea>
+        </div>
+      </div>
+      <div class="field" style="margin-top: 14px;">
+        <label for="rawText">Raw OCR Text</label>
+        <textarea id="rawText" placeholder="Full OCR output"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Open source OCR (MIT): https://github.com/naptha/tesseract.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+  <script>
+    const video = document.getElementById('videoPreview');
+    const canvas = document.getElementById('frameCanvas');
+    const startCamBtn = document.getElementById('startCamBtn');
+    const scanBtn = document.getElementById('scanBtn');
+    const fetchMobileBtn = document.getElementById('fetchMobileBtn');
+    const qrCodeEl = document.getElementById('qrCode');
+    const qrLinkEl = document.getElementById('qrLink');
+    const qrHostInput = document.getElementById('qrHost');
+    const statusEl = document.getElementById('status');
+
+    const nameEl = document.getElementById('name');
+    const licEl = document.getElementById('licenseNumber');
+    const dobEl = document.getElementById('dob');
+    const addrEl = document.getElementById('address');
+    const rawEl = document.getElementById('rawText');
+    const langInput = document.getElementById('langCode');
+
+    let stream = null;
+
+    function setStatus(msg) {
+      statusEl.textContent = msg || '';
+    }
+
+    function parseText(text) {
+      const lines = text.split(/\\r?\\n/).map((l) => l.trim()).filter(Boolean);
+      const normalized = lines.map((l) => l.toUpperCase());
+      const result = { name: '', licenseNumber: '', dob: '', address: '' };
+
+      const dobRegexes = [
+        /(\\d{2}[\\/\\-]\\d{2}[\\/\\-]\\d{4})/,
+        /(\\d{4}[\\/\\-]\\d{2}[\\/\\-]\\d{2})/,
+      ];
+      for (const line of lines) {
+        for (const re of dobRegexes) {
+          const m = line.match(re);
+          if (m) { result.dob = m[1]; break; }
+        }
+        if (result.dob) break;
+      }
+
+      const licRegex = /\\b([A-Z0-9]{6,15})\\b/;
+      for (const line of lines) {
+        if (/DL|LIC|DLN|ID/.test(line.toUpperCase())) {
+          const m = line.match(licRegex);
+          if (m) { result.licenseNumber = m[1]; break; }
+        }
+      }
+      if (!result.licenseNumber) {
+        const allTokens = text.replace(/[^A-Z0-9\\n]/gi, ' ').split(/\\s+/);
+        const candidate = allTokens.find((t) => /^[A-Z0-9]{7,15}$/.test(t));
+        if (candidate) result.licenseNumber = candidate;
+      }
+
+      const addressIdx = normalized.findIndex((l) => l.includes('ADDR') || l.includes('ADDRESS'));
+      if (addressIdx >= 0) {
+        result.address = [lines[addressIdx + 1], lines[addressIdx + 2]].filter(Boolean).join(', ');
+      } else {
+        const zipLine = lines.find((l) => /\\b\\d{5}(?:-\\d{4})?\\b/.test(l));
+        if (zipLine) {
+          const idx = lines.indexOf(zipLine);
+          result.address = [lines[idx - 1], lines[idx]].filter(Boolean).join(', ');
+        }
+      }
+
+      const nameIdx = normalized.findIndex((l) => l.includes('FN') || l.includes('LN') || l.includes('NAM'));
+      if (nameIdx >= 0) {
+        result.name = lines[nameIdx + 1] || lines[nameIdx];
+      } else {
+        const candidate = lines.find((l) => /^[A-Z ,.'-]{5,}$/.test(l) && l.split(' ').length >= 2);
+        if (candidate) result.name = candidate;
+      }
+
+      return result;
+    }
+
+    function setBusy(on) {
+      scanBtn.disabled = on;
+      if (fetchMobileBtn) fetchMobileBtn.disabled = on;
+    }
+
+    async function runOcrOnBlob(blob, preStatus = 'Running OCR...') {
+      setBusy(true);
+      setStatus(preStatus);
+      try {
+        const { data: { text } } = await Tesseract.recognize(blob, langInput.value || 'eng', {
+          logger: ({ status, progress }) => {
+            if (status === 'recognizing text') {
+              setStatus(`Scanning: ${(progress * 100).toFixed(0)}%`);
+            } else {
+              setStatus(status);
+            }
+          },
+        });
+
+        rawEl.value = text.trim();
+        const parsed = parseText(text);
+        nameEl.value = parsed.name || '';
+        licEl.value = parsed.licenseNumber || '';
+        dobEl.value = parsed.dob || '';
+        addrEl.value = parsed.address || '';
+        setStatus('Done. Review and adjust any fields as needed.');
+      } catch (err) {
+        console.error(err);
+        alert('OCR failed. Try a clearer image and good lighting.');
+        setStatus('Error during OCR.');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function startCamera() {
+      try {
+        if (stream) {
+          setStatus('Camera already running.');
+          return;
+        }
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        setStatus('Camera ready. Frame and tap Capture & Scan.');
+      } catch (err) {
+        console.error(err);
+        alert('Camera access failed. Please allow camera permissions.');
+        setStatus('Could not start camera.');
+      }
+    }
+
+    async function grabFrameBlob() {
+      if (!video || video.readyState < 2) throw new Error('Camera not ready.');
+      const w = video.videoWidth || 1280;
+      const h = video.videoHeight || 720;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+      });
+    }
+
+    startCamBtn.addEventListener('click', startCamera);
+
+    scanBtn.addEventListener('click', async () => {
+      if (!stream) {
+        alert('Start the camera first, frame the license, then capture.');
+        return;
+      }
+      try {
+        const frameBlob = await grabFrameBlob();
+        await runOcrOnBlob(frameBlob, 'Capturing frame and running OCR...');
+      } catch (err) {
+        console.error(err);
+        alert('OCR failed. Try a clearer frame and ensure good lighting.');
+        setStatus('Error during OCR.');
+      }
+    });
+
+    async function fetchLastUpload() {
+      try {
+        setBusy(true);
+        setStatus('Fetching last mobile upload...');
+        const res = await fetch('/api/last-upload');
+        if (!res.ok) throw new Error('Fetch failed');
+        const data = await res.json();
+        if (!data.ok || !data.hasImage || !data.dataUrl) {
+          alert('No mobile upload found yet. Upload from phone first.');
+          setStatus('Waiting for mobile upload...');
+          return;
+        }
+        const blob = await (await fetch(data.dataUrl)).blob();
+        await runOcrOnBlob(blob, 'Processing mobile upload...');
+      } catch (err) {
+        console.error(err);
+        alert('Could not fetch mobile upload. Ensure PC and phone are on the same network and server is running.');
+        setStatus('Failed to fetch mobile upload.');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderQr() {
+      if (!qrCodeEl) return;
+      const origin = window.location.origin || '';
+      const hostOverride = (qrHostInput && qrHostInput.value.trim()) || '';
+      if (!origin || origin.startsWith('file')) {
+        qrCodeEl.innerHTML = '<div class="subtle">Run the local server to enable QR.</div>';
+        if (qrLinkEl) qrLinkEl.textContent = '';
+        return;
+      }
+      let base = origin;
+      if (hostOverride) {
+        const hasProtocol = /^https?:\/\//i.test(hostOverride);
+        base = hasProtocol ? hostOverride : `http://${hostOverride}`;
+      } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        base = origin.replace('localhost', window.location.hostname).replace('127.0.0.1', window.location.hostname);
+      }
+      const mobileUrl = `${base}/mobile-upload`;
+      qrCodeEl.innerHTML = '';
+      /* global QRCode */
+      new QRCode(qrCodeEl, { text: mobileUrl, width: 160, height: 160 });
+      if (qrLinkEl) qrLinkEl.textContent = mobileUrl;
+    }
+
+    async function setAutoHost() {
+      if (!qrHostInput) return renderQr();
+      try {
+        const res = await fetch('/api/host-info');
+        if (!res.ok) throw new Error('host info failed');
+        const data = await res.json();
+        const port = data.port || window.location.port || '5080';
+        const hosts = data.hosts || [];
+        if (hosts.length) {
+          const candidate = `${hosts[0]}:${port}`;
+          if (!qrHostInput.value) qrHostInput.value = candidate;
+          qrHostInput.placeholder = candidate;
+        } else {
+          qrHostInput.placeholder = window.location.host || `localhost:${port}`;
+        }
+      } catch (err) {
+        qrHostInput.placeholder = window.location.host || 'localhost:5080';
+      } finally {
+        renderQr();
+      }
+    }
+
+    if (fetchMobileBtn) fetchMobileBtn.addEventListener('click', fetchLastUpload);
+    if (qrHostInput) qrHostInput.addEventListener('change', renderQr);
+    if (qrHostInput) {
+      qrHostInput.placeholder = window.location.host || 'localhost:5080';
+      if (!qrHostInput.value) qrHostInput.value = window.location.host || '';
+    }
+    setAutoHost();
+  </script>
+</body>
+</html>

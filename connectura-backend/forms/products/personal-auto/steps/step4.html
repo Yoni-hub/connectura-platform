@@ -1,0 +1,218 @@
+
+<style>
+  .vehicle-meta {
+    margin-bottom: 12px;
+  }
+  .vehicle-scroll {
+    position: relative;
+    padding: 0 44px;
+  }
+  .vehicle-container {
+    display: flex;
+    gap: 12px;
+    overflow: hidden;
+    scroll-behavior: smooth;
+  }
+  .vehicle-card {
+    margin: 0;
+    min-width: 320px;
+    max-width: 360px;
+    flex: 0 0 auto;
+  }
+  .vehicle-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 64px;
+    border: 1px solid var(--border, #b7b2a4);
+    background: var(--panel-bg, #fdfcf8);
+    cursor: pointer;
+    font-size: 20px;
+    color: var(--accent, #6b6257);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0.9;
+  }
+  .vehicle-nav:hover {
+    opacity: 1;
+  }
+  .vehicle-nav.prev {
+    left: 4px;
+  }
+  .vehicle-nav.next {
+    right: 4px;
+  }
+</style>
+
+<div class="form-card vehicle-meta">
+  <div class="card-title">Vehicle Information</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="vehicle-count">Number of Vehicles:</label>
+    <div class="field-control">
+      <input id="vehicle-count" name="vehicle-count" type="number" min="1" max="10" step="1" value="1" />
+    </div>
+  </div>
+</div>
+
+<div class="vehicle-scroll">
+  <button type="button" class="vehicle-nav prev" aria-label="Previous vehicle">&lt;</button>
+  <div id="vehicleContainer" class="vehicle-container"></div>
+  <button type="button" class="vehicle-nav next" aria-label="Next vehicle">&gt;</button>
+</div>
+
+<template id="vehicleTemplate">
+  <div class="form-card vehicle-card">
+    <div class="card-title">Vehicle <span class="vehicle-label"></span></div>
+    <div class="form-grid wide">
+      <label class="field-label" data-for="veh-date">Date Added:</label>
+      <div class="field-control"><input data-base="veh-date" type="date" /></div>
+
+      <label class="field-label" data-for="veh-vin"><span class="required">*</span> VIN:</label>
+      <div class="field-control"><input data-base="veh-vin" type="text" /></div>
+
+      <label class="field-label" data-for="veh-type"><span class="required">*</span> Vehicle Type:</label>
+      <div class="field-control">
+        <select data-base="veh-type">
+          <option value="">Select</option><option>Car</option><option>Truck</option><option>SUV</option><option>Van</option><option>Other</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-year"><span class="required">*</span> Model Year:</label>
+      <div class="field-control"><input data-base="veh-year" type="number" min="1900" max="2100" /></div>
+
+      <label class="field-label" data-for="veh-make"><span class="required">*</span> Make:</label>
+      <div class="field-control"><input data-base="veh-make" type="text" /></div>
+
+      <label class="field-label" data-for="veh-model"><span class="required">*</span> Model:</label>
+      <div class="field-control"><input data-base="veh-model" type="text" /></div>
+
+      <label class="field-label" data-for="veh-style"><span class="required">*</span> Style:</label>
+      <div class="field-control"><input data-base="veh-style" type="text" /></div>
+
+      <label class="field-label" data-for="veh-usage"><span class="required">*</span> Vehicle Usage:</label>
+      <div class="field-control">
+        <select data-base="veh-usage">
+          <option value="">Select</option><option>Commute</option><option>Pleasure</option><option>Business</option><option>Farm</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-antitheft"><span class="required">*</span> Anti Theft:</label>
+      <div class="field-control">
+        <select data-base="veh-antitheft">
+          <option value="">Select</option><option>None</option><option>Alarm</option><option>Immobilizer</option><option>Tracking</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-miles">Annual Miles:</label>
+      <div class="field-control"><input data-base="veh-miles" type="number" min="0" /></div>
+
+      <label class="field-label" data-for="veh-storage">In Storage:</label>
+      <div class="field-control">
+        <select data-base="veh-storage">
+          <option value="">Select</option><option>Yes</option><option>No</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-military-storage">Military Storage:</label>
+      <div class="field-control">
+        <select data-base="veh-military-storage">
+          <option value="">Select</option><option>Yes</option><option>No</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-garaging-state"><span class="required">*</span> Garaging State:</label>
+      <div class="field-control">
+        <select data-base="veh-garaging-state">
+          <option value="">Select</option><option>AL</option><option>AK</option><option>AZ</option><option>AR</option><option>CA</option><option>CO</option><option>CT</option><option>DE</option><option>FL</option><option>GA</option><option>HI</option><option>ID</option><option>IL</option><option>IN</option><option>IA</option><option>KS</option><option>KY</option><option>LA</option><option>ME</option><option>MD</option><option>MA</option><option>MI</option><option>MN</option><option>MS</option><option>MO</option><option>MT</option><option>NE</option><option>NV</option><option>NH</option><option>NJ</option><option>NM</option><option>NY</option><option>NC</option><option>ND</option><option>OH</option><option>OK</option><option>OR</option><option>PA</option><option>RI</option><option>SC</option><option>SD</option><option>TN</option><option>TX</option><option>UT</option><option>VT</option><option>VA</option><option>WA</option><option>WV</option><option>WI</option><option>WY</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-garaging-zip"><span class="required">*</span> Garaging Zip Code:</label>
+      <div class="field-control"><input data-base="veh-garaging-zip" type="text" /></div>
+
+      <label class="field-label" data-for="veh-ownership"><span class="required">*</span> Ownership Status:</label>
+      <div class="field-control">
+        <select data-base="veh-ownership">
+          <option value="">Select</option><option>Owned</option><option>Financed</option><option>Leased</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-title-status">Title Status:</label>
+      <div class="field-control"><input data-base="veh-title-status" type="text" /></div>
+
+      <label class="field-label" data-for="veh-loss-payee">Loss Payee/Add Ins:</label>
+      <div class="field-control"><input data-base="veh-loss-payee" type="text" /></div>
+
+      <label class="field-label" data-for="veh-original-owner">Original Owner:</label>
+      <div class="field-control">
+        <select data-base="veh-original-owner">
+          <option value="">Select</option><option>Yes</option><option>No</option>
+        </select>
+      </div>
+
+      <label class="field-label" data-for="veh-settlement-option">Settlement Option:</label>
+      <div class="field-control"><input data-base="veh-settlement-option" type="text" /></div>
+
+      <label class="field-label" data-for="veh-settlement-value">Settlement Value:</label>
+      <div class="field-control"><input data-base="veh-settlement-value" type="text" /></div>
+    </div>
+  </div>
+</template>
+
+<script>
+  (() => {
+    const vehicleCountInput = document.getElementById('vehicle-count');
+    const vehicleContainer = document.getElementById('vehicleContainer');
+    const vehicleTemplate = document.getElementById('vehicleTemplate');
+    const navPrev = document.querySelector('.vehicle-nav.prev');
+    const navNext = document.querySelector('.vehicle-nav.next');
+
+    function scrollVehicles(direction = 1) {
+      const step = vehicleContainer.clientWidth * 0.8;
+      vehicleContainer.scrollBy({ left: step * direction, behavior: 'smooth' });
+    }
+
+    function renderVehicles(count) {
+      vehicleContainer.innerHTML = '';
+      for (let i = 1; i <= count; i += 1) {
+        const clone = vehicleTemplate.content.cloneNode(true);
+        const card = clone.querySelector('.vehicle-card');
+        card.dataset.vehicle = String(i);
+        const label = clone.querySelector('.vehicle-label');
+        if (label) label.textContent = i;
+
+        clone.querySelectorAll('[data-base]').forEach((el) => {
+          const base = el.getAttribute('data-base');
+          const id = `${base}-${i}`;
+          el.id = id;
+          el.name = id;
+        });
+
+        clone.querySelectorAll('[data-for]').forEach((el) => {
+          const base = el.getAttribute('data-for');
+          el.setAttribute('for', `${base}-${i}`);
+        });
+
+        vehicleContainer.appendChild(clone);
+      }
+    }
+
+    function clampVehicleCount(val) {
+      return Math.max(1, Math.min(val || 1, 10));
+    }
+
+    vehicleCountInput.addEventListener('input', (e) => {
+      const safeCount = clampVehicleCount(Number(e.target.value));
+      e.target.value = safeCount;
+      renderVehicles(safeCount);
+      vehicleContainer.scrollTo({ left: 0, behavior: 'auto' });
+    });
+    if (navPrev) navPrev.addEventListener('click', () => scrollVehicles(-1));
+    if (navNext) navNext.addEventListener('click', () => scrollVehicles(1));
+
+    renderVehicles(clampVehicleCount(Number(vehicleCountInput.value)));
+  })();
+</script>

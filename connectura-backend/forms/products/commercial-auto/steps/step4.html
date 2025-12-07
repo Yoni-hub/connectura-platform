@@ -1,0 +1,55 @@
+<div class="form-card">
+  <div class="card-title">Coverages &amp; Loss History</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="ca-liability"><span class="required">*</span> Auto Liability Limit:</label>
+    <div class="field-control">
+      <select id="ca-liability" name="ca-liability">
+        <option value="">Select</option><option>$1,000,000 CSL</option><option>$750,000 CSL</option><option>$500,000 CSL</option><option>$300,000 CSL</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ca-um">UM/UIM Limit:</label>
+    <div class="field-control"><input id="ca-um" name="ca-um" type="text" placeholder="Reject, State Min, or limit" /></div>
+
+    <label class="field-label" for="ca-medpay">Med Pay/PIP:</label>
+    <div class="field-control"><input id="ca-medpay" name="ca-medpay" type="text" /></div>
+
+    <label class="field-label" for="ca-comp-ded">Comprehensive Deductible:</label>
+    <div class="field-control"><input id="ca-comp-ded" name="ca-comp-ded" type="text" /></div>
+
+    <label class="field-label" for="ca-coll-ded">Collision Deductible:</label>
+    <div class="field-control"><input id="ca-coll-ded" name="ca-coll-ded" type="text" /></div>
+
+    <label class="field-label" for="ca-hnoa">Hired/Non-Owned Auto:</label>
+    <div class="field-control">
+      <select id="ca-hnoa" name="ca-hnoa">
+        <option value="">Select</option><option>Yes - Both Hired &amp; Non-Owned</option><option>Hired Only</option><option>Non-Owned Only</option><option>No</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ca-cargo">Motor Truck Cargo Limit/Ded:</label>
+    <div class="field-control"><input id="ca-cargo" name="ca-cargo" type="text" placeholder="If applicable" /></div>
+
+    <label class="field-label" for="ca-filings-needed">ICC/BMC Filings Required:</label>
+    <div class="field-control">
+      <select id="ca-filings-needed" name="ca-filings-needed">
+        <option value="">Select</option><option>MCS-90</option><option>BMC-91X</option><option>State filings</option><option>None</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="ca-prior-carrier">Prior Carrier:</label>
+    <div class="field-control"><input id="ca-prior-carrier" name="ca-prior-carrier" type="text" /></div>
+
+    <label class="field-label" for="ca-prior-exp">Expiration:</label>
+    <div class="field-control"><input id="ca-prior-exp" name="ca-prior-exp" type="date" /></div>
+
+    <label class="field-label" for="ca-years-continuous">Years Continuous Coverage:</label>
+    <div class="field-control"><input id="ca-years-continuous" name="ca-years-continuous" type="number" min="0" /></div>
+
+    <label class="field-label" for="ca-losses">Losses (5 Years):</label>
+    <div class="field-control"><textarea id="ca-losses" name="ca-losses" rows="4" placeholder="Date / Type / Paid / Open / Reserve"></textarea></div>
+
+    <label class="field-label" for="ca-largest-loss">Largest Loss Amount:</label>
+    <div class="field-control"><input id="ca-largest-loss" name="ca-largest-loss" type="number" min="0" /></div>
+  </div>
+</div>

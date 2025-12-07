@@ -1,0 +1,33 @@
+<div class="form-card">
+  <div class="card-title">Coverage &amp; Beneficiaries</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="li-product"><span class="required">*</span> Product Type:</label>
+    <div class="field-control">
+      <select id="li-product" name="li-product">
+        <option value="">Select</option><option>Term</option><option>Whole Life</option><option>Universal Life</option><option>Index UL</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="li-term">Term Length (if term):</label>
+    <div class="field-control">
+      <select id="li-term" name="li-term">
+        <option value="">Select</option><option>10 Year</option><option>15 Year</option><option>20 Year</option><option>30 Year</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="li-face"><span class="required">*</span> Coverage Amount:</label>
+    <div class="field-control"><input id="li-face" name="li-face" type="number" min="0" /></div>
+
+    <label class="field-label" for="li-riders">Riders:</label>
+    <div class="field-control"><input id="li-riders" name="li-riders" type="text" placeholder="Accelerated benefit, waiver of premium, child term, accidental death" /></div>
+
+    <label class="field-label" for="li-beneficiaries"><span class="required">*</span> Beneficiaries:</label>
+    <div class="field-control"><textarea id="li-beneficiaries" name="li-beneficiaries" rows="3" placeholder="Name / relationship / %"></textarea></div>
+
+    <label class="field-label" for="li-owner">Policy Owner (if different):</label>
+    <div class="field-control"><input id="li-owner" name="li-owner" type="text" /></div>
+
+    <label class="field-label" for="li-payer">Premium Payer (if different):</label>
+    <div class="field-control"><input id="li-payer" name="li-payer" type="text" /></div>
+  </div>
+</div>

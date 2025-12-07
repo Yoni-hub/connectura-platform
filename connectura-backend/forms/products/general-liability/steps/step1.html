@@ -1,0 +1,38 @@
+<div class="form-card">
+  <div class="card-title">Business &amp; Operations</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="gl-legal-name"><span class="required">*</span> Legal Name/DBA:</label>
+    <div class="field-control"><input id="gl-legal-name" name="gl-legal-name" type="text" /></div>
+
+    <label class="field-label" for="gl-fein"><span class="required">*</span> FEIN:</label>
+    <div class="field-control"><input id="gl-fein" name="gl-fein" type="text" /></div>
+
+    <label class="field-label" for="gl-entity"><span class="required">*</span> Entity Type:</label>
+    <div class="field-control">
+      <select id="gl-entity" name="gl-entity">
+        <option value="">Select</option><option>Individual</option><option>Partnership</option><option>LLC</option><option>Corporation</option><option>Non-Profit</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="gl-operations"><span class="required">*</span> Operations Description:</label>
+    <div class="field-control"><textarea id="gl-operations" name="gl-operations" rows="3" placeholder="Products, services, processes, subcontractor use"></textarea></div>
+
+    <label class="field-label" for="gl-class">Primary Class/NAICS:</label>
+    <div class="field-control"><input id="gl-class" name="gl-class" type="text" /></div>
+
+    <label class="field-label" for="gl-gross-receipts"><span class="required">*</span> Annual Gross Receipts:</label>
+    <div class="field-control"><input id="gl-gross-receipts" name="gl-gross-receipts" type="number" min="0" /></div>
+
+    <label class="field-label" for="gl-payroll"><span class="required">*</span> Annual Payroll:</label>
+    <div class="field-control"><input id="gl-payroll" name="gl-payroll" type="number" min="0" /></div>
+
+    <label class="field-label" for="gl-subcosts">Subcontracted Costs:</label>
+    <div class="field-control"><input id="gl-subcosts" name="gl-subcosts" type="number" min="0" /></div>
+
+    <label class="field-label" for="gl-locations"><span class="required">*</span> # of Locations:</label>
+    <div class="field-control"><input id="gl-locations" name="gl-locations" type="number" min="1" /></div>
+
+    <label class="field-label" for="gl-primary-location"><span class="required">*</span> Primary Location Address:</label>
+    <div class="field-control"><input id="gl-primary-location" name="gl-primary-location" type="text" /></div>
+  </div>
+</div>

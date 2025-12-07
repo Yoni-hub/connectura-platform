@@ -1,0 +1,27 @@
+<div class="form-card">
+  <div class="card-title">Coverage Preferences</div>
+  <div class="form-grid wide">
+    <label class="field-label" for="hl-effective"><span class="required">*</span> Desired Effective Date:</label>
+    <div class="field-control"><input id="hl-effective" name="hl-effective" type="date" /></div>
+
+    <label class="field-label" for="hl-plan-type">Plan Type Preference:</label>
+    <div class="field-control">
+      <select id="hl-plan-type" name="hl-plan-type">
+        <option value="">Select</option><option>HMO</option><option>PPO</option><option>EPO</option><option>POS</option>
+      </select>
+    </div>
+
+    <label class="field-label" for="hl-doctors">Doctors/Hospitals to Keep In-Network:</label>
+    <div class="field-control"><textarea id="hl-doctors" name="hl-doctors" rows="3"></textarea></div>
+
+    <label class="field-label" for="hl-prescriptions">Current Prescriptions:</label>
+    <div class="field-control"><textarea id="hl-prescriptions" name="hl-prescriptions" rows="3" placeholder="Name / dosage / frequency"></textarea></div>
+
+    <label class="field-label" for="hl-dental">Include Adult Dental/Vision:</label>
+    <div class="field-control">
+      <select id="hl-dental" name="hl-dental">
+        <option value="">Select</option><option>Dental only</option><option>Vision only</option><option>Dental &amp; Vision</option><option>No</option>
+      </select>
+    </div>
+  </div>
+</div>
