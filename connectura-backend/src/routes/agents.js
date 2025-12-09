@@ -23,7 +23,7 @@ const formatAgent = (agent) => ({
 })
 
 router.get('/', async (req, res) => {
-  const { language, state, name } = req.query
+  const { language, state, name, location } = req.query
   const agents = await prisma.agent.findMany()
   const filtered = agents.filter((agent) => {
     const langs = parseJson(agent.languages, [])
@@ -31,7 +31,11 @@ router.get('/', async (req, res) => {
     const matchLang = language ? langs.some((l) => l.toLowerCase() === language.toLowerCase()) : true
     const matchState = state ? statesList.some((s) => s.toLowerCase() === state.toLowerCase()) : true
     const matchName = name ? agent.name.toLowerCase().includes(name.toLowerCase()) : true
-    return matchLang && matchState && matchName
+    const matchLocation = location
+      ? (agent.address && agent.address.toLowerCase().includes(location.toLowerCase())) ||
+        (agent.zip && agent.zip.toLowerCase().includes(location.toLowerCase()))
+      : true
+    return matchLang && matchState && matchName && matchLocation
   })
   res.json({ agents: filtered.map(formatAgent) })
 })

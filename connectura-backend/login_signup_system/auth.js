@@ -1,8 +1,8 @@
 const express = require('express')
 const bcrypt = require('bcrypt')
-const prisma = require('../prisma')
-const { generateToken } = require('../utils/token')
-const { authGuard } = require('../middleware/auth')
+const prisma = require('../src/prisma')
+const { generateToken } = require('../src/utils/token')
+const { authGuard } = require('../src/middleware/auth')
 
 const router = express.Router()
 

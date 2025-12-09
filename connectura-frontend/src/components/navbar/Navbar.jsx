@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import AuthModal from './AuthModal'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
 
   return (
     <>
@@ -28,16 +30,20 @@ export default function Navbar() {
 
           <nav className="hidden items-center gap-5 text-sm md:flex">
             <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]">
-              Find Agents
+              Find agents
             </Link>
             <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]">
-              Build Your Insurance Profile
+              Build your insurance profile
             </Link>
-            <Link to="/careers" className="text-slate-700 hover:text-[#7a0638]">
-              For Agents
-            </Link>
+            <button
+              type="button"
+              onClick={() => setAuthOpen(true)}
+              className="text-slate-700 hover:text-[#7a0638]"
+            >
+              For agents
+            </button>
             <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]">
-              About Us
+              About us
             </Link>
           </nav>
         </div>
@@ -46,21 +52,29 @@ export default function Navbar() {
           <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
               <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Find Agents
+                Find agents
               </Link>
               <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Build Your Insurance Profile
+                Build your insurance profile
               </Link>
-              <Link to="/careers" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                For Agents
-              </Link>
+              <button
+                type="button"
+                className="text-left text-slate-700 hover:text-[#7a0638]"
+                onClick={() => {
+                  setAuthOpen(true)
+                  setMenuOpen(false)
+                }}
+              >
+                For agents
+              </button>
               <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                About Us
+                About us
               </Link>
             </div>
           </div>
         )}
       </header>
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </>
   )
 }

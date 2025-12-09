@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const path = require('path')
 
-const authRoutes = require('./routes/auth')
+const authRoutes = require('../login_signup_system/auth')
 const agentRoutes = require('./routes/agents')
 const customerRoutes = require('./routes/customers')
 const searchRoutes = require('./routes/search')

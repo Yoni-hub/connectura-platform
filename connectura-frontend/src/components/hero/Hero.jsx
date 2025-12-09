@@ -7,16 +7,16 @@ export default function Hero() {
       <div className="relative max-w-4xl mx-auto text-center space-y-4">
         <p className="text-sm font-semibold text-[#7a0638] uppercase tracking-wide">Connectura</p>
         <h1 className="text-3xl md:text-4xl font-bold leading-snug">
-          Need an insurance agent who speaks your language? We’ll find the right match near you. Start chatting, calling, or video-calling a licensed professional today.
+          Need an insurance agent who speaks your language? We&apos;ll find the right match near you. Start chatting, calling, or video-calling a licensed professional today.
         </h1>
         <p className="text-slate-700 text-lg">
-          Insurance paperwork overwhelming? Let a licensed agent create your profile for you. Save it once — reuse it forever.
+          Insurance paperwork overwhelming? Let a licensed agent create your profile for you. Save it once and reuse it forever.
         </p>
         <div className="flex flex-wrap justify-center gap-3 pt-2">
-          <Link className="rounded-full bg-[#7a0638] text-white px-6 py-3 font-semibold shadow hover:bg-[#5f042c]" to="/agents">
+          <Link className="pill-btn-primary px-12 py-3.5 text-base" to="/agents">
             Find an agent
           </Link>
-          <Link className="rounded-full border border-[#7a0638]/20 px-6 py-3 font-semibold text-[#7a0638] hover:bg-white" to="/profile/create">
+          <Link className="pill-btn-ghost px-12 py-3.5 text-base" to="/profile/create">
             Create Insurance Profile
           </Link>
         </div>
