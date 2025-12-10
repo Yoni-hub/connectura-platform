@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
 import { states } from '../../data/states'
 
-export default function AuthModal({ open, onClose }) {
+export default function AuthModal({ open, onClose, intent = 'agent' }) {
   const { login, register, loading } = useAuth()
+  const nav = useNavigate()
   const [mode, setMode] = useState('login')
   const [remember, setRemember] = useState(false)
+  const [roleIntent, setRoleIntent] = useState(intent)
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -23,6 +26,7 @@ export default function AuthModal({ open, onClose }) {
     if (open) {
       setMode('login')
       setRemember(false)
+      setRoleIntent(intent)
       setForm({
         name: '',
         email: '',
@@ -35,13 +39,20 @@ export default function AuthModal({ open, onClose }) {
         address: '',
       })
     }
-  }, [open])
+  }, [open, intent])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (mode === 'login') {
-      const ok = await login(form.email, form.password)
-      if (ok) onClose()
+      const user = await login(form.email, form.password)
+      if (user) {
+        onClose()
+        if (user.role === 'AGENT') {
+          nav('/agent/dashboard', { replace: true })
+        } else {
+          nav('/client/dashboard', { replace: true })
+        }
+      }
       return
     }
 
@@ -50,29 +61,41 @@ export default function AuthModal({ open, onClose }) {
       return
     }
 
-    const languageList = form.languages
-      ? form.languages.split(',').map((l) => l.trim()).filter(Boolean)
-      : []
-    const productList = form.products
-      ? form.products.split(',').map((p) => p.trim()).filter(Boolean)
-      : []
+    const payload =
+      roleIntent === 'AGENT'
+        ? {
+            email: form.email,
+            password: form.password,
+            name: form.name,
+            role: 'AGENT',
+            languages: form.languages
+              ? form.languages.split(',').map((l) => l.trim()).filter(Boolean)
+              : [],
+            states: form.state ? [form.state] : [],
+            specialty: (form.products ? form.products.split(',').map((p) => p.trim()).filter(Boolean)[0] : '') || 'Auto',
+            producerNumber: '',
+            address: form.address,
+            zip: form.zip,
+            products: form.products
+              ? form.products.split(',').map((p) => p.trim()).filter(Boolean)
+              : [],
+          }
+        : {
+            email: form.email,
+            password: form.password,
+            name: form.name,
+            role: 'CUSTOMER',
+          }
 
-    const payload = {
-      email: form.email,
-      password: form.password,
-      name: form.name,
-      role: 'AGENT',
-      languages: languageList,
-      states: form.state ? [form.state] : [],
-      specialty: productList[0] || 'Auto',
-      producerNumber: '',
-      address: form.address,
-      zip: form.zip,
-      products: productList,
+    const user = await register(payload)
+    if (user) {
+      onClose()
+      if (user.role === 'AGENT') {
+        nav('/agent/dashboard', { replace: true })
+      } else {
+        nav('/client/dashboard', { replace: true })
+      }
     }
-
-    const ok = await register(payload)
-    if (ok) onClose()
   }
 
   return (
@@ -83,10 +106,18 @@ export default function AuthModal({ open, onClose }) {
       >
         <div className="space-y-1">
           <p className="text-2xl font-bold text-slate-900">
-            {mode === 'login' ? 'Welcome back' : 'Create your agent account'}
+            {mode === 'login'
+              ? 'Welcome back'
+              : roleIntent === 'AGENT'
+              ? 'Create your agent account'
+              : 'Create your account'}
           </p>
           <p className="text-sm text-slate-600">
-            {mode === 'login' ? 'Sign in to your dashboard.' : 'Set up your profile to start receiving matches.'}
+            {mode === 'login'
+              ? 'Sign in to your dashboard.'
+              : roleIntent === 'AGENT'
+              ? 'Set up your profile to start receiving matches.'
+              : 'Access your client dashboard and insurance profile.'}
           </p>
         </div>
 
@@ -114,7 +145,7 @@ export default function AuthModal({ open, onClose }) {
           </label>
         )}
 
-        {mode === 'create' && (
+        {mode === 'create' && roleIntent === 'AGENT' && (
           <div className="space-y-3">
             <label className="block text-sm">
               Full name or agency name
@@ -199,6 +230,42 @@ export default function AuthModal({ open, onClose }) {
                 onChange={(e) => setForm({ ...form, products: e.target.value })}
               />
             </label>
+          </div>
+        )}
+
+        {mode === 'create' && roleIntent !== 'AGENT' && (
+          <div className="space-y-3">
+            <label className="block text-sm">
+              Full name
+              <input
+                required
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-sm">
+                Password
+                <input
+                  type="password"
+                  required
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
+                Confirm password
+                <input
+                  type="password"
+                  required
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                />
+              </label>
+            </div>
           </div>
         )}
 

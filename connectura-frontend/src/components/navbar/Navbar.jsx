@@ -1,10 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthModal from './AuthModal'
+import { useAuth } from '../../context/AuthContext'
+import { API_URL } from '../../services/api'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [authIntent, setAuthIntent] = useState('agent')
+  const { user } = useAuth()
+
+  useEffect(() => {
+    const openCustomer = () => {
+      setAuthIntent('customer')
+      setAuthOpen(true)
+    }
+    const openAgent = () => {
+      setAuthIntent('agent')
+      setAuthOpen(true)
+    }
+    window.addEventListener('open-customer-auth', openCustomer)
+    window.addEventListener('open-agent-auth', openAgent)
+    return () => {
+      window.removeEventListener('open-customer-auth', openCustomer)
+      window.removeEventListener('open-agent-auth', openAgent)
+    }
+  }, [])
+
+  const triggerAuth = (intent) => {
+    setAuthIntent(intent)
+    setAuthOpen(true)
+  }
 
   return (
     <>
@@ -32,16 +58,22 @@ export default function Navbar() {
             <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]">
               Find agents
             </Link>
-            <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]">
+            <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#7a0638]">
               Build your insurance profile
-            </Link>
-            <button
-              type="button"
-              onClick={() => setAuthOpen(true)}
-              className="text-slate-700 hover:text-[#7a0638]"
-            >
-              For agents
             </button>
+            {user?.role === 'AGENT' ? (
+              <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#7a0638]">
+                Agent dashboard
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAuthOpen(true)}
+                className="text-slate-700 hover:text-[#7a0638]"
+              >
+                For agents
+              </button>
+            )}
             <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]">
               About us
             </Link>
@@ -54,19 +86,36 @@ export default function Navbar() {
               <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
                 Find agents
               </Link>
-              <Link to="/profile/create" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
-                Build your insurance profile
-              </Link>
               <button
                 type="button"
                 className="text-left text-slate-700 hover:text-[#7a0638]"
                 onClick={() => {
-                  setAuthOpen(true)
+                  triggerAuth('customer')
                   setMenuOpen(false)
                 }}
               >
-                For agents
+                Build your insurance profile
               </button>
+              {user?.role === 'AGENT' ? (
+                <Link
+                  to="/agent/dashboard"
+                  className="text-slate-700 hover:text-[#7a0638]"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Agent dashboard
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="text-left text-slate-700 hover:text-[#7a0638]"
+                  onClick={() => {
+                    setAuthOpen(true)
+                    setMenuOpen(false)
+                  }}
+                >
+                  For agents
+                </button>
+              )}
               <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
                 About us
               </Link>
@@ -74,7 +123,7 @@ export default function Navbar() {
           </div>
         )}
       </header>
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} intent={authIntent} />
     </>
   )
 }

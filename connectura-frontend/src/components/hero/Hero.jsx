@@ -16,9 +16,13 @@ export default function Hero() {
           <Link className="pill-btn-primary px-12 py-3.5 text-base" to="/agents">
             Find an agent
           </Link>
-          <Link className="pill-btn-ghost px-12 py-3.5 text-base" to="/profile/create">
+          <button
+            type="button"
+            className="pill-btn-ghost px-12 py-3.5 text-base"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-customer-auth'))}
+          >
             Create Insurance Profile
-          </Link>
+          </button>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useProfile } from '../context/ProfileContext'
 import { useAgents } from '../context/AgentContext'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
+import { API_URL } from '../services/api'
 
 export default function Dashboard() {
   const { profile, loading, loadProfile } = useProfile()
@@ -26,7 +27,10 @@ export default function Dashboard() {
           <h1 className="text-2xl font-semibold">Customer dashboard</h1>
           <p className="text-slate-500">Profile, saved agent, call actions, and post-sale summary</p>
         </div>
-        <button onClick={() => nav('/profile/create')} className="pill-btn-primary">
+        <button
+          onClick={() => window.open(`${API_URL}/forms/customer-information.html`, '_blank')}
+          className="pill-btn-primary"
+        >
           Create your insurance profile now
         </button>
       </div>
