@@ -5,147 +5,287 @@
   <title>Connectura Form System</title>
   <style>
     :root {
-      --page-bg: #f8f4e8;
-      --panel-bg: #fdfcf8;
-      --border: #b7b2a4;
-      --label: #222;
-      --accent: #6b6257;
-      --nav-active: #d9d2c3;
-      --btn: #c6b9a2;
-      --btn-text: #1f1b17;
+      --bg: #f6f0e7;
+      --bg-soft: #fdf8f3;
+      --card: #ffffff;
+      --border: #e5d8ce;
+      --border-strong: #d7c8be;
+      --ink: #2f3340;
+      --muted: #667085;
+      --accent: #7a0638;
+      --accent-soft: #f3e6eb;
+      --shadow: 0 22px 70px rgba(122, 6, 56, 0.12);
+      --shadow-soft: 0 12px 34px rgba(17, 24, 39, 0.06);
+      --radius-lg: 24px;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: var(--page-bg);
-      color: var(--label);
-      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #f7f1ea 0, #f3ece6 35%, #f7f1ea 100%);
+      color: var(--ink);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
     }
     .page {
-      max-width: 1400px;
+      max-width: 1280px;
       width: 100%;
-      margin: 16px auto;
-      padding: 16px 18px 30px;
-      background: var(--panel-bg);
+      margin: 18px auto 28px;
+      padding: 26px 28px 32px;
+      background: linear-gradient(180deg, #fffdfa 0%, #fbf5ef 100%);
       border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
     }
     .header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: 14px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
     }
     label {
-      font-weight: 600;
-      color: var(--accent);
+      font-weight: 700;
+      color: var(--ink);
       white-space: nowrap;
+      font-size: 14px;
     }
     select {
-      height: 34px;
-      padding: 6px 10px;
-      font-size: 14px;
+      height: 40px;
+      padding: 8px 12px;
+      font-size: 15px;
       border: 1px solid var(--border);
-      background: var(--page-bg);
-      min-width: 240px;
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      min-width: 260px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+    select:focus {
+      outline: 2px solid rgba(122, 6, 56, 0.12);
+      border-color: var(--accent);
     }
     .layout {
       display: grid;
-      grid-template-columns: 240px 1fr;
-      column-gap: 18px;
+      grid-template-columns: 260px 1fr;
+      column-gap: 20px;
       align-items: start;
     }
     .step-list {
       border: 1px solid var(--border);
-      background: var(--panel-bg);
-      padding: 12px 10px;
+      background: #fff;
+      padding: 14px 12px;
       list-style: none;
       margin: 0;
       min-height: 760px;
+      border-radius: 20px;
+      box-shadow: var(--shadow-soft);
     }
     .step-list li {
-      padding: 10px 12px;
+      padding: 12px 14px;
       border-left: 4px solid transparent;
       cursor: pointer;
-      color: var(--accent);
-      font-weight: 600;
+      color: var(--ink);
+      font-weight: 700;
+      border-radius: 14px;
+      transition: all 0.15s ease;
+    }
+    .step-list li:hover {
+      background: #f9f4ef;
     }
     .step-list li.active {
-      background: var(--nav-active);
-      border-color: #b09a7a;
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px #ead4dd;
     }
     .content-shell {
       border: 1px solid var(--border);
-      background: var(--panel-bg);
+      background: #fff;
       min-height: 760px;
       display: flex;
       flex-direction: column;
+      border-radius: 22px;
+      box-shadow: var(--shadow-soft);
     }
     .step-content {
-      padding: 14px 16px 18px;
+      padding: 18px 18px 22px;
       flex: 1;
       overflow: auto;
     }
     .actions {
       display: flex;
       justify-content: flex-end;
-      gap: 10px;
-      padding: 10px;
+      gap: 12px;
+      padding: 14px 16px;
       border-top: 1px solid var(--border);
-      background: var(--panel-bg);
+      background: #fbf5ef;
+      border-radius: 0 0 22px 22px;
     }
     .btn {
-      border: 1px solid #9f9380;
-      background: var(--btn);
-      color: var(--btn-text);
-      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 18px;
       font-size: 14px;
       cursor: pointer;
-      min-width: 90px;
+      min-width: 110px;
       text-align: center;
+      border-radius: 999px;
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(122, 6, 56, 0.08);
+    }
+    #prevBtn, #nextBtn {
+      background: #f7f2ed;
+    }
+    #saveBtn, #shareBtn {
+      background: linear-gradient(120deg, #8c0a3f, #64052e);
+      color: #fff;
+      border-color: #7a0638;
+      box-shadow: 0 12px 30px rgba(122, 6, 56, 0.22);
     }
     .other-input {
       display: none;
-      width: auto;
-      min-width: 240px;
+      width: 100%;
+      min-width: 200px;
       max-width: 100%;
-      padding: 6px 10px;
-      height: 34px;
-      border: 1px solid var(--border);
-      background: var(--page-bg);
-      font-size: 14px;
+      padding: 10px 12px;
+      height: 42px;
+      border: 1px solid var(--border-strong);
+      background: #fff;
+      font-size: 15px;
       box-sizing: border-box;
+      border-radius: 12px;
     }
     .extra-card {
       margin-top: 14px;
       border-top: 1px solid var(--border);
-      padding-top: 10px;
+      padding-top: 12px;
     }
     .extra-card textarea {
       width: 100%;
-      min-height: 90px;
-      padding: 8px;
+      min-height: 110px;
+      padding: 12px;
       border: 1px solid var(--border);
-      background: var(--panel-bg);
-      font-size: 14px;
+      background: #fff;
+      font-size: 15px;
       resize: vertical;
+      border-radius: 14px;
     }
     .upload-btn {
       display: inline-block;
-      border: 1px solid #9f9380;
-      background: var(--btn);
-      color: var(--btn-text);
-      padding: 8px 14px;
+      border: 1px solid var(--border);
+      background: #f7f2ed;
+      color: var(--ink);
+      padding: 10px 16px;
       font-size: 14px;
       cursor: pointer;
       text-align: center;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .upload-btn:hover {
+      background: #f0e5dd;
     }
     .upload-input {
       display: none;
     }
     .placeholder {
-      color: #6f6457;
+      color: #6b7280;
       font-size: 15px;
       padding: 10px;
+    }
+    .form-card {
+      background: #fff;
+      border: 1px solid #eee4da;
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: inset 0 1px 0 #fff, 0 12px 26px rgba(122, 6, 56, 0.06);
+      margin-bottom: 14px;
+    }
+    .form-card.extra-card {
+      background: #fbf7f3;
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 12px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      column-gap: 16px;
+      row-gap: 14px;
+      align-items: center;
+    }
+    .form-grid.wide {
+      grid-template-columns: 200px 1fr;
+    }
+    .field-label {
+      font-weight: 700;
+      color: #374151;
+      font-size: 14px;
+    }
+    .field-control input,
+    .field-control select,
+    .field-control textarea {
+      width: 100%;
+      border: 1px solid #e4d8cf;
+      border-radius: 12px;
+      padding: 11px 13px;
+      font-size: 15px;
+      background: #fdfcfb;
+      color: var(--ink);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+    .field-control textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+    .field-control input:focus,
+    .field-control select:focus,
+    .field-control textarea:focus {
+      outline: 2px solid rgba(122, 6, 56, 0.18);
+      border-color: var(--accent);
+      background: #fff;
+    }
+    .required {
+      color: var(--accent);
+    }
+    .section-spacer {
+      margin-top: 10px;
+      padding-top: 4px;
+    }
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+        row-gap: 14px;
+      }
+      .step-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        min-height: auto;
+      }
+      .content-shell {
+        min-height: 0;
+      }
+    }
+    @media (max-width: 768px) {
+      .page {
+        padding: 18px 16px 24px;
+      }
+      .form-grid,
+      .form-grid.wide {
+        grid-template-columns: 1fr;
+      }
+      label {
+        white-space: normal;
+      }
     }
   </style>
 </head>
@@ -502,6 +642,17 @@
     });
     saveBtn.addEventListener('click', () => alert('Saved'));
     shareBtn.addEventListener('click', () => alert('Shared'));
+
+    window.addEventListener('message', (event) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      const { type } = event.data;
+      if (type === 'connectura-save') {
+        saveBtn?.click();
+      }
+      if (type === 'connectura-reset') {
+        loadStep(1);
+      }
+    });
 
     setProduct(currentProduct);
   </script>
