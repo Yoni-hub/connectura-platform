@@ -34,10 +34,12 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-transparent bg-white/95 backdrop-blur shadow-none">
         <div className="page-shell flex items-center justify-between py-3">
-          <Link to="/" className="flex items-center gap-2 font-semibold text-[#7a0638]">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#7a0638]/10 text-lg font-bold">C</span>
+          <Link to="/" className="flex items-center gap-3 font-semibold text-[#0b3b8c]">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e7f0ff] text-lg font-bold text-[#006aff] shadow-[0_8px_20px_rgba(0,42,92,0.1)]">
+              C
+            </span>
             <div className="leading-tight">
               <div className="text-base font-bold">Connectura</div>
               <div className="text-xs text-slate-500">Insurance matchmaking</div>
@@ -55,40 +57,40 @@ export default function Navbar() {
           </button>
 
           <nav className="hidden items-center gap-5 text-sm md:flex">
-            <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]">
+            <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
               Find agents
             </Link>
-            <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#7a0638]">
+            <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#0b3b8c]">
               Build your insurance profile
             </button>
             {user?.role === 'AGENT' ? (
-              <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#7a0638]">
+              <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
                 Agent dashboard
               </Link>
             ) : (
               <button
                 type="button"
                 onClick={() => setAuthOpen(true)}
-                className="text-slate-700 hover:text-[#7a0638]"
+                className="text-slate-700 hover:text-[#0b3b8c]"
               >
                 For agents
               </button>
             )}
-            <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]">
+            <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
               About us
             </Link>
           </nav>
         </div>
 
         {menuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur">
+          <div className="md:hidden border-t border-[#dfe7f3] bg-white/95 backdrop-blur shadow-[0_16px_34px_rgba(0,42,92,0.08)]">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
-              <Link to="/agents" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
+              <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                 Find agents
               </Link>
               <button
                 type="button"
-                className="text-left text-slate-700 hover:text-[#7a0638]"
+                className="text-left text-slate-700 hover:text-[#0b3b8c]"
                 onClick={() => {
                   triggerAuth('customer')
                   setMenuOpen(false)
@@ -99,7 +101,7 @@ export default function Navbar() {
               {user?.role === 'AGENT' ? (
                 <Link
                   to="/agent/dashboard"
-                  className="text-slate-700 hover:text-[#7a0638]"
+                  className="text-slate-700 hover:text-[#0b3b8c]"
                   onClick={() => setMenuOpen(false)}
                 >
                   Agent dashboard
@@ -107,7 +109,7 @@ export default function Navbar() {
               ) : (
                 <button
                   type="button"
-                  className="text-left text-slate-700 hover:text-[#7a0638]"
+                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
                   onClick={() => {
                     setAuthOpen(true)
                     setMenuOpen(false)
@@ -116,7 +118,7 @@ export default function Navbar() {
                   For agents
                 </button>
               )}
-              <Link to="/contact" className="text-slate-700 hover:text-[#7a0638]" onClick={() => setMenuOpen(false)}>
+              <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                 About us
               </Link>
             </div>

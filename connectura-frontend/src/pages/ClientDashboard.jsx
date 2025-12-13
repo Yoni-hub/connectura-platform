@@ -291,7 +291,7 @@ export default function ClientDashboard() {
                   key={step.title}
                   onClick={() => setStepIndex(idx + 1)}
                   className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
-                    isActive ? 'bg-[#f3e6eb] text-[#7a0638] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
+                    isActive ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                   aria-current={isActive}
                 >
@@ -320,7 +320,7 @@ export default function ClientDashboard() {
               >
                 Log out
               </button>
-              <div className="h-12 w-12 rounded-full bg-[#7a0638]/10 text-[#7a0638] grid place-items-center font-bold">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-[#006aff]/12 text-[#0b3b8c] font-bold">
                 {initials}
               </div>
             </div>
@@ -331,7 +331,7 @@ export default function ClientDashboard() {
           <div className="surface p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <select
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:outline-none focus:ring-2 focus:ring-[#7a0638]/20"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:outline-none focus:ring-2 focus:ring-[#006aff]/20"
                 value={productKey}
                 onChange={(e) => setProductKey(e.target.value)}
               >
@@ -389,7 +389,7 @@ export default function ClientDashboard() {
                   setStepIndex(1)
                   setReloadTick((k) => k + 1)
                 }}
-                className="pill-btn-ghost px-6 border-[#d2bbc5] text-[#7a0638]"
+                className="pill-btn-ghost px-6 border-[#b5c8e8] text-[#0b3b8c]"
               >
                 Cancel
               </button>

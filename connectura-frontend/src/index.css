@@ -1,18 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    color: #0f172a;
-    background: #f5f1ed;
+    color: #0b1f3a;
+    background: #f7f9fc;
   }
 
   body {
     @apply min-h-screen text-slate-900;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-image: linear-gradient(180deg, #f7f4f1 0%, #f2ede8 60%, #f7f4f1 100%);
-    background-attachment: fixed;
+    font-family: 'Source Sans 3', 'Helvetica Neue', Arial, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f7f9fc;
   }
 
   h1,
@@ -20,20 +20,21 @@
   h3,
   h4 {
     @apply text-slate-900;
+    letter-spacing: -0.01em;
   }
 
   a {
-    @apply text-[#0866ff] hover:text-[#0654d4];
+    @apply text-[#006aff] hover:text-[#0b3b8c];
   }
 }
 
 @layer components {
   .page-shell {
-    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply w-full max-w-none px-4 sm:px-8 lg:px-10;
   }
 
   .surface {
-    @apply bg-white border border-slate-200 shadow-sm rounded-2xl;
+    @apply bg-white/80 border border-transparent shadow-none rounded-2xl;
   }
 
   .glass {
@@ -41,15 +42,15 @@
   }
 
   .pill-btn {
-    @apply rounded-full px-5 py-2.5 text-sm font-semibold transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed;
+    @apply rounded-md px-5 py-2.5 text-sm font-semibold transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed;
   }
 
   .pill-btn-primary {
-    @apply pill-btn text-white bg-gradient-to-r from-[#8c0a3f] to-[#64052e] shadow-[0_8px_20px_rgba(122,6,56,0.18)] hover:scale-[1.01] hover:shadow-[0_10px_24px_rgba(100,5,46,0.22)] active:scale-[0.99] focus:ring-2 focus:ring-offset-1 focus:ring-[#7a0638]/25;
+    @apply pill-btn text-white bg-gradient-to-r from-[#006aff] to-[#0b3b8c] shadow-[0_14px_32px_rgba(0,78,255,0.24)] hover:scale-[1.01] hover:shadow-[0_16px_38px_rgba(0,60,180,0.26)] active:scale-[0.99] focus:ring-2 focus:ring-offset-1 focus:ring-[#006aff]/25;
   }
 
   .pill-btn-ghost {
-    @apply pill-btn border border-[#7a0638]/25 text-[#7a0638] bg-white shadow-sm hover:border-[#7a0638]/40 hover:bg-[rgba(122,6,56,0.06)] hover:scale-[1.01] active:scale-[0.99] focus:ring-2 focus:ring-offset-1 focus:ring-[#7a0638]/20;
+    @apply pill-btn border border-[#d8e2f2] text-[#0b3b8c] bg-white shadow-[0_10px_24px_rgba(0,42,92,0.07)] hover:border-[#b5c8e8] hover:bg-[#f5f8ff] hover:scale-[1.01] active:scale-[0.99] focus:ring-2 focus:ring-offset-1 focus:ring-[#b5c8e8]/60;
   }
 }
 
@@ -128,8 +129,8 @@
 .field-control input:focus,
 .field-control select:focus,
 .field-control textarea:focus {
-  outline: 2px solid rgba(122, 6, 56, 0.18);
-  border-color: #7a0638;
+  outline: 2px solid rgba(0, 106, 255, 0.18);
+  border-color: #006aff;
   background: #fff;
 }
 .other-input {
@@ -164,7 +165,7 @@
   display: none;
 }
 .required {
-  color: #7a0638;
+  color: #0b3b8c;
 }
 
 @media (max-width: 768px) {

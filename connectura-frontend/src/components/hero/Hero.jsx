@@ -2,27 +2,45 @@ import { Link } from 'react-router-dom'
 
 export default function Hero() {
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#f5f1ed] border border-slate-200 shadow-sm p-10 text-slate-900">
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_20%,rgba(122,6,56,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(0,0,0,0.05),transparent_30%)]" />
-      <div className="relative max-w-4xl mx-auto text-center space-y-4">
-        <p className="text-sm font-semibold text-[#7a0638] uppercase tracking-wide">Connectura</p>
-        <h1 className="text-3xl md:text-4xl font-bold leading-snug">
-          Need an insurance agent who speaks your language? We&apos;ll find the right match near you. Start chatting, calling, or video-calling a licensed professional today.
+    <div className="relative w-full overflow-hidden bg-[#0b2a6f] text-white min-h-[70vh]">
+      <div className="absolute inset-0">
+        <img
+          src="/hero-insurance.png"
+          alt="Family protected by umbrella"
+          className="h-full w-full object-cover"
+          style={{ objectPosition: '50% 40%' }}
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b2a6f]/90 via-[#0b2a6f]/70 to-[#0b2a6f]/35" />
+      </div>
+
+      <div className="relative z-10 flex flex-col gap-4 px-5 py-12 text-white sm:px-10 lg:px-16 lg:py-16">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-sky-100">Connectura</p>
+        <h1 className="max-w-5xl text-3xl font-bold leading-tight md:text-5xl text-white drop-shadow-lg">
+          Find a trusted insurance agent wherever you live.
         </h1>
-        <p className="text-slate-700 text-lg">
-          Insurance paperwork overwhelming? Let a licensed agent create your profile for you. Save it once and reuse it forever.
+        <p className="max-w-3xl text-lg text-white/90 drop-shadow">
+          Speak to licensed agents who understand your language, answer quickly, and help you save on coverage. Chat, call, or hop on video in one place.
         </p>
-        <div className="flex flex-wrap justify-center gap-3 pt-2">
+
+        <div className="flex flex-wrap gap-3 pt-1">
           <Link className="pill-btn-primary px-12 py-3.5 text-base" to="/agents">
-            Find an agent
+            Start your search
           </Link>
           <button
             type="button"
-            className="pill-btn-ghost px-12 py-3.5 text-base"
+            className="pill-btn-ghost px-12 py-3.5 text-base bg-white text-[#0b3b8c]"
             onClick={() => window.dispatchEvent(new CustomEvent('open-customer-auth'))}
           >
-            Create Insurance Profile
+            Create profile
           </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-100">
+          <div className="grid h-11 w-11 place-items-center rounded-full border border-white/40 bg-white/15 text-base font-semibold">
+            24/7
+          </div>
+          <span>Live agent requests, saved profiles, and secure calls from any device.</span>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { languages } from '../../data/languages'
 import { states } from '../../data/states'
 
-export default function SearchBar({ onSearch, busy }) {
+export default function SearchBar({ onSearch, busy, variant = 'card' }) {
   const [filters, setFilters] = useState({ location: '', state: '', language: '', name: '' })
 
   useEffect(() => {
@@ -15,15 +15,20 @@ export default function SearchBar({ onSearch, busy }) {
     onSearch(next)
   }
 
+  const wrapperClass =
+    variant === 'minimal'
+      ? 'w-full bg-transparent p-0'
+      : 'glass rounded-[28px] border-[#dfe7f3] bg-white/95 p-6 shadow-[0_26px_70px_rgba(0,42,92,0.08)]'
+
   return (
-    <div className="glass rounded-2xl p-5 bg-[#f9f6f3]">
+    <div className={wrapperClass}>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="flex flex-col gap-1 lg:col-span-2">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Near</label>
+        <div className="flex flex-col gap-2 lg:col-span-2">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Near</label>
           <div className="relative">
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 shadow-sm focus:border-[#7a0638] focus:ring-[#7a0638]/30"
-              placeholder="Search by Address, City or ZIP Code"
+              className="w-full rounded-2xl border border-[#cfd9eb] bg-white px-4 py-3 pr-12 text-[15px] shadow-[0_10px_24px_rgba(0,42,92,0.06)] placeholder:text-slate-400 focus:border-[#006aff] focus:ring-[#006aff]/25"
+              placeholder="Search by address, city, or ZIP"
               value={filters.location}
               onChange={(e) => update('location', e.target.value)}
             />
@@ -40,10 +45,10 @@ export default function SearchBar({ onSearch, busy }) {
             </svg>
           </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">State</label>
+        <div className="flex flex-col gap-2">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">State</label>
           <select
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm focus:border-[#7a0638] focus:ring-[#7a0638]/30"
+            className="w-full rounded-2xl border border-[#cfd9eb] bg-white px-3 py-3 shadow-[0_10px_24px_rgba(0,42,92,0.06)] focus:border-[#006aff] focus:ring-[#006aff]/25"
             value={filters.state}
             onChange={(e) => update('state', e.target.value)}
           >
@@ -55,10 +60,10 @@ export default function SearchBar({ onSearch, busy }) {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Language</label>
+        <div className="flex flex-col gap-2">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Language</label>
           <select
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm focus:border-[#7a0638] focus:ring-[#7a0638]/30"
+            className="w-full rounded-2xl border border-[#cfd9eb] bg-white px-3 py-3 shadow-[0_10px_24px_rgba(0,42,92,0.06)] focus:border-[#006aff] focus:ring-[#006aff]/25"
             value={filters.language}
             onChange={(e) => update('language', e.target.value)}
           >
@@ -70,10 +75,10 @@ export default function SearchBar({ onSearch, busy }) {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Agent name</label>
+        <div className="flex flex-col gap-2">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agent name</label>
           <input
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 shadow-sm focus:border-[#7a0638] focus:ring-[#7a0638]/30"
+            className="w-full rounded-2xl border border-[#cfd9eb] bg-white px-3 py-3 shadow-[0_10px_24px_rgba(0,42,92,0.06)] focus:border-[#006aff] focus:ring-[#006aff]/25"
             placeholder="Search by name"
             value={filters.name}
             onChange={(e) => update('name', e.target.value)}
@@ -83,7 +88,7 @@ export default function SearchBar({ onSearch, busy }) {
           <button
             onClick={() => onSearch(filters)}
             disabled={busy}
-            className="pill-btn-primary px-12 py-3.5 text-base w-full md:w-auto disabled:opacity-60"
+            className="pill-btn-primary w-full px-12 py-3.5 text-base md:w-auto disabled:opacity-60"
           >
             {busy ? 'Searching...' : 'Search'}
           </button>

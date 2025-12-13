@@ -101,7 +101,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
   return (
     <Modal title="" open={open} onClose={onClose}>
       <form
-        className="space-y-4 rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f7f4f1_0%,#f2ede8_60%,#f7f4f1_100%)] p-5 shadow-sm"
+        className="space-y-4 rounded-2xl border border-[#dfe7f3] bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
         onSubmit={handleSubmit}
       >
         <div className="space-y-1">
@@ -275,7 +275,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4" />
               Remember me
             </label>
-            <button type="button" className="text-[#7a0638] font-semibold">Forgot password</button>
+            <button type="button" className="font-semibold text-[#006aff]">Forgot password</button>
           </div>
         )}
 
@@ -298,7 +298,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
           {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
           <button
             type="button"
-            className="text-[#7a0638] font-semibold"
+            className="font-semibold text-[#006aff]"
             onClick={() => setMode(mode === 'login' ? 'create' : 'login')}
           >
             {mode === 'login' ? 'Sign up' : 'Sign in'}

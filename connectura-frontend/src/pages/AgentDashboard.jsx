@@ -140,7 +140,7 @@ export default function AgentDashboard() {
                 onClick={() => setActiveTab(item)}
                 className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
                   activeTab === item
-                    ? 'bg-[#7a0638]/10 text-[#7a0638] shadow-sm'
+                    ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm'
                     : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
@@ -169,7 +169,7 @@ export default function AgentDashboard() {
               >
                 Log out
               </button>
-              <div className="h-12 w-12 rounded-full bg-[#7a0638]/10 text-[#7a0638] grid place-items-center font-bold">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-[#006aff]/12 text-[#0b3b8c] font-bold">
                 {initials}
               </div>
             </div>
