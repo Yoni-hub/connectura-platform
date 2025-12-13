@@ -10,6 +10,8 @@ const formatAgent = (agent) => ({
   name: agent.name,
   bio: agent.bio,
   photo: agent.photo,
+  email: agent.user?.email,
+  phone: agent.phone,
   languages: parseJson(agent.languages, []),
   states: parseJson(agent.states, []),
   specialty: agent.specialty,
@@ -41,7 +43,7 @@ router.get('/', async (req, res) => {
 })
 
 router.get('/:id', async (req, res) => {
-  const agent = await prisma.agent.findUnique({ where: { id: Number(req.params.id) } })
+  const agent = await prisma.agent.findUnique({ where: { id: Number(req.params.id) }, include: { user: true } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
   res.json({ agent: formatAgent(agent) })
 })
@@ -49,26 +51,43 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', authGuard, async (req, res) => {
   const agentId = Number(req.params.id)
   if (req.user.role !== 'AGENT') return res.status(403).json({ error: 'Forbidden' })
-  const agent = await prisma.agent.findUnique({ where: { id: agentId } })
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
   if (!agent || agent.userId !== req.user.id) {
     return res.status(403).json({ error: 'Cannot edit this agent' })
   }
-  const { bio, languages, states, specialty, availability, producerNumber, address, zip, products } = req.body
-  const updated = await prisma.agent.update({
-    where: { id: agentId },
-    data: {
-      bio: bio ?? agent.bio,
-      languages: languages ? JSON.stringify(languages) : agent.languages,
-      states: states ? JSON.stringify(states) : agent.states,
-      specialty: specialty ?? agent.specialty,
-      availability: availability ?? agent.availability,
-      producerNumber: producerNumber ?? agent.producerNumber,
-      address: address ?? agent.address,
-      zip: zip ?? agent.zip,
-      products: products ? JSON.stringify(products) : agent.products,
-    },
-  })
-  res.json({ agent: formatAgent(updated) })
+  const { name, email, phone, bio, languages, states, specialty, availability, producerNumber, address, zip, products } =
+    req.body
+
+  try {
+    const updated = await prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        name: name ?? agent.name,
+        phone: phone ?? agent.phone,
+        bio: bio ?? agent.bio,
+        languages: languages ? JSON.stringify(languages) : agent.languages,
+        states: states ? JSON.stringify(states) : agent.states,
+        specialty: specialty ?? agent.specialty,
+        availability: availability ?? agent.availability,
+        producerNumber: producerNumber ?? agent.producerNumber,
+        address: address ?? agent.address,
+        zip: zip ?? agent.zip,
+        products: products ? JSON.stringify(products) : agent.products,
+      },
+      include: { user: true },
+    })
+
+    if (email && email !== agent.user?.email) {
+      await prisma.user.update({ where: { id: agent.userId }, data: { email } })
+      updated.user.email = email
+    }
+
+    res.json({ agent: formatAgent(updated) })
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(400).json({ error: 'Email already in use' })
+    console.error('agent update error', err)
+    res.status(500).json({ error: 'Failed to update agent' })
+  }
 })
 
 module.exports = router

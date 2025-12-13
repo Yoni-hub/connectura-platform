@@ -101,7 +101,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
   return (
     <Modal title="" open={open} onClose={onClose}>
       <form
-        className="space-y-4 rounded-2xl border border-[#dfe7f3] bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+        className="space-y-4 rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
         onSubmit={handleSubmit}
       >
         <div className="space-y-1">

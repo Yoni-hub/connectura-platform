@@ -1,313 +1,184 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { API_URL } from '../services/api'
+import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 
-const productOptions = [
-  { value: 'personal-auto', label: 'Personal Auto' },
-  { value: 'homeowners', label: 'Homeowners' },
-  { value: 'renters', label: 'Renters' },
-  { value: 'motorcycle-offroad', label: 'Motorcycle / Off-Road' },
-  { value: 'commercial-auto', label: 'Commercial Auto' },
-  { value: 'general-liability', label: 'General Liability Insurance' },
-  { value: 'commercial-property', label: 'Commercial Property Insurance' },
-  { value: 'workers-comp', label: "Workers' Compensation" },
-  { value: 'professional-liability', label: 'Professional Liability (Errors & Omissions)' },
-  { value: 'umbrella', label: 'Umbrella Insurance' },
-  { value: 'travel', label: 'Travel Insurance' },
-  { value: 'pet', label: 'Pet Insurance' },
-  { value: 'flood-earthquake', label: 'Flood or Earthquake Insurance' },
-  { value: 'health', label: 'Health Insurance' },
-  { value: 'life', label: 'Life Insurance' },
-  { value: 'disability', label: 'Disability Insurance' },
-  { value: 'dental-vision', label: 'Dental & Vision Insurance' },
-  { value: 'long-term-care', label: 'Long-Term Care Insurance' },
-  { value: 'cyber-liability', label: 'Cyber Liability Insurance' },
-]
+const navItems = ['Overview', 'Profile', 'Agents', 'Messages', 'Appointments', 'Settings']
 
-const productConfigs = {
-  'personal-auto': [
-    { title: 'Named Insured', file: 'products/personal-auto/steps/step1.html' },
-    { title: 'Current Mailing Address', file: 'products/personal-auto/steps/step2.html' },
-    { title: 'Driver Information', file: 'products/personal-auto/steps/step3.html' },
-    { title: 'Vehicle Information', file: 'products/personal-auto/steps/step4.html' },
-    { title: 'Coverages', file: 'products/personal-auto/steps/step5.html' },
-    { title: 'Prior Policy Information', file: 'products/personal-auto/steps/step6.html' },
-    { title: 'Additional Information', file: 'products/personal-auto/steps/step7.html' },
-  ],
-  homeowners: [
-    { title: 'Property & Insured', file: 'products/homeowners/steps/step1.html' },
-    { title: 'Coverages', file: 'products/homeowners/steps/step2.html' },
-    { title: 'Loss History', file: 'products/homeowners/steps/step3.html' },
-  ],
-  renters: [
-    { title: 'Applicant & Address', file: 'products/renters/steps/step1.html' },
-    { title: 'Contents Coverage', file: 'products/renters/steps/step2.html' },
-  ],
-  'motorcycle-offroad': [
-    { title: 'Applicant & Contact', file: 'products/motorcycle-offroad/steps/step1.html' },
-    { title: 'Motorcycle / Off-Road Unit', file: 'products/motorcycle-offroad/steps/step2.html' },
-    { title: 'Coverages & History', file: 'products/motorcycle-offroad/steps/step3.html' },
-  ],
-  'commercial-auto': [
-    { title: 'Business & Operations', file: 'products/commercial-auto/steps/step1.html' },
-    { title: 'Vehicle Schedule', file: 'products/commercial-auto/steps/step2.html' },
-    { title: 'Drivers', file: 'products/commercial-auto/steps/step3.html' },
-    { title: 'Coverages & Loss History', file: 'products/commercial-auto/steps/step4.html' },
-  ],
-  'general-liability': [
-    { title: 'Business & Operations', file: 'products/general-liability/steps/step1.html' },
-    { title: 'Coverages & Limits', file: 'products/general-liability/steps/step2.html' },
-    { title: 'Risk Controls & Loss History', file: 'products/general-liability/steps/step3.html' },
-  ],
-  'commercial-property': [
-    { title: 'Location & Building Details', file: 'products/commercial-property/steps/step1.html' },
-    { title: 'Protections & Exposure', file: 'products/commercial-property/steps/step2.html' },
-    { title: 'Coverages & Valuation', file: 'products/commercial-property/steps/step3.html' },
-  ],
-  'workers-comp': [
-    { title: 'Employer Information', file: 'products/workers-comp/steps/step1.html' },
-    { title: 'Exposure & Payroll', file: 'products/workers-comp/steps/step2.html' },
-    { title: 'Safety & Loss History', file: 'products/workers-comp/steps/step3.html' },
-  ],
-  'professional-liability': [
-    { title: 'Firm Profile', file: 'products/professional-liability/steps/step1.html' },
-    { title: 'Coverage Details', file: 'products/professional-liability/steps/step2.html' },
-    { title: 'Claims & Risk Controls', file: 'products/professional-liability/steps/step3.html' },
-  ],
-  umbrella: [
-    { title: 'Underlying Policies', file: 'products/umbrella/steps/step1.html' },
-    { title: 'Exposure Summary', file: 'products/umbrella/steps/step2.html' },
-    { title: 'Umbrella Coverage & Loss History', file: 'products/umbrella/steps/step3.html' },
-  ],
-  travel: [
-    { title: 'Trip Details', file: 'products/travel/steps/step1.html' },
-    { title: 'Traveler Information', file: 'products/travel/steps/step2.html' },
-    { title: 'Coverage Selections', file: 'products/travel/steps/step3.html' },
-  ],
-  pet: [
-    { title: 'Owner & Pet Details', file: 'products/pet/steps/step1.html' },
-    { title: 'Health & Coverage', file: 'products/pet/steps/step2.html' },
-  ],
-  'flood-earthquake': [
-    { title: 'Property Location', file: 'products/flood-earthquake/steps/step1.html' },
-    { title: 'Building Details', file: 'products/flood-earthquake/steps/step2.html' },
-    { title: 'Coverage & History', file: 'products/flood-earthquake/steps/step3.html' },
-  ],
-  health: [
-    { title: 'Household Information', file: 'products/health/steps/step1.html' },
-    { title: 'Coverage Preferences', file: 'products/health/steps/step2.html' },
-    { title: 'Disclosures', file: 'products/health/steps/step3.html' },
-  ],
-  life: [
-    { title: 'Proposed Insured', file: 'products/life/steps/step1.html' },
-    { title: 'Coverage & Beneficiaries', file: 'products/life/steps/step2.html' },
-    { title: 'Health & Lifestyle', file: 'products/life/steps/step3.html' },
-  ],
-  disability: [
-    { title: 'Employment & Income', file: 'products/disability/steps/step1.html' },
-    { title: 'Benefit Design', file: 'products/disability/steps/step2.html' },
-    { title: 'Health & Risks', file: 'products/disability/steps/step3.html' },
-  ],
-  'dental-vision': [
-    { title: 'Enrollee & Dependents', file: 'products/dental-vision/steps/step1.html' },
-    { title: 'Coverage Elections', file: 'products/dental-vision/steps/step2.html' },
-  ],
-  'long-term-care': [
-    { title: 'Applicant Profile', file: 'products/long-term-care/steps/step1.html' },
-    { title: 'Coverage Design', file: 'products/long-term-care/steps/step2.html' },
-    { title: 'Care Preferences & Health', file: 'products/long-term-care/steps/step3.html' },
-  ],
-  'cyber-liability': [
-    { title: 'Organization & Data Profile', file: 'products/cyber-liability/steps/step1.html' },
-    { title: 'Security Controls', file: 'products/cyber-liability/steps/step2.html' },
-    { title: 'Incidents & Coverage', file: 'products/cyber-liability/steps/step3.html' },
-  ],
+const parseFullName = (fullName = '') => {
+  const parts = fullName.trim().split(' ').filter(Boolean)
+  const firstName = parts[0] || ''
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : ''
+  const middleName = parts.length > 2 ? parts.slice(1, -1).join(' ') : parts[1] || ''
+  return { firstName, middleName, lastName }
 }
 
-const defaultProduct = 'personal-auto'
-
 export default function ClientDashboard() {
-  const { user, logout } = useAuth()
+  const { user, lastPassword, setLastPassword, logout } = useAuth()
   const nav = useNavigate()
-  const contentRef = useRef(null)
-
-  const [productKey, setProductKey] = useState(defaultProduct)
-  const [stepIndex, setStepIndex] = useState(1)
-  const [stepHtml, setStepHtml] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [reloadTick, setReloadTick] = useState(0)
-
-  const steps = productConfigs[productKey] || []
-  const activeStep = steps[stepIndex - 1]
+  const [activeTab, setActiveTab] = useState('Overview')
+  const [loading, setLoading] = useState(true)
+  const [client, setClient] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [form, setForm] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    email: user?.email || '',
+    phone: '',
+    address: '',
+    zip: '',
+    state: '',
+    availability: 'online',
+  })
 
   useEffect(() => {
-    setStepIndex(1)
-  }, [productKey])
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      if (!activeStep) {
-        setStepHtml('')
+    const fetchProfile = async () => {
+      if (!user?.customerId) {
+        setLoading(false)
         return
       }
       setLoading(true)
-      setError('')
       try {
-        const res = await fetch(`${API_URL}/forms/${activeStep.file}?v=${Date.now()}`, { cache: 'no-store' })
-        if (!res.ok) throw new Error('Load error')
-        const html = await res.text()
-        if (!cancelled) setStepHtml(html)
-      } catch (err) {
-        if (!cancelled) {
-          setError('Could not load this step. Please try again.')
-          setStepHtml('')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [activeStep, reloadTick])
-
-  useEffect(() => {
-    const root = contentRef.current
-    if (!root) return
-
-    // run inline scripts if any
-    const scripts = root.querySelectorAll('script')
-    scripts.forEach((old) => {
-      const s = document.createElement('script')
-      Array.from(old.attributes).forEach((attr) => s.setAttribute(attr.name, attr.value))
-      s.textContent = old.textContent
-      old.replaceWith(s)
-    })
-
-    const addOtherSupport = (select) => {
-      if (!select || select.dataset.hasOther === '1') return
-      const hasOther = Array.from(select.options).some(
-        (opt) => opt.value === 'other' || opt.textContent.trim().toLowerCase() === 'other'
-      )
-      if (!hasOther) {
-        const opt = document.createElement('option')
-        opt.value = 'other'
-        opt.textContent = 'Other'
-        select.appendChild(opt)
-      }
-
-      const wrapper = select.closest('.field-control') || select.parentElement
-      const baseId = select.id || select.name || `select-${Math.random().toString(36).slice(2, 7)}`
-      const originalName = select.getAttribute('name') || baseId
-      const inputId = `${baseId}-other`
-      let otherInput = wrapper.querySelector(`[data-other-for=\"${inputId}\"]`)
-      if (!otherInput) {
-        otherInput = document.createElement('input')
-        otherInput.type = 'text'
-        otherInput.className = 'other-input'
-        otherInput.placeholder = 'Please specify'
-        otherInput.id = inputId
-        otherInput.setAttribute('data-other-for', inputId)
-        wrapper.appendChild(otherInput)
-      }
-
-      const syncOther = () => {
-        const val = (select.value || '').toLowerCase()
-        const txt = (select.options[select.selectedIndex]?.textContent || '').trim().toLowerCase()
-        const show = val === 'other' || txt === 'other'
-        otherInput.style.display = show ? 'block' : 'none'
-        select.style.display = show ? 'none' : ''
-        if (show) {
-          select.name = `${originalName}__select`
-          otherInput.name = originalName
-          if (!otherInput.value) otherInput.focus()
-        } else {
-          select.name = originalName
-          otherInput.name = ''
-          otherInput.value = ''
-        }
-      }
-
-      otherInput.addEventListener('blur', () => {
-        if (!otherInput.value) {
-          select.value = ''
-          syncOther()
-        }
-      })
-      select.addEventListener('change', syncOther)
-      syncOther()
-      select.dataset.hasOther = '1'
-    }
-
-    const enhanceAllSelects = (rootNode) => {
-      rootNode.querySelectorAll('select').forEach(addOtherSupport)
-    }
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (!(node instanceof HTMLElement)) return
-          if (node.tagName === 'SELECT') addOtherSupport(node)
-          node.querySelectorAll && node.querySelectorAll('select').forEach(addOtherSupport)
+        const res = await api.get(`/customers/${user.customerId}/profile`)
+        const profile = res.data.profile
+        setClient(profile)
+        const nameParts = parseFullName(profile?.name || '')
+        const details = profile?.profileData || {}
+        setForm({
+          firstName: details.firstName || nameParts.firstName,
+          middleName: details.middleName || nameParts.middleName,
+          lastName: details.lastName || nameParts.lastName,
+          email: details.email || user?.email || '',
+          phone: details.phone || '',
+          address: details.address || '',
+          zip: details.zip || '',
+          state: details.state || '',
+          availability: details.availability || 'online',
         })
-      })
-    })
-
-    enhanceAllSelects(root)
-    observer.observe(root, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [stepHtml])
+      } catch (err) {
+        setClient(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProfile()
+  }, [user?.customerId, user?.email])
 
   const initials = useMemo(() => {
-    if (user?.name) {
-      return user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
+    if (form.firstName || form.lastName) {
+      return `${form.firstName?.[0] || ''}${form.lastName?.[0] || ''}`.toUpperCase() || 'CL'
     }
     if (user?.email) return user.email[0]?.toUpperCase() ?? 'CL'
     return 'CL'
-  }, [user])
+  }, [form.firstName, form.lastName, user?.email])
 
-  const displayName = user?.name || user?.email || 'client'
+  const displayName = form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : user?.email || 'client'
+
+  const resetProfileForm = () => {
+    if (client) {
+      const nameParts = parseFullName(client?.name || '')
+      const details = client?.profileData || {}
+      setForm({
+        firstName: details.firstName || nameParts.firstName,
+        middleName: details.middleName || nameParts.middleName,
+        lastName: details.lastName || nameParts.lastName,
+        email: details.email || user?.email || '',
+        phone: details.phone || '',
+        address: details.address || '',
+        zip: details.zip || '',
+        state: details.state || '',
+        availability: details.availability || 'online',
+      })
+    } else {
+      setForm({
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        email: user?.email || '',
+        phone: '',
+        address: '',
+        zip: '',
+        state: '',
+        availability: 'online',
+      })
+    }
+  }
+
+  const handleProfileSave = (e) => {
+    e.preventDefault()
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    setClient((prev) => ({
+      ...(prev || {}),
+      name: fullName,
+      profileData: {
+        ...(prev?.profileData || {}),
+        firstName: form.firstName,
+        middleName: form.middleName,
+        lastName: form.lastName,
+        phone: form.phone,
+        email: form.email,
+        address: form.address,
+        zip: form.zip,
+        state: form.state,
+        availability: form.availability,
+      },
+    }))
+    toast.success('Profile saved')
+  }
+
+  const handlePasswordSubmit = (e) => {
+    e?.preventDefault()
+    if (!newPassword || !confirmPassword) {
+      toast.error('Enter and confirm your new password')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+    setLastPassword(newPassword)
+    setChangingPassword(false)
+    setShowPassword(false)
+    setNewPassword('')
+    setConfirmPassword('')
+    toast.success('Password updated locally (connect backend to persist)')
+  }
+
+  const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
 
   return (
     <main className="page-shell py-8">
-      <div className="grid gap-4 lg:grid-cols-[240px,1fr]">
+      <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
         <aside className="surface p-4 lg:p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Steps</div>
-          <div className="space-y-2">
-            {steps.map((step, idx) => {
-              const isActive = idx === stepIndex - 1
-              return (
-                <button
-                  key={step.title}
-                  onClick={() => setStepIndex(idx + 1)}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
-                    isActive ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                  aria-current={isActive}
-                >
-                  <div className="text-xs font-semibold text-slate-500">Step {idx + 1}</div>
-                  <div>{step.title}</div>
-                </button>
-              )
-            })}
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Connectura</div>
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <button
+                key={item}
+                onClick={() => setActiveTab(item)}
+                className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
+                  activeTab === item ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {item}
+              </button>
+            ))}
           </div>
         </aside>
 
-        <section className="space-y-4">
+        <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold">Connectura Client Dashboard</h1>
-              <p className="text-slate-500">Welcome back, {displayName}. Complete your insurance profile.</p>
+              <p className="text-slate-500">
+                Welcome back{displayName ? `, ${displayName}` : ''}. Track your policies and appointments.
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -326,78 +197,236 @@ export default function ClientDashboard() {
             </div>
           </div>
 
-          {loading && !stepHtml && <Skeleton className="h-24" />}
+          {loading && <Skeleton className="h-24" />}
 
-          <div className="surface p-4 sm:p-5 space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:outline-none focus:ring-2 focus:ring-[#006aff]/20"
-                value={productKey}
-                onChange={(e) => setProductKey(e.target.value)}
-              >
-                {productOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+          {!loading && activeTab === 'Overview' && (
+            <div className="surface p-5">
+              <h2 className="text-xl font-semibold mb-2">Overview</h2>
+              <p className="text-slate-600">
+                Stay on top of your insurance profile, saved agents, and upcoming appointments.
+              </p>
             </div>
+          )}
 
-            {error && <div className="text-red-600 text-sm">{error}</div>}
+          {!loading && activeTab === 'Profile' && (
+            <form className="surface p-5 space-y-4" onSubmit={handleProfileSave}>
+              <h2 className="text-xl font-semibold">Profile</h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block text-sm">
+                  First name
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.firstName}
+                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Middle name
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.middleName}
+                    onChange={(e) => setForm({ ...form, middleName: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Last name
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.lastName}
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                  />
+                </label>
+              </div>
 
-            {!error && (
-              <div className="space-y-3">
-                {loading && <div className="text-slate-500 text-sm">Loading step...</div>}
-                <div ref={contentRef} className="step-html py-2" dangerouslySetInnerHTML={{ __html: stepHtml }} />
-                <div className="form-card extra-card m-2">
-                  <div className="card-title">Additional Details</div>
-                  <div className="form-grid wide">
-                    <label className="field-label" htmlFor={`missing-info-${productKey}-${stepIndex}`}>
-                      Any missing Information, not included in the form ? Write it here:
-                    </label>
-                    <div className="field-control">
-                      <textarea
-                        id={`missing-info-${productKey}-${stepIndex}`}
-                        name={`missing-info-${productKey}-${stepIndex}`}
-                        placeholder="Add any extra info here"
-                      />
-                    </div>
-                    <label className="field-label" htmlFor={`missing-upload-${productKey}-${stepIndex}`}>
-                      Upload File:
-                    </label>
-                    <div className="field-control">
-                      <label className="upload-btn" htmlFor={`missing-upload-${productKey}-${stepIndex}`}>
-                        Upload File
-                      </label>
-                      <input
-                        className="upload-input"
-                        id={`missing-upload-${productKey}-${stepIndex}`}
-                        name={`missing-upload-${productKey}-${stepIndex}`}
-                        type="file"
-                        accept="*/*"
-                      />
-                    </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-sm">
+                  Email
+                  <input
+                    type="email"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Phone number
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <label className="block text-sm">
+                Address
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </label>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block text-sm">
+                  ZIP
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.zip}
+                    onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  State
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.state}
+                    onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <label className="block text-sm">
+                Availability
+                <select
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={form.availability}
+                  onChange={(e) => setForm({ ...form, availability: e.target.value })}
+                >
+                  <option value="online">Online</option>
+                  <option value="busy">Busy</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </label>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" className="pill-btn-ghost" onClick={resetProfileForm}>
+              Cancel
+            </button>
+            <button type="submit" className="pill-btn-primary px-8">
+                  Save changes
+                </button>
+              </div>
+            </form>
+          )}
+
+          {!loading && activeTab === 'Agents' && (
+            <div className="surface p-5">
+              <h2 className="text-xl font-semibold mb-2">Agents</h2>
+              <p className="text-slate-600">Saved and matched agents will show up here.</p>
+            </div>
+          )}
+
+          {!loading && activeTab === 'Messages' && (
+            <div className="surface p-5">
+              <h2 className="text-xl font-semibold mb-2">Messages</h2>
+              <p className="text-slate-600">Conversations with agents will appear here.</p>
+            </div>
+          )}
+
+          {!loading && activeTab === 'Appointments' && (
+            <div className="surface p-5">
+              <h2 className="text-xl font-semibold mb-2">Appointments</h2>
+              <p className="text-slate-600">Track your upcoming calls and meetings.</p>
+            </div>
+          )}
+
+          {!loading && activeTab === 'Settings' && (
+            <div className="surface p-5 space-y-4">
+              <h2 className="text-xl font-semibold">Settings</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <div className="text-sm text-slate-500">Email</div>
+                  <div className="font-semibold">{form.email || 'Not set'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <div className="text-sm text-slate-500">Name</div>
+                  <div className="font-semibold">
+                    {[form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ') || 'Not set'}
                   </div>
                 </div>
               </div>
-            )}
+              <div className="text-sm text-slate-500">
+                Manage notifications and account preferences (coming soon).
+              </div>
 
-            <div className="flex items-center justify-end gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setStepIndex(1)
-                  setReloadTick((k) => k + 1)
-                }}
-                className="pill-btn-ghost px-6 border-[#b5c8e8] text-[#0b3b8c]"
-              >
-                Cancel
-              </button>
-              <button type="button" onClick={() => alert('Saved')} className="pill-btn-primary px-6">
-                Save changes
-              </button>
+              <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <span>Password</span>
+                      <button
+                        type="button"
+                        className="text-slate-500 hover:text-slate-800"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18m-4.5-4.5A7 7 0 017 12m7 7a7 7 0 01-7-7m0 0a7 7 0 0111.667-5M12 9a3 3 0 013 3" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <div className="font-semibold">{passwordDisplay}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="pill-btn-ghost text-sm px-4"
+                    onClick={() => setChangingPassword((v) => !v)}
+                  >
+                    {changingPassword ? 'Cancel' : 'Change password'}
+                  </button>
+                </div>
+
+                {changingPassword && (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-sm">
+                        New password
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        Confirm password
+                        <input
+                          type="password"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="pill-btn-ghost"
+                        onClick={() => {
+                          setChangingPassword(false)
+                          setNewPassword('')
+                          setConfirmPassword('')
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button type="button" className="pill-btn-primary px-5" onClick={handlePasswordSubmit}>
+                        Save password
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
     </main>

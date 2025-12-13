@@ -19,6 +19,7 @@ CREATE TABLE "Agent" (
     "producerNumber" TEXT,
     "address" TEXT,
     "zip" TEXT,
+    "phone" TEXT,
     "products" TEXT NOT NULL DEFAULT '[]',
     "availability" TEXT NOT NULL,
     "rating" REAL NOT NULL,

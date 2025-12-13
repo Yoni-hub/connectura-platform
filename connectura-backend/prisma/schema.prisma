@@ -33,6 +33,7 @@ model Agent {
   producerNumber String?
   address        String?
   zip            String?
+  phone          String?
   products       String   @default("[]")
   availability String
   rating       Float

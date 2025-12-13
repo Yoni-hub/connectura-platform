@@ -21,7 +21,7 @@ const sampleMessages = []
 const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function AgentDashboard() {
-  const { user, lastPassword, setLastPassword, logout } = useAuth()
+  const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
   const nav = useNavigate()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -45,6 +45,8 @@ export default function AgentDashboard() {
     zip: '',
     state: '',
     availability: 'online',
+    phone: '',
+    email: user?.email || '',
   })
 
   useEffect(() => {
@@ -54,13 +56,15 @@ export default function AgentDashboard() {
       try {
         const res = await api.get(`/agents/${user.agentId}`)
         const current = res.data.agent
-        setAgent(current)
+        setAgent({ ...current, phone: current.phone || '', email: current.email || user?.email || '' })
         setForm({
           name: current.name || '',
           address: current.address || '',
           zip: current.zip || '',
           state: Array.isArray(current.states) ? current.states[0] || '' : '',
           availability: current.availability || 'online',
+          phone: current.phone || '',
+          email: current.email || user?.email || '',
         })
       } catch (err) {
         toast.error('Could not load your agent profile')
@@ -79,20 +83,28 @@ export default function AgentDashboard() {
     setSaving(true)
     try {
       const payload = {
+        name: form.name,
         availability: form.availability,
         address: form.address,
         zip: form.zip,
         states: form.state ? [form.state] : [],
+        phone: form.phone,
+        email: form.email,
       }
       const res = await api.put(`/agents/${agent.id}`, payload)
       const updated = res.data.agent
-      setAgent(updated)
+      setAgent({ ...updated, phone: form.phone, email: form.email })
+      if (setUser && user) {
+        setUser({ ...user, email: form.email })
+      }
       setForm({
         name: updated.name || '',
         address: updated.address || '',
         zip: updated.zip || '',
         state: Array.isArray(updated.states) ? updated.states[0] || '' : '',
         availability: updated.availability || 'online',
+        phone: form.phone,
+        email: form.email,
       })
       toast.success('Agent profile updated')
     } catch (err) {
@@ -271,19 +283,38 @@ export default function AgentDashboard() {
 
                     <label className="block text-sm">
                       Agent/Agency name
-                      <input
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        disabled
-                      />
-                    </label>
+                    <input
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
+                </label>
 
-                    <label className="block text-sm">
-                      Address
-                      <input
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                        value={form.address}
+                <label className="block text-sm">
+                  Email
+                    <input
+                      type="email"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  Phone number
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="e.g., (555) 123-4567"
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  Address
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={form.address}
                         onChange={(e) => setForm({ ...form, address: e.target.value })}
                       />
                     </label>
@@ -320,22 +351,24 @@ export default function AgentDashboard() {
                       </select>
                     </label>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                      <button
-                        type="button"
-                        className="pill-btn-ghost"
-                        onClick={() =>
-                          agent &&
-                          setForm({
-                            name: agent.name || '',
-                            address: agent.address || '',
-                            zip: agent.zip || '',
-                            state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
-                            availability: agent.availability || 'online',
-                          })
-                        }
-                      >
-                        Cancel
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          className="pill-btn-ghost"
+                          onClick={() =>
+                            agent &&
+                            setForm({
+                              name: agent.name || '',
+                              address: agent.address || '',
+                              zip: agent.zip || '',
+                              state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
+                              availability: agent.availability || 'online',
+                              phone: agent.phone || '',
+                              email: agent.email || user?.email || '',
+                            })
+                          }
+                        >
+                          Cancel
                       </button>
                       <button type="submit" disabled={saving} className="pill-btn-primary px-8">
                         {saving ? 'Saving...' : 'Save changes'}
