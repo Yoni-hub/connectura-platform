@@ -70,7 +70,7 @@ export default function Navbar() {
             ) : (
               <button
                 type="button"
-                onClick={() => setAuthOpen(true)}
+                onClick={() => triggerAuth('agent')}
                 className="text-slate-700 hover:text-[#0b3b8c]"
               >
                 For agents
@@ -111,7 +111,7 @@ export default function Navbar() {
                   type="button"
                   className="text-left text-slate-700 hover:text-[#0b3b8c]"
                   onClick={() => {
-                    setAuthOpen(true)
+                    triggerAuth('agent')
                     setMenuOpen(false)
                   }}
                 >

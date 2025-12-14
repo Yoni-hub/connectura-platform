@@ -3,6 +3,7 @@
 - Connectura does NOT sell insurance.
 - Quotes & policies are handled on agents' own systems.
 - Platform connects clients to licensed agents.
+- No platform payouts; Connectura does not pay agents or clients.
 - Core features:
   1) Language-based matching
   2) Client insurance profiles (create once, securely share)

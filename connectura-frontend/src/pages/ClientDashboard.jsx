@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 
-const navItems = ['Overview', 'Profile', 'Agents', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
 const parseFullName = (fullName = '') => {
   const parts = fullName.trim().split(' ').filter(Boolean)
@@ -308,6 +308,36 @@ export default function ClientDashboard() {
                 </button>
               </div>
             </form>
+          )}
+
+          {!loading && activeTab === 'Forms' && (
+            <div className="surface p-5 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold">Forms</h2>
+                  <p className="text-slate-600">
+                    Complete your insurance profile once and securely share it with licensed agents.
+                  </p>
+                </div>
+                <button type="button" className="pill-btn-primary px-5" onClick={() => nav('/client_forms')}>
+                  Open forms workspace
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-1">
+                  <div className="text-sm font-semibold text-slate-700">Start or continue</div>
+                  <div className="text-sm text-slate-600">
+                    Choose any line—auto, home, business—and complete the steps at your pace.
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-1">
+                  <div className="text-sm font-semibold text-slate-700">Share with agents</div>
+                  <div className="text-sm text-slate-600">
+                    Keep your details in one place and share them only with matched, licensed agents.
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {!loading && activeTab === 'Agents' && (

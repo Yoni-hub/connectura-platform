@@ -5,6 +5,7 @@ import AgentProfile from '../pages/AgentProfile'
 import Dashboard from '../pages/Dashboard'
 import ClientDashboard from '../pages/ClientDashboard'
 import AgentDashboard from '../pages/AgentDashboard'
+import AgentOnboarding from '../pages/AgentOnboarding'
 import ClientForms from '../pages/ClientForms'
 import VideoCall from '../pages/VideoCall'
 import VoiceCall from '../pages/VoiceCall'
@@ -87,6 +88,14 @@ export default function AppRouter() {
           element={
             <AgentOnly>
               <AgentDashboard />
+            </AgentOnly>
+          }
+        />
+        <Route
+          path="/agent/onboarding"
+          element={
+            <AgentOnly>
+              <AgentOnboarding />
             </AgentOnly>
           }
         />

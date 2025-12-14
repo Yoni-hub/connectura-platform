@@ -2,14 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
-import { states } from '../../data/states'
 
 export default function AuthModal({ open, onClose, intent = 'agent' }) {
   const { login, register, loading } = useAuth()
   const nav = useNavigate()
   const [mode, setMode] = useState('login')
   const [remember, setRemember] = useState(false)
-  const [roleIntent, setRoleIntent] = useState(intent)
+  const [roleIntent, setRoleIntent] = useState(intent?.toUpperCase() === 'CUSTOMER' ? 'CUSTOMER' : 'AGENT')
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -26,7 +25,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
     if (open) {
       setMode('login')
       setRemember(false)
-      setRoleIntent(intent)
+      setRoleIntent(intent?.toUpperCase() === 'CUSTOMER' ? 'CUSTOMER' : 'AGENT')
       setForm({
         name: '',
         email: '',
@@ -91,7 +90,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
     if (user) {
       onClose()
       if (user.role === 'AGENT') {
-        nav('/agent/dashboard', { replace: true })
+        nav('/agent/onboarding', { replace: true })
       } else {
         nav('/client/dashboard', { replace: true })
       }
@@ -109,14 +108,14 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
             {mode === 'login'
               ? 'Welcome back'
               : roleIntent === 'AGENT'
-              ? 'Create your agent account'
+              ? 'Create your account'
               : 'Create your account'}
           </p>
           <p className="text-sm text-slate-600">
             {mode === 'login'
               ? 'Sign in to your dashboard.'
               : roleIntent === 'AGENT'
-              ? 'Set up your profile to start receiving matches.'
+              ? 'Access your agent dashboard.'
               : 'Access your client dashboard and insurance profile.'}
           </p>
         </div>
@@ -148,7 +147,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
         {mode === 'create' && roleIntent === 'AGENT' && (
           <div className="space-y-3">
             <label className="block text-sm">
-              Full name or agency name
+              Full name
               <input
                 required
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
@@ -178,58 +177,6 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
                 />
               </label>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="text-sm block">
-                Licensed state
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                  value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
-                >
-                  <option value="">Select</option>
-                  {states.map((st) => (
-                    <option key={st} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                ZIP code
-                <input
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                  value={form.zip}
-                  onChange={(e) => setForm({ ...form, zip: e.target.value })}
-                />
-              </label>
-            </div>
-            <label className="block text-sm">
-              Business address
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                placeholder="Street, city"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm">
-              Primary language(s)
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                placeholder="e.g., English, Spanish"
-                value={form.languages}
-                onChange={(e) => setForm({ ...form, languages: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm">
-              Products you sell
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                placeholder="e.g., Auto, Home, Renters"
-                value={form.products}
-                onChange={(e) => setForm({ ...form, products: e.target.value })}
-              />
-            </label>
           </div>
         )}
 
