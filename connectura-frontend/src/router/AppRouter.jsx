@@ -33,6 +33,16 @@ function AgentOnly({ children }) {
   return children
 }
 
+function AgentApprovedOnly({ children }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/" replace />
+  if (user.role !== 'AGENT') return <Navigate to="/dashboard" replace />
+  const pending = user.agentStatus && user.agentStatus !== 'approved'
+  const suspended = user.agentSuspended
+  if (pending || suspended) return <Navigate to="/agent/onboarding" replace />
+  return children
+}
+
 function CustomerOnly({ children }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/" replace />
@@ -87,9 +97,9 @@ export default function AppRouter() {
         <Route
           path="/agent/dashboard"
           element={
-            <AgentOnly>
+            <AgentApprovedOnly>
               <AgentDashboard />
-            </AgentOnly>
+            </AgentApprovedOnly>
           }
         />
         <Route

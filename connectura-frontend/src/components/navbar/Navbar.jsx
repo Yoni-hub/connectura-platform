@@ -64,9 +64,15 @@ export default function Navbar() {
               Build your insurance profile
             </button>
             {user?.role === 'AGENT' ? (
-              <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
-                Agent dashboard
-              </Link>
+              (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
+                <Link to="/agent/onboarding" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Agent onboarding
+                </Link>
+              ) : (
+                <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Agent dashboard
+                </Link>
+              )
             ) : (
               <button
                 type="button"
@@ -99,13 +105,23 @@ export default function Navbar() {
                 Build your insurance profile
               </button>
               {user?.role === 'AGENT' ? (
-                <Link
-                  to="/agent/dashboard"
-                  className="text-slate-700 hover:text-[#0b3b8c]"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Agent dashboard
-                </Link>
+                (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
+                  <Link
+                    to="/agent/onboarding"
+                    className="text-slate-700 hover:text-[#0b3b8c]"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Agent onboarding
+                  </Link>
+                ) : (
+                  <Link
+                    to="/agent/dashboard"
+                    className="text-slate-700 hover:text-[#0b3b8c]"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Agent dashboard
+                  </Link>
+                )
               ) : (
                 <button
                   type="button"
