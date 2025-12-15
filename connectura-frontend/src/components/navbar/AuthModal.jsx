@@ -47,8 +47,14 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
       if (user) {
         onClose()
         if (user.role === 'AGENT') {
-          const pending = localStorage.getItem('connectura_agent_onboarding_pending') === 'true'
-          nav(pending ? '/agent/onboarding' : '/agent/dashboard', { replace: true })
+          const pendingFlag = localStorage.getItem('connectura_agent_onboarding_pending') === 'true'
+          const pendingStatus = user.agentStatus && user.agentStatus !== 'approved'
+          const suspended = user.agentSuspended
+          if (pendingFlag || pendingStatus || suspended) {
+            nav('/agent/onboarding', { replace: true })
+          } else {
+            nav('/agent/dashboard', { replace: true })
+          }
         } else {
           nav('/client/dashboard', { replace: true })
         }

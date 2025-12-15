@@ -27,6 +27,9 @@ export default function AgentOnboarding() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [agentStatus, setAgentStatus] = useState('pending')
+  const [agentUnderReview, setAgentUnderReview] = useState(false)
+  const [agentSuspended, setAgentSuspended] = useState(false)
   const [form, setForm] = useState({
     name: '',
     producerNumber: '',
@@ -64,6 +67,9 @@ export default function AgentOnboarding() {
           availability: agent?.availability || 'online',
           bio: agent?.bio || '',
         })
+        setAgentStatus(agent?.status || 'pending')
+        setAgentUnderReview(Boolean(agent?.underReview))
+        setAgentSuspended(Boolean(agent?.isSuspended))
       } catch (err) {
         toast.error('Could not load your profile')
       } finally {
@@ -100,6 +106,8 @@ export default function AgentOnboarding() {
       toast.success('Onboarding saved. Welcome!')
       localStorage.setItem('connectura_agent_onboarding_pending', 'true')
       setShowSuccess(true)
+      setAgentStatus('pending')
+      setAgentUnderReview(true)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Save failed')
     } finally {
@@ -286,10 +294,10 @@ export default function AgentOnboarding() {
           >
             Sign out
           </button>
-        </div>
+      </div>
 
-        <div className="grid gap-3 sm:grid-cols-4">
-          {steps.map((step, idx) => (
+      <div className="grid gap-3 sm:grid-cols-4">
+        {steps.map((step, idx) => (
             <button
               type="button"
               key={step.id}
@@ -350,6 +358,38 @@ export default function AgentOnboarding() {
                 onClick={() => setShowSuccess(false)}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {agentStatus !== 'approved' && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">Profile under review</h2>
+            <p className="text-slate-700">
+              Your agent profile is currently under review. Once approved, you will be redirected to your dashboard. If you are
+              suspended, please contact support.
+            </p>
+            {agentSuspended && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                Your account is suspended. Please contact support to resolve this.
+              </div>
+            )}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Need help? Call customer service at <span className="font-semibold">123-456-7890</span> or email{' '}
+              <a className="text-[#0b3b8c] font-semibold" href="mailto:agent.onboarding@connectura.com">
+                agent.onboarding@connectura.com
+              </a>
+              .
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={() => setAgentStatus(agentUnderReview ? 'pending' : agentStatus)}
+              >
+                OK
               </button>
             </div>
           </div>
