@@ -68,10 +68,14 @@ export default function AgentOnboarding() {
           availability: agent?.availability || 'online',
           bio: agent?.bio || '',
         })
-        setAgentStatus(agent?.status || 'pending')
-        setAgentUnderReview(Boolean(agent?.underReview))
-        setAgentSuspended(Boolean(agent?.isSuspended))
-        setShowReviewOverlay((agent?.status || 'pending') !== 'approved')
+        const status = agent?.status || 'pending'
+        const underReviewFlag = Boolean(agent?.underReview)
+        const suspendedFlag = Boolean(agent?.isSuspended)
+        const submittedFlag = localStorage.getItem('connectura_agent_onboarding_submitted') === 'true'
+        setAgentStatus(status)
+        setAgentUnderReview(underReviewFlag)
+        setAgentSuspended(suspendedFlag)
+        setShowReviewOverlay(submittedFlag && status !== 'approved')
       } catch (err) {
         toast.error('Could not load your profile')
       } finally {
@@ -107,6 +111,7 @@ export default function AgentOnboarding() {
       await api.put(`/agents/${user.agentId}`, payload)
       toast.success('Onboarding saved. Welcome!')
       localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+      localStorage.setItem('connectura_agent_onboarding_submitted', 'true')
       setShowSuccess(true)
       setAgentStatus('pending')
       setAgentUnderReview(true)

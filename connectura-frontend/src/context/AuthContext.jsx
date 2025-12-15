@@ -21,8 +21,10 @@ export function AuthProvider({ children }) {
           const suspended = res.data.user.agentSuspended
           if (pending || suspended) {
             localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+            localStorage.setItem('connectura_agent_onboarding_submitted', 'true')
           } else {
             localStorage.removeItem('connectura_agent_onboarding_pending')
+            localStorage.removeItem('connectura_agent_onboarding_submitted')
           }
         }
       })
@@ -46,8 +48,10 @@ export function AuthProvider({ children }) {
         const suspended = res.data.user.agentSuspended
         if (pending || suspended) {
           localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+          localStorage.setItem('connectura_agent_onboarding_submitted', 'true')
         } else {
           localStorage.removeItem('connectura_agent_onboarding_pending')
+          localStorage.removeItem('connectura_agent_onboarding_submitted')
         }
       }
       toast.success('Logged in')
@@ -70,6 +74,7 @@ export function AuthProvider({ children }) {
       setLastPassword(payload.password)
       if (res.data.user.role === 'AGENT') {
         localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+        localStorage.removeItem('connectura_agent_onboarding_submitted')
       }
       toast.success('Account created')
       return res.data.user
@@ -87,6 +92,7 @@ export function AuthProvider({ children }) {
     setLastPassword('')
     localStorage.removeItem('connectura_token')
     localStorage.removeItem('connectura_agent_onboarding_pending')
+    localStorage.removeItem('connectura_agent_onboarding_submitted')
   }
 
   return (
