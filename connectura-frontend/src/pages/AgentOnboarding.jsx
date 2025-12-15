@@ -30,6 +30,7 @@ export default function AgentOnboarding() {
   const [agentStatus, setAgentStatus] = useState('pending')
   const [agentUnderReview, setAgentUnderReview] = useState(false)
   const [agentSuspended, setAgentSuspended] = useState(false)
+  const [showReviewOverlay, setShowReviewOverlay] = useState(false)
   const [form, setForm] = useState({
     name: '',
     producerNumber: '',
@@ -70,6 +71,7 @@ export default function AgentOnboarding() {
         setAgentStatus(agent?.status || 'pending')
         setAgentUnderReview(Boolean(agent?.underReview))
         setAgentSuspended(Boolean(agent?.isSuspended))
+        setShowReviewOverlay((agent?.status || 'pending') !== 'approved')
       } catch (err) {
         toast.error('Could not load your profile')
       } finally {
@@ -108,6 +110,7 @@ export default function AgentOnboarding() {
       setShowSuccess(true)
       setAgentStatus('pending')
       setAgentUnderReview(true)
+      setShowReviewOverlay(true)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Save failed')
     } finally {
@@ -363,7 +366,7 @@ export default function AgentOnboarding() {
           </div>
         </div>
       )}
-      {agentStatus !== 'approved' && (
+      {showReviewOverlay && agentStatus !== 'approved' && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <h2 className="text-xl font-semibold text-slate-900">Profile under review</h2>
@@ -395,7 +398,7 @@ export default function AgentOnboarding() {
                 type="button"
                 className="pill-btn-primary px-5"
                 onClick={() => {
-                  setAgentStatus(agentStatus)
+                  setShowReviewOverlay(false)
                   setActiveIndex(0)
                 }}
               >
