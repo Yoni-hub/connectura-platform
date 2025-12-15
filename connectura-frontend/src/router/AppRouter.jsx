@@ -13,6 +13,7 @@ import Contact from '../pages/Contact'
 import Careers from '../pages/Careers'
 import PrivacyPolicy from '../pages/PrivacyPolicy'
 import LegalNotice from '../pages/LegalNotice'
+import Admin from '../pages/Admin'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
@@ -119,6 +120,7 @@ export default function AppRouter() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/legal-notice" element={<LegalNotice />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
       <Footer />
     </BrowserRouter>
