@@ -152,7 +152,7 @@ export default function AgentOnboarding() {
           </button>
       </div>
 
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4">
           {steps.map((step, idx) => (
             <button
               type="button"
@@ -168,7 +168,7 @@ export default function AgentOnboarding() {
           ))}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-4">
           <div
             className={`rounded-xl border p-4 shadow-sm ${activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
           >
