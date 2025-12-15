@@ -383,13 +383,23 @@ export default function AgentOnboarding() {
               </a>
               .
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="pill-btn-ghost px-5"
+                onClick={() => nav('/')}
+              >
+                Cancel
+              </button>
               <button
                 type="button"
                 className="pill-btn-primary px-5"
-                onClick={() => setAgentStatus(agentUnderReview ? 'pending' : agentStatus)}
+                onClick={() => {
+                  setAgentStatus(agentStatus)
+                  setActiveIndex(0)
+                }}
               >
-                OK
+                Edit
               </button>
             </div>
           </div>
