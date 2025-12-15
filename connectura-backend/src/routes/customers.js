@@ -16,6 +16,7 @@ const formatCustomerProfile = (customer) => ({
   drivers: customer.drivers || [],
   vehicles: customer.vehicles || [],
   profileData: parseJson(customer.profileData, {}),
+  isDisabled: customer.isDisabled,
 })
 
 router.get('/:id/profile', authGuard, async (req, res) => {

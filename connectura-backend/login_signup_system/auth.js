@@ -12,6 +12,9 @@ const sanitizeUser = (user) => ({
   role: user.role,
   agentId: user.agent?.id,
   customerId: user.customer?.id,
+  agentStatus: user.agent?.status,
+  agentSuspended: user.agent?.isSuspended,
+  agentUnderReview: user.agent?.underReview,
 })
 
 router.post('/register', async (req, res) => {
@@ -59,6 +62,9 @@ router.post('/register', async (req, res) => {
                   rating: 4.5,
                   reviews: JSON.stringify([]),
                   photo: '/uploads/agents/agent1.svg',
+                  status: 'pending',
+                  underReview: true,
+                  isSuspended: false,
                 },
               }
             : undefined,

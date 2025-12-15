@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const path = require('path')
+const bcrypt = require('bcrypt')
 
 const authRoutes = require('../login_signup_system/auth')
 const agentRoutes = require('./routes/agents')
@@ -9,6 +10,8 @@ const customerRoutes = require('./routes/customers')
 const searchRoutes = require('./routes/search')
 const quoteRoutes = require('./routes/quotes')
 const contactRoutes = require('./routes/contact')
+const adminRoutes = require('./routes/admin')
+const prisma = require('./prisma')
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -33,6 +36,7 @@ app.use('/customers', customerRoutes)
 app.use('/search', searchRoutes)
 app.use('/', quoteRoutes)
 app.use('/contact', contactRoutes)
+app.use('/admin', adminRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' })
@@ -43,6 +47,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error', detail: err.message })
 })
 
-app.listen(PORT, () => {
-  console.log(`Connectura API running on http://localhost:${PORT}`)
-})
+async function ensureAdminSeed() {
+  const email = process.env.ADMIN_EMAIL || 'admin@connectura.com'
+  const password = process.env.ADMIN_PASSWORD || 'ChangeMe123!'
+  const existing = await prisma.adminUser.findUnique({ where: { email } })
+  if (existing) return
+  const hashed = await bcrypt.hash(password, 10)
+  await prisma.adminUser.create({
+    data: {
+      email,
+      password: hashed,
+      role: 'ADMIN',
+    },
+  })
+  console.log(`Seeded admin user at ${email} (please change default password).`)
+}
+
+ensureAdminSeed()
+  .catch((err) => console.error('Admin seed error', err))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`Connectura API running on http://localhost:${PORT}`)
+    })
+  })

@@ -47,7 +47,8 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
       if (user) {
         onClose()
         if (user.role === 'AGENT') {
-          nav('/agent/dashboard', { replace: true })
+          const pending = localStorage.getItem('connectura_agent_onboarding_pending') === 'true'
+          nav(pending ? '/agent/onboarding' : '/agent/dashboard', { replace: true })
         } else {
           nav('/client/dashboard', { replace: true })
         }

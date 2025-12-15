@@ -22,6 +22,9 @@ const formatAgent = (agent) => ({
   availability: agent.availability,
   rating: agent.rating,
   reviews: parseJson(agent.reviews, []),
+  status: agent.status,
+  isSuspended: agent.isSuspended,
+  underReview: agent.underReview,
 })
 
 router.get('/', async (req, res) => {

@@ -35,6 +35,9 @@ model Agent {
   zip            String?
   phone          String?
   products       String   @default("[]")
+  status        String    @default("approved")
+  isSuspended   Boolean   @default(false)
+  underReview   Boolean   @default(false)
   availability String
   rating       Float
   reviews      String
@@ -55,6 +58,7 @@ model Customer {
   sharedWithAgent  Boolean   @default(false)
   preferredAgent   Agent?    @relation("AgentCustomers", fields: [preferredAgentId], references: [id])
   preferredAgentId Int?
+  isDisabled       Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   drivers          Driver[]
@@ -85,4 +89,25 @@ model Vehicle {
   primaryUse String
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model AdminUser {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  password   String
+  role       String   @default("ADMIN")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  auditLogs  AuditLog[]
+}
+
+model AuditLog {
+  id        Int       @id @default(autoincrement())
+  actorId   Int?
+  actor     AdminUser? @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  targetType String
+  targetId   String
+  action     String
+  diff       String?
+  createdAt  DateTime  @default(now())
 }

@@ -14,7 +14,18 @@ export function AuthProvider({ children }) {
     if (!token) return
     api
       .get('/auth/me')
-      .then((res) => setUser(res.data.user))
+      .then((res) => {
+        setUser(res.data.user)
+        if (res.data.user?.role === 'AGENT') {
+          const pending = res.data.user.agentStatus && res.data.user.agentStatus !== 'approved'
+          const suspended = res.data.user.agentSuspended
+          if (pending || suspended) {
+            localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+          } else {
+            localStorage.removeItem('connectura_agent_onboarding_pending')
+          }
+        }
+      })
       .catch(() => {
         setUser(null)
         setToken(null)
@@ -30,6 +41,15 @@ export function AuthProvider({ children }) {
       setUser(res.data.user)
       localStorage.setItem('connectura_token', res.data.token)
       setLastPassword(password)
+      if (res.data.user.role === 'AGENT') {
+        const pending = res.data.user.agentStatus && res.data.user.agentStatus !== 'approved'
+        const suspended = res.data.user.agentSuspended
+        if (pending || suspended) {
+          localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+        } else {
+          localStorage.removeItem('connectura_agent_onboarding_pending')
+        }
+      }
       toast.success('Logged in')
       return res.data.user
     } catch (err) {
@@ -48,6 +68,9 @@ export function AuthProvider({ children }) {
       setUser(res.data.user)
       localStorage.setItem('connectura_token', res.data.token)
       setLastPassword(payload.password)
+      if (res.data.user.role === 'AGENT') {
+        localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+      }
       toast.success('Account created')
       return res.data.user
     } catch (err) {
@@ -63,6 +86,7 @@ export function AuthProvider({ children }) {
     setToken(null)
     setLastPassword('')
     localStorage.removeItem('connectura_token')
+    localStorage.removeItem('connectura_agent_onboarding_pending')
   }
 
   return (

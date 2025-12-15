@@ -26,6 +26,7 @@ export default function AgentOnboarding() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [form, setForm] = useState({
     name: '',
     producerNumber: '',
@@ -97,7 +98,8 @@ export default function AgentOnboarding() {
       }
       await api.put(`/agents/${user.agentId}`, payload)
       toast.success('Onboarding saved. Welcome!')
-      nav('/agent/dashboard', { replace: true })
+      localStorage.setItem('connectura_agent_onboarding_pending', 'true')
+      setShowSuccess(true)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Save failed')
     } finally {
@@ -107,18 +109,24 @@ export default function AgentOnboarding() {
 
   const renderStep = () => {
     const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
+    const narrowInput = `${commonInput} max-w-[220px]`
+    const narrowTextArea = `${commonInput} max-w-[320px] min-h-[120px]`
     if (steps[activeIndex].id === 'identity') {
       return (
         <div className="space-y-4">
           <label className="block text-sm">
             Full name or agency name
-            <input className={commonInput} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input
+              className={narrowInput}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
           </label>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-sm">
               Producer/license number
               <input
-                className={commonInput}
+                className={narrowInput}
                 value={form.producerNumber}
                 onChange={(e) => setForm({ ...form, producerNumber: e.target.value })}
                 placeholder="NPN or state license ID"
@@ -127,7 +135,7 @@ export default function AgentOnboarding() {
             <label className="block text-sm">
               Licensed state (resident)
               <input
-                className={commonInput}
+                className={narrowInput}
                 value={form.state}
                 onChange={(e) => setForm({ ...form, state: e.target.value })}
                 placeholder="e.g., CA"
@@ -137,7 +145,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             Short bio (no carrier promises; quotes handled on your own systems)
             <textarea
-              className={`${commonInput} min-h-[96px]`}
+              className={narrowTextArea}
               value={form.bio}
               onChange={(e) => setForm({ ...form, bio: e.target.value })}
               placeholder="Licensed independent agent focused on..."
@@ -152,7 +160,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             Languages you support
             <input
-              className={commonInput}
+              className={narrowInput}
               value={form.languages}
               onChange={(e) => setForm({ ...form, languages: e.target.value })}
               placeholder="e.g., English, Spanish"
@@ -161,7 +169,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             Products / lines you sell
             <input
-              className={commonInput}
+              className={narrowInput}
               value={form.products}
               onChange={(e) => setForm({ ...form, products: e.target.value })}
               placeholder="e.g., Auto, Home, Renters, Commercial"
@@ -170,7 +178,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             Primary specialty
             <input
-              className={commonInput}
+              className={narrowInput}
               value={form.specialty}
               onChange={(e) => setForm({ ...form, specialty: e.target.value })}
               placeholder="e.g., Small business, High-net-worth personal lines"
@@ -186,7 +194,7 @@ export default function AgentOnboarding() {
             <label className="block text-sm">
               Phone
               <input
-                className={commonInput}
+                className={narrowInput}
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 placeholder="Best number for client callbacks"
@@ -195,7 +203,7 @@ export default function AgentOnboarding() {
             <label className="block text-sm">
               Availability
               <select
-                className={commonInput}
+                className={narrowInput}
                 value={form.availability}
                 onChange={(e) => setForm({ ...form, availability: e.target.value })}
               >
@@ -208,7 +216,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             Office address
             <input
-              className={commonInput}
+              className={narrowInput}
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               placeholder="Street, city"
@@ -217,7 +225,7 @@ export default function AgentOnboarding() {
           <label className="block text-sm">
             ZIP code
             <input
-              className={commonInput}
+              className={narrowInput}
               value={form.zip}
               onChange={(e) => setForm({ ...form, zip: e.target.value })}
               placeholder="e.g., 94105"
@@ -282,15 +290,17 @@ export default function AgentOnboarding() {
 
         <div className="grid gap-3 sm:grid-cols-4">
           {steps.map((step, idx) => (
-            <div
+            <button
+              type="button"
               key={step.id}
               className={`rounded-xl border p-3 text-sm ${
                 idx === activeIndex ? 'border-[#0b3b8c] bg-[#e8f0ff]' : 'border-slate-200 bg-white'
               }`}
+              onClick={() => setActiveIndex(idx)}
             >
               <div className="font-semibold text-slate-900">{step.title}</div>
               <div className="text-slate-600 text-xs mt-1 leading-snug">{step.blurb}</div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -305,22 +315,46 @@ export default function AgentOnboarding() {
           >
             Back
           </button>
-          {activeIndex < steps.length - 1 ? (
-            <div className="flex gap-3">
-              <button type="button" className="pill-btn-ghost" onClick={goNext}>
-                Skip
-              </button>
+          <div className="flex gap-3">
+            {activeIndex < steps.length - 1 ? (
               <button type="button" className="pill-btn-primary" onClick={goNext}>
                 Next
               </button>
-            </div>
-          ) : (
-            <button type="button" className="pill-btn-primary px-8" disabled={saving} onClick={handleSave}>
-              {saving ? 'Saving...' : 'Save and finish'}
-            </button>
-          )}
+            ) : (
+              <button type="button" className="pill-btn-primary px-8" disabled={saving} onClick={handleSave}>
+                {saving ? 'Saving...' : 'Submit'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">Submission received</h2>
+            <p className="text-slate-700">
+              Your profile has been submitted and is under review. Once approved, we&apos;ll redirect you to your dashboard.
+            </p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Need help? Call customer service at <span className="font-semibold">123-456-7890</span> or email{' '}
+              <a className="text-[#0b3b8c] font-semibold" href="mailto:agent.onboarding@connectura.com">
+                agent.onboarding@connectura.com
+              </a>
+              .
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={() => setShowSuccess(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
