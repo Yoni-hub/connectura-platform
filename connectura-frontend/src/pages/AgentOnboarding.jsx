@@ -118,155 +118,8 @@ export default function AgentOnboarding() {
     }
   }
 
-  const renderStep = () => {
-    const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
-    const narrowInput = `${commonInput} max-w-[220px]`
-    const narrowTextArea = `${commonInput} max-w-[320px] min-h-[120px]`
-    if (steps[activeIndex].id === 'identity') {
-      return (
-        <div className="space-y-4">
-          <label className="block text-sm">
-            Full name or agency name
-            <input
-              className={narrowInput}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </label>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              Producer/license number
-              <input
-                className={narrowInput}
-                value={form.producerNumber}
-                onChange={(e) => setForm({ ...form, producerNumber: e.target.value })}
-                placeholder="NPN or state license ID"
-              />
-            </label>
-            <label className="block text-sm">
-              Licensed state (resident)
-              <input
-                className={narrowInput}
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-                placeholder="e.g., CA"
-              />
-            </label>
-          </div>
-          <label className="block text-sm">
-            Short bio (no carrier promises; quotes handled on your own systems)
-            <textarea
-              className={narrowTextArea}
-              value={form.bio}
-              onChange={(e) => setForm({ ...form, bio: e.target.value })}
-              placeholder="Licensed independent agent focused on..."
-            />
-          </label>
-        </div>
-      )
-    }
-    if (steps[activeIndex].id === 'offerings') {
-      return (
-        <div className="space-y-4">
-          <label className="block text-sm">
-            Languages you support
-            <input
-              className={narrowInput}
-              value={form.languages}
-              onChange={(e) => setForm({ ...form, languages: e.target.value })}
-              placeholder="e.g., English, Spanish"
-            />
-          </label>
-          <label className="block text-sm">
-            Products / lines you sell
-            <input
-              className={narrowInput}
-              value={form.products}
-              onChange={(e) => setForm({ ...form, products: e.target.value })}
-              placeholder="e.g., Auto, Home, Renters, Commercial"
-            />
-          </label>
-          <label className="block text-sm">
-            Primary specialty
-            <input
-              className={narrowInput}
-              value={form.specialty}
-              onChange={(e) => setForm({ ...form, specialty: e.target.value })}
-              placeholder="e.g., Small business, High-net-worth personal lines"
-            />
-          </label>
-        </div>
-      )
-    }
-    if (steps[activeIndex].id === 'availability') {
-      return (
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              Phone
-              <input
-                className={narrowInput}
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="Best number for client callbacks"
-              />
-            </label>
-            <label className="block text-sm">
-              Availability
-              <select
-                className={narrowInput}
-                value={form.availability}
-                onChange={(e) => setForm({ ...form, availability: e.target.value })}
-              >
-                <option value="online">Online</option>
-                <option value="busy">Busy</option>
-                <option value="offline">Offline</option>
-              </select>
-            </label>
-          </div>
-          <label className="block text-sm">
-            Office address
-            <input
-              className={narrowInput}
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="Street, city"
-            />
-          </label>
-          <label className="block text-sm">
-            ZIP code
-            <input
-              className={narrowInput}
-              value={form.zip}
-              onChange={(e) => setForm({ ...form, zip: e.target.value })}
-              placeholder="e.g., 94105"
-            />
-          </label>
-          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-600">
-            Connectura does NOT sell insurance, does NOT pay agents or clients, and all quotes/policies stay on your own systems.
-          </div>
-        </div>
-      )
-    }
-    return (
-      <div className="space-y-3 text-sm text-slate-700">
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="font-semibold text-slate-800 mb-1">Profile</div>
-          <div>Name: {form.name || '—'}</div>
-          <div>License: {form.producerNumber || '—'} ({form.state || 'State not set'})</div>
-          <div>Languages: {form.languages || '—'}</div>
-          <div>Products: {form.products || '—'}</div>
-          <div>Specialty: {form.specialty || '—'}</div>
-          <div>Availability: {form.availability}</div>
-          <div>Phone: {form.phone || '—'}</div>
-          <div>Address: {form.address || '—'} {form.zip || ''}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-3 text-slate-600">
-          Reminder: Connectura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
-        </div>
-      </div>
-    )
-  }
+  const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
+  const fullWidthTextArea = `${commonInput} min-h-[120px]`
 
   if (loading) {
     return (
@@ -299,8 +152,8 @@ export default function AgentOnboarding() {
           </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        {steps.map((step, idx) => (
+        <div className="grid gap-3 sm:grid-cols-4">
+          {steps.map((step, idx) => (
             <button
               type="button"
               key={step.id}
@@ -315,28 +168,159 @@ export default function AgentOnboarding() {
           ))}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">{renderStep()}</div>
-
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            className="pill-btn-ghost"
-            onClick={goPrev}
-            disabled={activeIndex === 0}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
           >
-            Back
-          </button>
-          <div className="flex gap-3">
-            {activeIndex < steps.length - 1 ? (
-              <button type="button" className="pill-btn-primary" onClick={goNext}>
-                Next
-              </button>
-            ) : (
-              <button type="button" className="pill-btn-primary px-8" disabled={saving} onClick={handleSave}>
-                {saving ? 'Saving...' : 'Submit'}
-              </button>
-            )}
+            <h3 className="text-sm font-semibold mb-3">Identity & licensing</h3>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                Full name or agency name
+                <input
+                  className={commonInput}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
+                Producer/license number
+                <input
+                  className={commonInput}
+                  value={form.producerNumber}
+                  onChange={(e) => setForm({ ...form, producerNumber: e.target.value })}
+                  placeholder="NPN or state license ID"
+                />
+              </label>
+              <label className="block text-sm">
+                Licensed state (resident)
+                <input
+                  className={commonInput}
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  placeholder="e.g., CA"
+                />
+              </label>
+              <label className="block text-sm">
+                Short bio (no carrier promises; quotes handled on your own systems)
+                <textarea
+                  className={fullWidthTextArea}
+                  value={form.bio}
+                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                  placeholder="Licensed independent agent focused on..."
+                />
+              </label>
+            </div>
           </div>
+
+          <div
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+          >
+            <h3 className="text-sm font-semibold mb-3">Products & audiences</h3>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                Languages you support
+                <input
+                  className={commonInput}
+                  value={form.languages}
+                  onChange={(e) => setForm({ ...form, languages: e.target.value })}
+                  placeholder="e.g., English, Spanish"
+                />
+              </label>
+              <label className="block text-sm">
+                Products / lines you sell
+                <input
+                  className={commonInput}
+                  value={form.products}
+                  onChange={(e) => setForm({ ...form, products: e.target.value })}
+                  placeholder="e.g., Auto, Home, Renters, Commercial"
+                />
+              </label>
+              <label className="block text-sm">
+                Primary specialty
+                <input
+                  className={commonInput}
+                  value={form.specialty}
+                  onChange={(e) => setForm({ ...form, specialty: e.target.value })}
+                  placeholder="e.g., Small business, High-net-worth personal lines"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+          >
+            <h3 className="text-sm font-semibold mb-3">Availability & contact</h3>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                Phone
+                <input
+                  className={commonInput}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="Best number for client callbacks"
+                />
+              </label>
+              <label className="block text-sm">
+                Availability
+                <select
+                  className={commonInput}
+                  value={form.availability}
+                  onChange={(e) => setForm({ ...form, availability: e.target.value })}
+                >
+                  <option value="online">Online</option>
+                  <option value="busy">Busy</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                Office address
+                <input
+                  className={commonInput}
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="Street, city"
+                />
+              </label>
+              <label className="block text-sm">
+                ZIP code
+                <input
+                  className={commonInput}
+                  value={form.zip}
+                  onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                  placeholder="e.g., 94105"
+                />
+              </label>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-600">
+                Connectura does NOT sell insurance, does NOT pay agents or clients, and all quotes/policies stay on your own systems.
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+          >
+            <h3 className="text-sm font-semibold mb-3">Confirm & finish</h3>
+            <div className="space-y-2 text-sm text-slate-700">
+              <div>Name: {form.name || '—'}</div>
+              <div>License: {form.producerNumber || '—'} ({form.state || 'State not set'})</div>
+              <div>Languages: {form.languages || '—'}</div>
+              <div>Products: {form.products || '—'}</div>
+              <div>Specialty: {form.specialty || '—'}</div>
+              <div>Availability: {form.availability}</div>
+              <div>Phone: {form.phone || '—'}</div>
+              <div>Address: {form.address || '—'} {form.zip || ''}</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
+              Reminder: Connectura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <button type="button" className="pill-btn-primary px-8" disabled={saving} onClick={handleSave}>
+            {saving ? 'Saving...' : 'Submit'}
+          </button>
         </div>
       </div>
 
