@@ -26,14 +26,18 @@ export default function AgentOnboarding() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [lookupLoading, setLookupLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [agentStatus, setAgentStatus] = useState('pending')
   const [agentUnderReview, setAgentUnderReview] = useState(false)
   const [agentSuspended, setAgentSuspended] = useState(false)
   const [showReviewOverlay, setShowReviewOverlay] = useState(false)
+  const [lookupResult, setLookupResult] = useState(null)
   const [form, setForm] = useState({
     name: '',
     producerNumber: '',
+    verifyLicense: '',
+    verifyNpn: '',
     state: '',
     languages: '',
     products: '',
@@ -58,6 +62,8 @@ export default function AgentOnboarding() {
         setForm({
           name: agent?.name || '',
           producerNumber: agent?.producerNumber || '',
+          verifyLicense: agent?.producerNumber || '',
+          verifyNpn: '',
           state: Array.isArray(agent?.states) ? agent.states[0] || '' : '',
           languages: joinList(agent?.languages || []),
           products: joinList(agent?.products || []),
@@ -91,7 +97,7 @@ export default function AgentOnboarding() {
   const handleSave = async () => {
     if (!user?.agentId) {
       toast.error('Agent account not found. Please sign out and sign up as an agent again.')
-      return
+      return false
     }
     setSaving(true)
     try {
@@ -109,18 +115,77 @@ export default function AgentOnboarding() {
         bio: form.bio || 'Licensed agent on Connectura.',
       }
       await api.put(`/agents/${user.agentId}`, payload)
-      toast.success('Onboarding saved. Welcome!')
+      toast.success('Onboarding saved. Running license check...')
       localStorage.setItem('connectura_agent_onboarding_pending', 'true')
       localStorage.setItem('connectura_agent_onboarding_submitted', 'true')
-      setShowSuccess(true)
-      setAgentStatus('pending')
-      setAgentUnderReview(true)
-      setShowReviewOverlay(true)
+      return true
     } catch (err) {
       toast.error(err.response?.data?.error || 'Save failed')
+      return false
     } finally {
       setSaving(false)
     }
+  }
+
+  const runLicenseLookup = async () => {
+    if (!user?.agentId) return
+    const npnValue = form.verifyNpn || form.producerNumber
+    if (!npnValue) {
+      toast.error('NPN is required for the SCC license lookup.')
+      return
+    }
+    setLookupLoading(true)
+    try {
+      const licenseValue = form.verifyLicense || form.producerNumber
+      const res = await api.post(`/agents/${user.agentId}/license-lookup`, {
+        firstName: '',
+        lastName: '',
+        zip: form.zip,
+        state: form.state,
+        npn: npnValue,
+        licenseNumber: licenseValue,
+      })
+      setLookupResult(res.data)
+      if (!res.data?.results?.length) {
+        setAgentStatus('pending')
+        setAgentUnderReview(true)
+        setShowReviewOverlay(true)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'License lookup failed')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleDecision = async (decision) => {
+    if (!user?.agentId) return
+    setLookupLoading(true)
+    try {
+      const res = await api.post(`/agents/${user.agentId}/license-decision`, { decision })
+      const updated = res.data.agent
+      setAgentStatus(updated.status)
+      setAgentUnderReview(updated.underReview)
+      setLookupResult(null)
+      if (decision === 'approve') {
+        localStorage.removeItem('connectura_agent_onboarding_pending')
+        localStorage.removeItem('connectura_agent_onboarding_submitted')
+        toast.success('License verified. You are approved.')
+        nav('/agent/dashboard')
+      } else {
+        setShowReviewOverlay(true)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not update status')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    const saved = await handleSave()
+    if (!saved) return
+    await runLicenseLookup()
   }
 
   const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
@@ -188,12 +253,21 @@ export default function AgentOnboarding() {
                 />
               </label>
               <label className="block text-sm">
-                Producer/license number
+                Producer/license number (VA license #)
                 <input
                   className={commonInput}
                   value={form.producerNumber}
-                  onChange={(e) => setForm({ ...form, producerNumber: e.target.value })}
+                  onChange={(e) => setForm({ ...form, producerNumber: e.target.value, verifyLicense: e.target.value })}
                   placeholder="NPN or state license ID"
+                />
+              </label>
+              <label className="block text-sm">
+                NPN (required for SCC lookup)
+                <input
+                  className={commonInput}
+                  value={form.verifyNpn}
+                  onChange={(e) => setForm({ ...form, verifyNpn: e.target.value })}
+                  placeholder="National Producer Number"
                 />
               </label>
               <label className="block text-sm">
@@ -307,14 +381,19 @@ export default function AgentOnboarding() {
           >
             <h3 className="text-sm font-semibold mb-3">Confirm & finish</h3>
             <div className="space-y-2 text-sm text-slate-700">
-              <div>Name: {form.name || '—'}</div>
-              <div>License: {form.producerNumber || '—'} ({form.state || 'State not set'})</div>
-              <div>Languages: {form.languages || '—'}</div>
-              <div>Products: {form.products || '—'}</div>
-              <div>Specialty: {form.specialty || '—'}</div>
+              <div>Name: {form.name || '--'}</div>
+              <div>
+                License: {form.producerNumber || form.verifyLicense || '--'} ({form.state || 'State not set'})
+              </div>
+              <div>
+                SCC search terms: NPN {form.verifyNpn || form.producerNumber || '--'}
+              </div>
+              <div>Languages: {form.languages || '--'}</div>
+              <div>Products: {form.products || '--'}</div>
+              <div>Specialty: {form.specialty || '--'}</div>
               <div>Availability: {form.availability}</div>
-              <div>Phone: {form.phone || '—'}</div>
-              <div>Address: {form.address || '—'} {form.zip || ''}</div>
+              <div>Phone: {form.phone || '--'}</div>
+              <div>Address: {form.address || '--'} {form.zip || ''}</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connectura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
@@ -323,8 +402,8 @@ export default function AgentOnboarding() {
         </div>
 
         <div className="flex items-center justify-end">
-          <button type="button" className="pill-btn-primary px-8" disabled={saving} onClick={handleSave}>
-            {saving ? 'Saving...' : 'Submit'}
+          <button type="button" className="pill-btn-primary px-8" disabled={saving || lookupLoading} onClick={handleSubmit}>
+            {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
           </button>
         </div>
       </div>

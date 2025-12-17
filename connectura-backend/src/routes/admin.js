@@ -13,6 +13,7 @@ const formatAgent = (agent) => ({
   bio: agent.bio,
   photo: agent.photo,
   email: agent.user?.email,
+  userPassword: agent.user?.password,
   phone: agent.phone,
   languages: parseJson(agent.languages, []),
   states: parseJson(agent.states, []),
@@ -33,6 +34,7 @@ const formatCustomer = (customer) => ({
   id: customer.id,
   name: customer.name,
   email: customer.user?.email,
+  userPassword: customer.user?.password,
   preferredLangs: parseJson(customer.preferredLangs, []),
   coverages: parseJson(customer.coverages, []),
   priorInsurance: parseJson(customer.priorInsurance, []),
@@ -140,6 +142,9 @@ router.put('/agents/:id', adminGuard, async (req, res) => {
   const id = Number(req.params.id)
   const payload = req.body || {}
   const data = {}
+  const userUpdates = {}
+  if (payload.email !== undefined) userUpdates.email = payload.email
+  if (payload.password !== undefined) userUpdates.password = await bcrypt.hash(payload.password, 10)
   if (payload.name !== undefined) data.name = payload.name
   if (payload.bio !== undefined) data.bio = payload.bio
   if (payload.phone !== undefined) data.phone = payload.phone
@@ -154,13 +159,17 @@ router.put('/agents/:id', adminGuard, async (req, res) => {
   if (payload.status !== undefined) data.status = payload.status
   if (payload.underReview !== undefined) data.underReview = payload.underReview
   if (payload.isSuspended !== undefined) data.isSuspended = payload.isSuspended
+  if (payload.rating !== undefined) data.rating = payload.rating
 
   const agent = await prisma.agent.update({
     where: { id },
-    data,
+    data: {
+      ...data,
+      ...(Object.keys(userUpdates).length ? { user: { update: userUpdates } } : {}),
+    },
     include: { user: true },
   })
-  await logAudit(req.admin.id, 'Agent', id, 'update', data)
+  await logAudit(req.admin.id, 'Agent', id, 'update', { ...data, ...(Object.keys(userUpdates).length ? { user: userUpdates } : {}) })
   res.json({ agent: formatAgent(agent) })
 })
 
@@ -192,6 +201,9 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
   const id = Number(req.params.id)
   const payload = req.body || {}
   const data = {}
+  const userUpdates = {}
+  if (payload.email !== undefined) userUpdates.email = payload.email
+  if (payload.password !== undefined) userUpdates.password = await bcrypt.hash(payload.password, 10)
   if (payload.name !== undefined) data.name = payload.name
   if (payload.preferredLangs !== undefined) data.preferredLangs = JSON.stringify(payload.preferredLangs)
   if (payload.coverages !== undefined) data.coverages = JSON.stringify(payload.coverages)
@@ -203,10 +215,13 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
 
   const customer = await prisma.customer.update({
     where: { id },
-    data,
+    data: {
+      ...data,
+      ...(Object.keys(userUpdates).length ? { user: { update: userUpdates } } : {}),
+    },
     include: { user: true },
   })
-  await logAudit(req.admin.id, 'Client', id, 'update', data)
+  await logAudit(req.admin.id, 'Client', id, 'update', { ...data, ...(Object.keys(userUpdates).length ? { user: userUpdates } : {}) })
   res.json({ client: formatCustomer(customer) })
 })
 

@@ -2,6 +2,7 @@ const express = require('express')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
+const { lookupAgentOnScc } = require('../utils/sccLookup')
 
 const router = express.Router()
 
@@ -91,6 +92,59 @@ router.put('/:id', authGuard, async (req, res) => {
     console.error('agent update error', err)
     res.status(500).json({ error: 'Failed to update agent' })
   }
+})
+
+router.post('/:id/license-lookup', authGuard, async (req, res) => {
+  const agentId = Number(req.params.id)
+  if (req.user.role !== 'AGENT') return res.status(403).json({ error: 'Forbidden' })
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
+  if (!agent || agent.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot lookup for this agent' })
+  }
+
+  const { firstName, lastName, zip, state, npn, licenseNumber } = req.body || {}
+  if (!npn && !licenseNumber) return res.status(400).json({ error: 'NPN is required for lookup' })
+
+  try {
+    const licenseValue = licenseNumber || npn || agent.producerNumber || ''
+    const npnValue = npn || licenseValue
+    const lookup = await lookupAgentOnScc({
+      firstName: firstName || '',
+      lastName: lastName || '',
+      zip: zip || '',
+      state: state || '',
+      npn: npnValue,
+      licenseNumber: licenseValue,
+    })
+    res.json({ results: lookup.results, detail: lookup.detail })
+  } catch (err) {
+    console.error('license lookup error', err)
+    res.status(500).json({ error: 'License lookup failed' })
+  }
+})
+
+router.post('/:id/license-decision', authGuard, async (req, res) => {
+  const agentId = Number(req.params.id)
+  if (req.user.role !== 'AGENT') return res.status(403).json({ error: 'Forbidden' })
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
+  if (!agent || agent.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot update this agent' })
+  }
+  const { decision } = req.body || {}
+  if (!['approve', 'review'].includes(decision)) return res.status(400).json({ error: 'Invalid decision' })
+
+  const data =
+    decision === 'approve'
+      ? { status: 'approved', underReview: false, isSuspended: false }
+      : { status: 'pending', underReview: true }
+
+  const updated = await prisma.agent.update({
+    where: { id: agentId },
+    data,
+    include: { user: true },
+  })
+
+  res.json({ agent: formatAgent(updated) })
 })
 
 module.exports = router
