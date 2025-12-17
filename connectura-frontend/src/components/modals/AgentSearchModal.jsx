@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { api } from '../../services/api'
 
 const states = [
   { value: '', label: '---Select State---' },
@@ -127,13 +128,46 @@ export default function AgentSearchModal({ open, onClose }) {
   )
 
   const [form, setForm] = useState(initialForm)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [results, setResults] = useState([])
+  const [detail, setDetail] = useState(null)
 
   const reset = () => setForm(initialForm)
 
   const handleChange = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
+    setLoading(true)
+    setResults([])
+    setDetail(null)
+    try {
+      const payload = {
+        activeOnly: form.activeOnly === 'active',
+        licenseNumber: form.vaLicense,
+        npn: form.npn,
+        lastName: form.lastName,
+        lastNameMode: form.lastNameMode,
+        firstName: form.firstName,
+        city: form.city,
+        state: form.state,
+        zip: form.zip,
+        insuranceType: form.insuranceType,
+        licenseType: form.licenseType,
+      }
+      const res = await api.post('/agents/scc-search', payload)
+      setResults(res.data.results || [])
+      setDetail(res.data.detail || null)
+      if (!res.data.results?.length) {
+        setError('No results found. Adjust your criteria and try again.')
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Search failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!open) return null
@@ -141,25 +175,72 @@ export default function AgentSearchModal({ open, onClose }) {
   const input = 'mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm'
   const select = input
 
+  const renderResults = () => {
+    if (loading) return <div className="text-sm text-slate-700">Searching SCC...</div>
+    if (error) return <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">{error}</div>
+    if (!results.length && !detail) {
+      return (
+        <div className="text-sm text-slate-700">
+          Enter search criteria to start search. Results from SCC will appear here.
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-4">
+        {results.length > 0 && (
+          <div className="overflow-auto rounded border border-slate-200 bg-white">
+            <table className="min-w-full text-xs">
+              <thead className="bg-[#0b0b6a] text-white">
+                <tr>
+                  <th className="px-2 py-2 text-left">Name</th>
+                  <th className="px-2 py-2 text-left">Status</th>
+                  <th className="px-2 py-2 text-left">City</th>
+                  <th className="px-2 py-2 text-left">State</th>
+                  <th className="px-2 py-2 text-left">Zip</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((row, idx) => (
+                  <tr key={`${row.index}-${idx}`} className="border-t border-slate-100">
+                    <td className="px-2 py-1 text-[#0b3b8c]">{row.name}</td>
+                    <td className="px-2 py-1">{row.status}</td>
+                    <td className="px-2 py-1">{row.city}</td>
+                    <td className="px-2 py-1">{row.state}</td>
+                    <td className="px-2 py-1">{row.zip}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {detail && (
+          <div className="rounded border border-slate-200 bg-white p-3 text-sm">
+            <div className="text-base font-semibold text-[#0b3b8c]">{detail.name}</div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div>Status: {detail.status || '--'}</div>
+              <div>Residency: {detail.residency || '--'}</div>
+              <div>City: {detail.city || '--'}</div>
+              <div>State: {detail.state || '--'}</div>
+              <div>ZIP: {detail.zip || '--'}</div>
+              <div>License #: {detail.licenseNumber || '--'}</div>
+              <div>NPN: {detail.npn || '--'}</div>
+              <div>Effective: {detail.licenseEffective || '--'}</div>
+              <div>Expires: {detail.licenseExpires || '--'}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-3 py-8">
-      <div className="w-full max-w-5xl rounded-md bg-[#f5f5f8] shadow-2xl border border-slate-200">
-        <div className="relative flex items-center gap-2 bg-[#f5f5f8] px-4 pt-4">
-          <div className="flex flex-wrap gap-2">
-            {['Agent', 'Agency', 'Company', 'Navigator', 'Search Help'].map((tab, idx) => (
-              <div
-                key={tab}
-                className={`rounded-t-md px-3 py-2 text-sm font-semibold ${
-                  idx === 0 ? 'bg-[#fff8d1] text-slate-900 border border-[#d6c35a]' : 'bg-[#0b0b6a] text-white'
-                }`}
-              >
-                {tab}
-              </div>
-            ))}
-          </div>
+      <div className="w-full max-w-6xl rounded-xl bg-white shadow-2xl border border-slate-200">
+        <div className="relative flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="text-base font-semibold text-[#0b3b8c]">Agent Search</div>
           <button
             type="button"
-            className="absolute right-4 top-3 rounded-full px-2 text-slate-600 hover:bg-slate-200"
+            className="rounded-full px-3 py-1 text-slate-600 hover:bg-slate-100"
             onClick={onClose}
             aria-label="Close agent search"
           >
@@ -168,117 +249,107 @@ export default function AgentSearchModal({ open, onClose }) {
         </div>
 
         <div className="px-4 pb-4">
-          <div className="mt-2 text-sm text-slate-800">
-            The information presented is <strong>current as of 12/16/2025.</strong>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-4 bg-[#0b0b6a] px-3 py-2 text-white text-sm font-semibold">
-            <span>Agent Search</span>
-            <span className="text-xs font-normal">
-              Reset <span className="bg-yellow-300 text-black px-1">Enter Search Criteria to Start Search.</span>
-            </span>
-          </div>
-
-          <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-            <div className="flex items-center gap-4 text-sm text-slate-800">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="activeOnly"
-                  checked={form.activeOnly === 'active'}
-                  onChange={() => handleChange('activeOnly', 'active')}
-                />
-                Active Only
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="activeOnly"
-                  checked={form.activeOnly === 'all'}
-                  onChange={() => handleChange('activeOnly', 'all')}
-                />
-                All
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="text-sm text-slate-900 font-semibold">
-                Virginia License Number
-                <input className={input} placeholder="Virginia License Number" value={form.vaLicense} onChange={(e) => handleChange('vaLicense', e.target.value)} />
-              </label>
-              <label className="text-sm text-slate-900 font-semibold">
-                National Producer Number (NPN)
-                <input className={input} placeholder="NPN" value={form.npn} onChange={(e) => handleChange('npn', e.target.value)} />
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div>
-                <div className="flex items-center justify-between text-sm text-slate-900 font-semibold">
-                  <span>Last Name</span>
-                  <div className="flex items-center gap-2 text-xs font-normal text-slate-700">
-                    <label className="flex items-center gap-1">
-                      <input
-                        type="radio"
-                        name="lastNameMode"
-                        checked={form.lastNameMode === 'starts'}
-                        onChange={() => handleChange('lastNameMode', 'starts')}
-                      />
-                      Starts With
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <input
-                        type="radio"
-                        name="lastNameMode"
-                        checked={form.lastNameMode === 'contains'}
-                        onChange={() => handleChange('lastNameMode', 'contains')}
-                      />
-                      Contains
-                    </label>
-                  </div>
-                </div>
-                <input className={input} placeholder="Last Name" value={form.lastName} onChange={(e) => handleChange('lastName', e.target.value)} />
+          <div className="mt-4 grid gap-4 md:grid-cols-[360px,1fr]">
+            <form className="space-y-4 border border-slate-200 bg-[#f7f9fc] p-4 rounded-lg max-h-[70vh] overflow-y-auto" onSubmit={handleSubmit}>
+              <div className="flex items-center gap-4 text-sm text-slate-800">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="activeOnly"
+                    checked={form.activeOnly === 'active'}
+                    onChange={() => handleChange('activeOnly', 'active')}
+                  />
+                  Active Only
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="activeOnly"
+                    checked={form.activeOnly === 'all'}
+                    onChange={() => handleChange('activeOnly', 'all')}
+                  />
+                  All
+                </label>
               </div>
-              <label className="text-sm text-slate-900 font-semibold">
-                First Name
-                <input className={input} placeholder="First Name" value={form.firstName} onChange={(e) => handleChange('firstName', e.target.value)} />
-              </label>
-              <label className="text-sm text-slate-900 font-semibold">
-                City
-                <input className={input} placeholder="City" value={form.city} onChange={(e) => handleChange('city', e.target.value)} />
-              </label>
-            </div>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              <label className="text-sm text-slate-900 font-semibold">
-                State
-                <select className={select} value={form.state} onChange={(e) => handleChange('state', e.target.value)}>
-                  {states.map((st) => (
-                    <option key={st.value || 'blank'} value={st.value}>
-                      {st.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm text-slate-900 font-semibold">
-                Zip Code
-                <input className={input} placeholder="Zip Code" value={form.zip} onChange={(e) => handleChange('zip', e.target.value)} />
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="text-sm text-slate-900 font-semibold">
-                Type of Insurance
-                <select className={select} value={form.insuranceType} onChange={(e) => handleChange('insuranceType', e.target.value)}>
-                  {insuranceTypes.map((opt) => (
-                    <option key={opt.value || 'ins-blank'} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex flex-col gap-1">
-                <div className="text-center text-xs font-semibold text-slate-700 mt-6 mb-1">OR</div>
+              <div className="grid gap-3">
+                <label className="text-sm text-slate-900 font-semibold">
+                  Virginia License Number
+                  <input
+                    className={input}
+                    placeholder="Virginia License Number"
+                    value={form.vaLicense}
+                    onChange={(e) => handleChange('vaLicense', e.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-slate-900 font-semibold">
+                  National Producer Number (NPN)
+                  <input className={input} placeholder="NPN" value={form.npn} onChange={(e) => handleChange('npn', e.target.value)} />
+                </label>
+                <div>
+                  <div className="flex items-center justify-between text-sm text-slate-900 font-semibold">
+                    <span>Last Name</span>
+                    <div className="flex items-center gap-2 text-xs font-normal text-slate-700">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="lastNameMode"
+                          checked={form.lastNameMode === 'starts'}
+                          onChange={() => handleChange('lastNameMode', 'starts')}
+                        />
+                        Starts With
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="lastNameMode"
+                          checked={form.lastNameMode === 'contains'}
+                          onChange={() => handleChange('lastNameMode', 'contains')}
+                        />
+                        Contains
+                      </label>
+                    </div>
+                  </div>
+                  <input className={input} placeholder="Last Name" value={form.lastName} onChange={(e) => handleChange('lastName', e.target.value)} />
+                </div>
+                <label className="text-sm text-slate-900 font-semibold">
+                  First Name
+                  <input
+                    className={input}
+                    placeholder="First Name"
+                    value={form.firstName}
+                    onChange={(e) => handleChange('firstName', e.target.value)}
+                  />
+                </label>
+                <label className="text-sm text-slate-900 font-semibold">
+                  City
+                  <input className={input} placeholder="City" value={form.city} onChange={(e) => handleChange('city', e.target.value)} />
+                </label>
+                <label className="text-sm text-slate-900 font-semibold">
+                  State
+                  <select className={select} value={form.state} onChange={(e) => handleChange('state', e.target.value)}>
+                    {states.map((st) => (
+                      <option key={st.value || 'blank'} value={st.value}>
+                        {st.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-900 font-semibold">
+                  Zip Code
+                  <input className={input} placeholder="Zip Code" value={form.zip} onChange={(e) => handleChange('zip', e.target.value)} />
+                </label>
+                <label className="text-sm text-slate-900 font-semibold">
+                  Type of Insurance
+                  <select className={select} value={form.insuranceType} onChange={(e) => handleChange('insuranceType', e.target.value)}>
+                    {insuranceTypes.map((opt) => (
+                      <option key={opt.value || 'ins-blank'} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="text-center text-xs font-semibold text-slate-700">OR</div>
                 <label className="text-sm text-slate-900 font-semibold">
                   License Type
                   <select className={select} value={form.licenseType} onChange={(e) => handleChange('licenseType', e.target.value)}>
@@ -290,24 +361,28 @@ export default function AgentSearchModal({ open, onClose }) {
                   </select>
                 </label>
               </div>
-            </div>
 
-            <div className="flex flex-wrap gap-3 pb-2">
-              <button
-                type="submit"
-                className="rounded border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                className="rounded border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm"
-                onClick={reset}
-              >
-                Reset
-              </button>
-            </div>
-          </form>
+              <div className="flex flex-wrap gap-3 pb-1">
+                <button
+                  type="submit"
+                  className="rounded bg-[#0b3b8c] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-[#0a357e]"
+                  disabled={loading}
+                >
+                  {loading ? 'Searching...' : 'Search'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-[#0b3b8c] shadow-sm"
+                  onClick={reset}
+                  disabled={loading}
+                >
+                  Reset
+                </button>
+              </div>
+            </form>
+
+            <div className="min-h-[420px] rounded-lg border border-slate-200 bg-white p-4">{renderResults()}</div>
+          </div>
         </div>
       </div>
     </div>

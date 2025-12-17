@@ -147,4 +147,40 @@ router.post('/:id/license-decision', authGuard, async (req, res) => {
   res.json({ agent: formatAgent(updated) })
 })
 
+router.post('/scc-search', async (req, res) => {
+  try {
+    const {
+      firstName = '',
+      lastName = '',
+      lastNameMode = 'starts',
+      zip = '',
+      state = '',
+      npn = '',
+      licenseNumber = '',
+      activeOnly = true,
+      city = '',
+      insuranceType = '',
+      licenseType = '',
+    } = req.body || {}
+
+    const lookup = await lookupAgentOnScc({
+      firstName,
+      lastName,
+      lastNameMode,
+      zip,
+      state,
+      npn,
+      licenseNumber,
+      activeOnly,
+      city,
+      insuranceType,
+      licenseType,
+    })
+    res.json({ results: lookup.results, detail: lookup.detail })
+  } catch (err) {
+    console.error('scc search error', err)
+    res.status(500).json({ error: 'SCC search failed' })
+  }
+})
+
 module.exports = router
