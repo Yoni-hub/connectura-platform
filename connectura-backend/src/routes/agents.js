@@ -3,6 +3,9 @@ const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { lookupAgentOnScc } = require('../utils/sccLookup')
+const { getAgentRecordByNpn } = require('../utils/sccPlaywright')
+const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 
 const router = express.Router()
 
@@ -180,6 +183,109 @@ router.post('/scc-search', async (req, res) => {
   } catch (err) {
     console.error('scc search error', err)
     res.status(500).json({ error: 'SCC search failed' })
+  }
+})
+
+router.post('/scc-npn', async (req, res) => {
+  try {
+    const npn = String(req.body?.npn || '').trim()
+    if (!npn) return res.status(400).json({ error: 'NPN is required' })
+    const result = await getAgentRecordByNpn(npn)
+    if (result.needs_human_verification) {
+      return res.status(503).json({ error: 'Needs human verification', needs_human_verification: true })
+    }
+    if (!result.found) {
+      return res.status(404).json({ error: 'No results found for NPN', result })
+    }
+    res.json(result)
+  } catch (err) {
+    console.error('scc npn search error', err)
+    res.status(500).json({ error: 'SCC NPN search failed' })
+  }
+})
+
+router.post('/request', async (req, res) => {
+  const { email, firstName, lastName, npn } = req.body || {}
+  if (!email || !firstName || !lastName || !npn) {
+    return res.status(400).json({ error: 'Email, first name, last name, and NPN are required.' })
+  }
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { email } })
+    if (existingUser) return res.status(400).json({ error: 'Email already in use.' })
+
+    const existingAgent = await prisma.agent.findFirst({ where: { producerNumber: npn } })
+    if (existingAgent) return res.status(400).json({ error: 'An agent request already exists for this NPN.' })
+
+    const password = crypto.randomBytes(12).toString('hex')
+    const hashed = await bcrypt.hash(password, 10)
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashed,
+        role: 'AGENT',
+      },
+    })
+
+    const agent = await prisma.agent.create({
+      data: {
+        userId: user.id,
+        name: `${firstName} ${lastName}`.trim(),
+        bio: 'Pending approval.',
+        photo: '',
+        languages: '[]',
+        states: '[]',
+        specialty: '',
+        producerNumber: npn,
+        address: '',
+        zip: '',
+        phone: '',
+        products: '[]',
+        status: 'pending',
+        isSuspended: false,
+        underReview: true,
+        availability: 'offline',
+        rating: 0,
+        reviews: '[]',
+      },
+      include: { user: true },
+    })
+
+    console.log('New agent request received', { email, npn, agentId: agent.id })
+
+    res.status(201).json({
+      message: 'Request received. We will notify you when approved.',
+      agent: {
+        id: agent.id,
+        email,
+        name: agent.name,
+        status: agent.status,
+        underReview: agent.underReview,
+      },
+    })
+  } catch (err) {
+    console.error('agent request error', err)
+    res.status(500).json({ error: 'Could not submit request.' })
+  }
+})
+
+router.post('/request-status', async (req, res) => {
+  const { npn } = req.body || {}
+  if (!npn) return res.status(400).json({ error: 'NPN is required' })
+  try {
+    const agent = await prisma.agent.findFirst({ where: { producerNumber: npn } })
+    if (!agent) return res.status(404).json({ error: 'No request found for this NPN', found: false })
+    const approved = agent.status === 'approved' && !agent.isSuspended
+    res.json({
+      found: true,
+      status: agent.status,
+      underReview: agent.underReview,
+      isSuspended: agent.isSuspended,
+      approved,
+    })
+  } catch (err) {
+    console.error('agent status check error', err)
+    res.status(500).json({ error: 'Status lookup failed' })
   }
 })
 
