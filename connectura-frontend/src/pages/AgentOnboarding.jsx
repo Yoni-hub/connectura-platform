@@ -6,9 +6,9 @@ import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 
 const steps = [
+  { id: 'availability', title: 'Connectura account credentials', blurb: 'Your Connectura account login and security answers.' },
   { id: 'identity', title: 'Identity & licensing', blurb: 'Who you are, where you are licensed, and your producer number.' },
   { id: 'offerings', title: 'Products & audiences', blurb: 'What you sell, languages you support, and service areas.' },
-  { id: 'availability', title: 'Availability & contact', blurb: 'How clients reach you and when you respond.' },
   { id: 'review', title: 'Confirm & finish', blurb: 'Review and save your onboarding details.' },
 ]
 
@@ -161,6 +161,12 @@ export default function AgentOnboarding() {
     bio: '',
     insuranceTypes: [],
     licenseTypes: [],
+    accountEmail: '',
+    accountPassword: '',
+    accountPasswordConfirm: '',
+    securityQ1: '',
+    securityQ2: '',
+    securityQ3: '',
   })
 
   useEffect(() => {
@@ -201,6 +207,12 @@ export default function AgentOnboarding() {
           bio: agent?.bio || '',
           insuranceTypes: Array.isArray(agent?.insuranceTypes) ? agent.insuranceTypes : [],
           licenseTypes: Array.isArray(agent?.licenseTypes) ? agent.licenseTypes : [],
+          accountEmail: '',
+          accountPassword: '',
+          accountPasswordConfirm: '',
+          securityQ1: '',
+          securityQ2: '',
+          securityQ3: '',
         })
         const status = agent?.status || 'pending'
         const underReviewFlag = Boolean(agent?.underReview)
@@ -218,13 +230,6 @@ export default function AgentOnboarding() {
     }
     loadAgent()
   }, [user?.agentId])
-
-  const openAgentSignup = () => {
-    window.dispatchEvent(new Event('open-agent-auth-signup'))
-  }
-
-  const goNext = () => setActiveIndex((i) => Math.min(i + 1, steps.length - 1))
-  const goPrev = () => setActiveIndex((i) => Math.max(i - 1, 0))
 
   const toggleValue = (field, value) => {
     setForm((prev) => {
@@ -251,7 +256,7 @@ export default function AgentOnboarding() {
       return false
     }
     if (!user?.agentId) {
-      toast.error('Agent account not found. Please sign out and sign up as an agent again.')
+      toast.error('Please sign in to submit onboarding.')
       return false
     }
     setSaving(true)
@@ -349,9 +354,60 @@ export default function AgentOnboarding() {
   }
 
   const handleSubmit = async () => {
+    const requiredFields = [
+      { key: 'accountEmail', label: 'Account email', step: 0, el: 'account-email' },
+      { key: 'accountPassword', label: 'Password', step: 0, el: 'account-password' },
+      { key: 'accountPasswordConfirm', label: 'Repeat password', step: 0, el: 'account-password-confirm' },
+      { key: 'securityQ1', label: 'Security phrase 1', step: 0, el: 'security-phrase-1' },
+      { key: 'securityQ2', label: 'Security phrase 2', step: 0, el: 'security-phrase-2' },
+      { key: 'securityQ3', label: 'Security phrase 3', step: 0, el: 'security-phrase-3' },
+      { key: 'producerNumber', label: 'Virginia License Number', step: 1, el: 'producer-number' },
+      { key: 'verifyNpn', label: 'National Producer Number (NPN)', step: 1, el: 'npn' },
+      { key: 'state', label: 'State', step: 1, el: 'state' },
+      { key: 'zip', label: 'Zip Code', step: 1, el: 'zip' },
+      { key: 'firstName', label: 'First Name', step: 1, el: 'first-name' },
+      { key: 'lastName', label: 'Last Name', step: 1, el: 'last-name' },
+      { key: 'agencyName', label: 'Agency Name', step: 1, el: 'agency-name' },
+      { key: 'city', label: 'City', step: 1, el: 'city' },
+      { key: 'languages', label: 'Languages you support', step: 2, el: 'languages' },
+      { key: 'products', label: 'Products / lines you sell', step: 2, el: 'products' },
+      { key: 'specialty', label: 'Primary specialty', step: 2, el: 'specialty' },
+      { key: 'bio', label: 'About you (bio)', step: 2, el: 'bio' },
+    ]
+
+    const missing = requiredFields.filter(({ key }) => !form[key]?.toString().trim())
+    if (form.accountPassword !== form.accountPasswordConfirm) {
+      toast.error('Passwords must match.')
+      setActiveIndex(0)
+      setTimeout(() => {
+        const el = document.getElementById('account-password')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+        }
+      }, 100)
+      return
+    }
+    if (missing.length) {
+      const first = missing[0]
+      setActiveIndex(first.step)
+      setTimeout(() => {
+        const el = document.getElementById(first.el)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+        }
+      }, 120)
+      toast.error(`Please fill the required fields: ${missing.map((m) => m.label).join(', ')}.`)
+      return
+    }
+
     const saved = await handleSave()
     if (!saved) return
     await runLicenseLookup()
+    toast.success(
+      'Account created successfully. Your agent onboarding is under review. When your account is approved, we will send you a link to your email to log into your dashboard. Need help? Call us at 1123-456-7890 or email help@connectura.com.'
+    )
   }
 
   const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
@@ -370,19 +426,6 @@ export default function AgentOnboarding() {
 
   return (
     <main className="page-shell py-10">
-      {!user && (
-        <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700 flex flex-col gap-3">
-          <div className="text-sm font-semibold text-slate-800">Start your agent onboarding</div>
-          <p className="text-sm">
-            You can review the onboarding steps now. To save and verify your profile, create your agent account first.
-          </p>
-          <div>
-            <button type="button" className="pill-btn-primary" onClick={openAgentSignup}>
-              Create account to continue
-            </button>
-          </div>
-        </div>
-      )}
       <div className="surface p-5 md:p-6 space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -396,13 +439,12 @@ export default function AgentOnboarding() {
             type="button"
             className="pill-btn-ghost px-4"
             onClick={() => {
-              logout()
               nav('/')
             }}
           >
-            Sign out
+            Home
           </button>
-      </div>
+        </div>
 
         <div className="grid gap-3 md:grid-cols-4">
           {steps.map((step, idx) => (
@@ -422,12 +464,101 @@ export default function AgentOnboarding() {
 
         <div className="grid gap-4 md:grid-cols-4">
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
+          >
+            <h3 className="text-sm font-semibold mb-3">Connectura account credentials</h3>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                Email <span className="text-red-500">*</span>
+                <input
+                  type="email"
+                  className={commonInput}
+                  value={form.accountEmail}
+                  onChange={(e) => setForm({ ...form, accountEmail: e.target.value })}
+                  placeholder="Email"
+                  required
+                  id="account-email"
+                />
+              </label>
+              <label className="block text-sm">
+                Password <span className="text-red-500">*</span>
+                <input
+                  type="password"
+                  className={commonInput}
+                  value={form.accountPassword}
+                  onChange={(e) => setForm({ ...form, accountPassword: e.target.value })}
+                  placeholder="Password"
+                  required
+                  id="account-password"
+                />
+              </label>
+              <label className="block text-sm">
+                Repeat password <span className="text-red-500">*</span>
+                <input
+                  type="password"
+                  className={commonInput}
+                  value={form.accountPasswordConfirm}
+                  onChange={(e) => setForm({ ...form, accountPasswordConfirm: e.target.value })}
+                  placeholder="Repeat password"
+                  required
+                  id="account-password-confirm"
+                />
+              </label>
+              <label className="block text-sm">
+                Security phrase 1 <span className="text-red-500">*</span>
+                <input
+                  className={commonInput}
+                  value={form.securityQ1}
+                  onChange={(e) => setForm({ ...form, securityQ1: e.target.value })}
+                  placeholder="Phrase 1"
+                  required
+                  id="security-phrase-1"
+                />
+              </label>
+              <label className="block text-sm">
+                Security phrase 2 <span className="text-red-500">*</span>
+                <input
+                  className={commonInput}
+                  value={form.securityQ2}
+                  onChange={(e) => setForm({ ...form, securityQ2: e.target.value })}
+                  placeholder="Phrase 2"
+                  required
+                  id="security-phrase-2"
+                />
+              </label>
+              <label className="block text-sm">
+                Security phrase 3 <span className="text-red-500">*</span>
+                <input
+                  className={commonInput}
+                  value={form.securityQ3}
+                  onChange={(e) => setForm({ ...form, securityQ3: e.target.value })}
+                  placeholder="Phrase 3"
+                  required
+                  id="security-phrase-3"
+                />
+              </label>
+              <div className="text-xs text-slate-600 text-right">
+                In case you lose your account, you have to remember your security phrases.
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-6 mt-auto">
+              <button
+                type="button"
+                className="pill-btn-primary px-6"
+                onClick={() => setActiveIndex(1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
           >
             <h3 className="text-sm font-semibold mb-3">Identity & licensing</h3>
             <div className="space-y-3">
               <label className="block text-sm">
-                Virginia License Number
+                Virginia License Number <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.producerNumber}
@@ -435,21 +566,27 @@ export default function AgentOnboarding() {
                     setForm({ ...form, producerNumber: e.target.value, verifyLicense: e.target.value })
                   }
                   placeholder="Virginia License Number"
+                  required
+                  id="producer-number"
                 />
               </label>
               <label className="block text-sm">
-                National Producer Number (NPN)
+                National Producer Number (NPN) <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.verifyNpn}
                   onChange={(e) => setForm({ ...form, verifyNpn: e.target.value })}
                   placeholder="NPN"
+                  required
+                  id="npn"
                 />
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-sm col-span-1 sm:col-span-2">
                   <div className="flex items-center justify-between">
-                    <span>Agency Name</span>
+                    <span>
+                      Agency Name <span className="text-red-500">*</span>
+                    </span>
                     <div className="flex items-center gap-3 text-xs text-slate-600">
                       <label className="inline-flex items-center gap-1">
                         <input
@@ -478,16 +615,20 @@ export default function AgentOnboarding() {
                     value={form.agencyName}
                     onChange={(e) => setForm({ ...form, agencyName: e.target.value })}
                     placeholder="Agency Name"
+                    required
+                    id="agency-name"
                   />
                 </label>
 
                 <label className="block text-sm">
-                  Last Name
+                  Last Name <span className="text-red-500">*</span>
                   <input
                     className={commonInput}
                     value={form.lastName}
                     onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                     placeholder="Last Name"
+                    required
+                    id="last-name"
                   />
                 </label>
                 <div className="flex items-end gap-3 text-xs text-slate-600">
@@ -513,31 +654,37 @@ export default function AgentOnboarding() {
                   </label>
                 </div>
               </div>
+                <label className="block text-sm">
+                  First Name <span className="text-red-500">*</span>
+                  <input
+                    className={commonInput}
+                    value={form.firstName}
+                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    placeholder="First Name"
+                    required
+                    id="first-name"
+                  />
+                </label>
               <label className="block text-sm">
-                First Name
-                <input
-                  className={commonInput}
-                  value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  placeholder="First Name"
-                />
-              </label>
-              <label className="block text-sm">
-                City
+                City <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
                   placeholder="City"
+                  required
+                  id="city"
                 />
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-sm">
-                  State
+                  State <span className="text-red-500">*</span>
                   <select
                     className={commonInput}
                     value={form.state}
                     onChange={(e) => setForm({ ...form, state: e.target.value })}
+                    required
+                    id="state"
                   >
                     <option value="">--Select State--</option>
                     {STATE_OPTIONS.map((st) => (
@@ -548,12 +695,14 @@ export default function AgentOnboarding() {
                   </select>
                 </label>
                 <label className="block text-sm">
-                  Zip Code
+                  Zip Code <span className="text-red-500">*</span>
                   <input
                     className={commonInput}
                     value={form.zip}
                     onChange={(e) => setForm({ ...form, zip: e.target.value })}
                     placeholder="Zip Code"
+                    required
+                    id="zip"
                   />
                 </label>
               </div>
@@ -631,104 +780,94 @@ export default function AgentOnboarding() {
                 </div>
               </label>
             </div>
+            <div className="flex items-center justify-between gap-3 pt-6 mt-auto">
+              <button
+                type="button"
+                className="pill-btn-ghost px-6"
+                onClick={() => setActiveIndex(0)}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-6"
+                onClick={() => setActiveIndex(2)}
+              >
+                Next
+              </button>
+            </div>
           </div>
 
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
           >
             <h3 className="text-sm font-semibold mb-3">Products & audiences</h3>
             <div className="space-y-3">
               <label className="block text-sm">
-                Languages you support
+                Languages you support <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.languages}
                   onChange={(e) => setForm({ ...form, languages: e.target.value })}
                   placeholder="e.g., English, Spanish"
+                  required
+                  id="languages"
                 />
               </label>
               <label className="block text-sm">
-                Products / lines you sell
+                Products / lines you sell <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.products}
                   onChange={(e) => setForm({ ...form, products: e.target.value })}
                   placeholder="e.g., Auto, Home, Renters, Commercial"
+                  required
+                  id="products"
                 />
               </label>
               <label className="block text-sm">
-                Primary specialty
+                Primary specialty <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
                   value={form.specialty}
                   onChange={(e) => setForm({ ...form, specialty: e.target.value })}
                   placeholder="e.g., Small business, High-net-worth personal lines"
+                  required
+                  id="specialty"
                 />
               </label>
               <label className="block text-sm">
-                About you (bio)
+                About you (bio) <span className="text-red-500">*</span>
                 <textarea
                   className={`${commonInput} min-h-[120px]`}
                   value={form.bio}
                   onChange={(e) => setForm({ ...form, bio: e.target.value })}
                   placeholder="Share your background, carriers, and how you help clients."
+                  required
+                  id="bio"
                 />
               </label>
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-6 mt-auto">
+              <button
+                type="button"
+                className="pill-btn-ghost px-6"
+                onClick={() => setActiveIndex(1)}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-6"
+                onClick={() => setActiveIndex(3)}
+              >
+                Next
+              </button>
             </div>
           </div>
 
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
-          >
-            <h3 className="text-sm font-semibold mb-3">Availability & contact</h3>
-            <div className="space-y-3">
-              <label className="block text-sm">
-                Phone
-                <input
-                  className={commonInput}
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Best number for client callbacks"
-                />
-              </label>
-              <label className="block text-sm">
-                Availability
-                <select
-                  className={commonInput}
-                  value={form.availability}
-                  onChange={(e) => setForm({ ...form, availability: e.target.value })}
-                >
-                  <option value="online">Online</option>
-                  <option value="busy">Busy</option>
-                  <option value="offline">Offline</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                Office address
-                <input
-                  className={commonInput}
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  placeholder="Street, city"
-                />
-              </label>
-              <label className="block text-sm">
-                ZIP code
-                <input
-                  className={commonInput}
-                  value={form.zip}
-                  onChange={(e) => setForm({ ...form, zip: e.target.value })}
-                  placeholder="e.g., 94105"
-                />
-              </label>
-              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm text-slate-600">
-                Connectura does NOT sell insurance, does NOT pay agents or clients, and all quotes/policies stay on your own systems.
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'}`}
+            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
           >
             <h3 className="text-sm font-semibold mb-3">Confirm & finish</h3>
             <div className="space-y-2 text-sm text-slate-700">
@@ -744,17 +883,33 @@ export default function AgentOnboarding() {
               <div>Languages: {form.languages || '--'}</div>
               <div>Products: {form.products || '--'}</div>
               <div>Specialty: {form.specialty || '--'}</div>
-              <div>Availability: {form.availability}</div>
-              <div>Phone: {form.phone || '--'}</div>
+              <div>Account email: {form.accountEmail || '--'}</div>
+              <div>
+                Security phrases saved: {['securityQ1', 'securityQ2', 'securityQ3'].filter((key) => form[key]).length}/3
+              </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connectura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
             </div>
+            <div className="flex items-center justify-start pt-6 mt-auto">
+              <button
+                type="button"
+                className="pill-btn-ghost px-6"
+                onClick={() => setActiveIndex(2)}
+              >
+                Back
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end">
-          <button type="button" className="pill-btn-primary px-8" disabled={saving || lookupLoading} onClick={handleSubmit}>
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            className="pill-btn-primary px-8"
+            disabled={saving || lookupLoading}
+            onClick={handleSubmit}
+          >
             {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
           </button>
         </div>
