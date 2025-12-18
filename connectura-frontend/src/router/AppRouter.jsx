@@ -104,11 +104,7 @@ export default function AppRouter() {
         />
         <Route
           path="/agent/onboarding"
-          element={
-            <AgentOnly>
-              <AgentOnboarding />
-            </AgentOnly>
-          }
+          element={<AgentOnboarding />}
         />
         <Route
           path="/call/video/:id"

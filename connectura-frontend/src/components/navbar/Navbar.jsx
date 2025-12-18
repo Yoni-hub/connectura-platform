@@ -1,67 +1,50 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import AuthModal from './AuthModal'
 import { useAuth } from '../../context/AuthContext'
-import { API_URL } from '../../services/api'
-import AgentSearchModal from '../modals/AgentSearchModal'
 
 export default function Navbar() {
-  const nav = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
   const [authIntent, setAuthIntent] = useState('agent')
-  const [agentChoiceOpen, setAgentChoiceOpen] = useState(false)
-  const [agentSearchOpen, setAgentSearchOpen] = useState(false)
+  const [authStartMode, setAuthStartMode] = useState('login')
   const { user } = useAuth()
 
   useEffect(() => {
     const openCustomer = () => {
       setAuthIntent('customer')
+      setAuthStartMode('login')
       setAuthOpen(true)
     }
     const openAgent = () => {
       setAuthIntent('agent')
+      setAuthStartMode('login')
+      setAuthOpen(true)
+    }
+    const openAgentSignup = () => {
+      setAuthIntent('agent')
+      setAuthStartMode('create')
       setAuthOpen(true)
     }
     window.addEventListener('open-customer-auth', openCustomer)
     window.addEventListener('open-agent-auth', openAgent)
+    window.addEventListener('open-agent-auth-signup', openAgentSignup)
     return () => {
       window.removeEventListener('open-customer-auth', openCustomer)
       window.removeEventListener('open-agent-auth', openAgent)
+      window.removeEventListener('open-agent-auth-signup', openAgentSignup)
     }
   }, [])
 
   const triggerAuth = (intent) => {
     setAuthIntent(intent)
+    setAuthStartMode('login')
     setAuthOpen(true)
-  }
-
-  const markAgentFlowSeen = () => {
-    try {
-      localStorage.setItem('connectura_agent_flow_seen', 'true')
-    } catch {}
   }
 
   const handleForAgentsClick = () => {
     setMenuOpen(false)
-    const seen = localStorage.getItem('connectura_agent_flow_seen') === 'true'
-    if (seen) {
-      setAgentSearchOpen(true)
-      return
-    }
-    setAgentChoiceOpen(true)
-  }
-
-  const chooseAgent = () => {
-    markAgentFlowSeen()
-    setAgentChoiceOpen(false)
-    setAgentSearchOpen(true)
-  }
-
-  const chooseAgency = () => {
-    markAgentFlowSeen()
-    setAgentChoiceOpen(false)
-    nav('/agents')
+    triggerAuth('agent')
   }
 
   return (
@@ -168,36 +151,7 @@ export default function Navbar() {
           </div>
         )}
       </header>
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} intent={authIntent} />
-
-      {agentChoiceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl space-y-4 text-center">
-            <div className="text-sm font-semibold text-slate-800">Continue as</div>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-[#0b3b8c] px-4 py-2 text-[#0b3b8c] font-semibold hover:bg-[#e7f0ff]"
-                onClick={chooseAgent}
-              >
-                Agent
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-[#0b3b8c] px-4 py-2 text-[#0b3b8c] font-semibold hover:bg-[#e7f0ff]"
-                onClick={chooseAgency}
-              >
-                Agency
-              </button>
-            </div>
-            <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setAgentChoiceOpen(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <AgentSearchModal open={agentSearchOpen} onClose={() => setAgentSearchOpen(false)} />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} intent={authIntent} startMode={authStartMode} />
     </>
   )
 }

@@ -20,12 +20,118 @@ const splitList = (value = '') =>
 
 const joinList = (value = []) => value.filter(Boolean).join(', ')
 
+const STATE_OPTIONS = [
+  'Alabama',
+  'Alaska',
+  'American Samoa',
+  'Arizona',
+  'Arkansas',
+  'California',
+  'Colorado',
+  'Connecticut',
+  'Delaware',
+  'District of Columbia',
+  'Florida',
+  'Georgia',
+  'Guam',
+  'Hawaii',
+  'Idaho',
+  'Illinois',
+  'Indiana',
+  'Iowa',
+  'Kansas',
+  'Kentucky',
+  'Louisiana',
+  'Maine',
+  'Maryland',
+  'Massachusetts',
+  'Michigan',
+  'Minnesota',
+  'Mississippi',
+  'Missouri',
+  'Montana',
+  'Nebraska',
+  'Nevada',
+  'New Hampshire',
+  'New Jersey',
+  'New Mexico',
+  'New York',
+  'North Carolina',
+  'North Dakota',
+  'Ohio',
+  'Oklahoma',
+  'Oregon',
+  'Pennsylvania',
+  'Puerto Rico',
+  'Rhode Island',
+  'South Carolina',
+  'South Dakota',
+  'Tennessee',
+  'Texas',
+  'U.S. Virgin Islands',
+  'Utah',
+  'Vermont',
+  'Virginia',
+  'Washington',
+  'West Virginia',
+  'Wisconsin',
+  'Wyoming',
+]
+
+const INSURANCE_TYPES = [
+  'Automobile',
+  'Commercial',
+  'Dental',
+  'Flood',
+  'Health \\ Disability',
+  'Home',
+  'Life',
+  'Long-Term Care',
+  'Pet',
+  'Settlement\\Closing Providers',
+  'Surplus Lines',
+  'Title',
+  'Travel',
+  'Variable \\ Annuities',
+]
+const LICENSE_TYPES = [
+  'Credit',
+  'Health',
+  'Life & Annuities',
+  'Life & Health Consultant',
+  'Limited Life & Health',
+  'Limited Lines P&C - PEI',
+  'Limited Lines P&C - SSI',
+  'Limited Lines P&C - Travel',
+  'Limited Property & Casualty',
+  'Managing General Agent',
+  'Motor Vehicle Rental Contract',
+  'Navigator',
+  'Personal Lines',
+  'Pharmacy Benefits Manager',
+  'Property & Casualty',
+  'Property & Casualty Consultant',
+  'Public Adjuster',
+  'Reinsur Intermediary Broker',
+  'Reinsur Intermediary Manager',
+  'Settlement Agent',
+  'Surplus Lines',
+  'Temporary Life & Health',
+  'Temporary Life & Health-Debit',
+  'Temporary Property & Casualty',
+  'Title',
+  'Variable Contracts',
+  'Viatical Settlement Broker',
+]
+
 export default function AgentOnboarding() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [insuranceOpen, setInsuranceOpen] = useState(false)
+  const [licenseOpen, setLicenseOpen] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [agentStatus, setAgentStatus] = useState('pending')
@@ -35,6 +141,12 @@ export default function AgentOnboarding() {
   const [lookupResult, setLookupResult] = useState(null)
   const [form, setForm] = useState({
     name: '',
+    firstName: '',
+    lastName: '',
+    lastNameMode: 'startsWith',
+    agencyName: '',
+    agencyNameMode: 'startsWith',
+    city: '',
     producerNumber: '',
     verifyLicense: '',
     verifyNpn: '',
@@ -47,6 +159,8 @@ export default function AgentOnboarding() {
     phone: '',
     availability: 'online',
     bio: '',
+    insuranceTypes: [],
+    licenseTypes: [],
   })
 
   useEffect(() => {
@@ -59,8 +173,20 @@ export default function AgentOnboarding() {
       try {
         const res = await api.get(`/agents/${user.agentId}`)
         const agent = res.data.agent
+        const nameParts = (agent?.name || '').trim().split(/\s+/)
+        const firstName = nameParts[0] || ''
+        const lastName = nameParts.slice(1).join(' ')
+        const address = agent?.address || ''
+        const city = address.split(',')[0] || ''
+
         setForm({
           name: agent?.name || '',
+          firstName,
+          lastName,
+          lastNameMode: 'startsWith',
+          agencyName: '',
+          agencyNameMode: 'startsWith',
+          city,
           producerNumber: agent?.producerNumber || '',
           verifyLicense: agent?.producerNumber || '',
           verifyNpn: '',
@@ -68,11 +194,13 @@ export default function AgentOnboarding() {
           languages: joinList(agent?.languages || []),
           products: joinList(agent?.products || []),
           specialty: agent?.specialty || '',
-          address: agent?.address || '',
+          address,
           zip: agent?.zip || '',
           phone: agent?.phone || '',
           availability: agent?.availability || 'online',
           bio: agent?.bio || '',
+          insuranceTypes: Array.isArray(agent?.insuranceTypes) ? agent.insuranceTypes : [],
+          licenseTypes: Array.isArray(agent?.licenseTypes) ? agent.licenseTypes : [],
         })
         const status = agent?.status || 'pending'
         const underReviewFlag = Boolean(agent?.underReview)
@@ -91,28 +219,66 @@ export default function AgentOnboarding() {
     loadAgent()
   }, [user?.agentId])
 
+  const openAgentSignup = () => {
+    window.dispatchEvent(new Event('open-agent-auth-signup'))
+  }
+
   const goNext = () => setActiveIndex((i) => Math.min(i + 1, steps.length - 1))
   const goPrev = () => setActiveIndex((i) => Math.max(i - 1, 0))
 
+  const toggleValue = (field, value) => {
+    setForm((prev) => {
+      const current = new Set(prev[field] || [])
+      if (current.has(value)) {
+        current.delete(value)
+      } else {
+        current.add(value)
+      }
+      return { ...prev, [field]: Array.from(current) }
+    })
+  }
+
+  const handleBlurDropdown = (setter) => (e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setter(false)
+    }
+  }
+
   const handleSave = async () => {
+    if (!user) {
+      toast.error('Create your agent account to submit onboarding.')
+      openAgentSignup()
+      return false
+    }
     if (!user?.agentId) {
       toast.error('Agent account not found. Please sign out and sign up as an agent again.')
       return false
     }
     setSaving(true)
     try {
+      const displayName =
+        (form.name || `${form.firstName} ${form.lastName}`.trim()) || 'Agent'
+      const addressValue = form.address || form.city || ''
       const payload = {
-        name: form.name,
+        name: displayName.trim(),
+        agencyName: form.agencyName,
+        agencyNameMode: form.agencyNameMode,
         producerNumber: form.producerNumber,
         states: form.state ? [form.state] : [],
         languages: splitList(form.languages),
         products: splitList(form.products),
         specialty: form.specialty || splitList(form.products)[0] || 'Auto',
-        address: form.address,
+        address: addressValue,
         zip: form.zip,
         phone: form.phone,
         availability: form.availability,
         bio: form.bio || 'Licensed agent on Connectura.',
+        insuranceTypes: form.insuranceTypes,
+        licenseTypes: form.licenseTypes,
+        lastNameMode: form.lastNameMode,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        city: form.city,
       }
       await api.put(`/agents/${user.agentId}`, payload)
       toast.success('Onboarding saved. Running license check...')
@@ -138,8 +304,8 @@ export default function AgentOnboarding() {
     try {
       const licenseValue = form.verifyLicense || form.producerNumber
       const res = await api.post(`/agents/${user.agentId}/license-lookup`, {
-        firstName: '',
-        lastName: '',
+        firstName: form.firstName || '',
+        lastName: form.lastName || '',
         zip: form.zip,
         state: form.state,
         npn: npnValue,
@@ -189,7 +355,10 @@ export default function AgentOnboarding() {
   }
 
   const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
-  const fullWidthTextArea = `${commonInput} min-h-[120px]`
+  const displayName = (form.name || `${form.firstName} ${form.lastName}`.trim()) || '--'
+  const licenseNumberDisplay = form.producerNumber || form.verifyLicense || '--'
+  const npnDisplay = form.verifyNpn || form.producerNumber || '--'
+  const agencyNameDisplay = form.agencyName || '--'
 
   if (loading) {
     return (
@@ -201,6 +370,19 @@ export default function AgentOnboarding() {
 
   return (
     <main className="page-shell py-10">
+      {!user && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700 flex flex-col gap-3">
+          <div className="text-sm font-semibold text-slate-800">Start your agent onboarding</div>
+          <p className="text-sm">
+            You can review the onboarding steps now. To save and verify your profile, create your agent account first.
+          </p>
+          <div>
+            <button type="button" className="pill-btn-primary" onClick={openAgentSignup}>
+              Create account to continue
+            </button>
+          </div>
+        </div>
+      )}
       <div className="surface p-5 md:p-6 space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -245,48 +427,208 @@ export default function AgentOnboarding() {
             <h3 className="text-sm font-semibold mb-3">Identity & licensing</h3>
             <div className="space-y-3">
               <label className="block text-sm">
-                Full name or agency name
-                <input
-                  className={commonInput}
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </label>
-              <label className="block text-sm">
-                Producer/license number (VA license #)
+                Virginia License Number
                 <input
                   className={commonInput}
                   value={form.producerNumber}
-                  onChange={(e) => setForm({ ...form, producerNumber: e.target.value, verifyLicense: e.target.value })}
-                  placeholder="NPN or state license ID"
+                  onChange={(e) =>
+                    setForm({ ...form, producerNumber: e.target.value, verifyLicense: e.target.value })
+                  }
+                  placeholder="Virginia License Number"
                 />
               </label>
               <label className="block text-sm">
-                NPN (required for SCC lookup)
+                National Producer Number (NPN)
                 <input
                   className={commonInput}
                   value={form.verifyNpn}
                   onChange={(e) => setForm({ ...form, verifyNpn: e.target.value })}
-                  placeholder="National Producer Number"
+                  placeholder="NPN"
                 />
               </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block text-sm col-span-1 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <span>Agency Name</span>
+                    <div className="flex items-center gap-3 text-xs text-slate-600">
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="agencyNameMode"
+                          value="startsWith"
+                          checked={form.agencyNameMode === 'startsWith'}
+                          onChange={(e) => setForm({ ...form, agencyNameMode: e.target.value })}
+                        />
+                        Starts With
+                      </label>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="agencyNameMode"
+                          value="contains"
+                          checked={form.agencyNameMode === 'contains'}
+                          onChange={(e) => setForm({ ...form, agencyNameMode: e.target.value })}
+                        />
+                        Contains
+                      </label>
+                    </div>
+                  </div>
+                  <input
+                    className={commonInput}
+                    value={form.agencyName}
+                    onChange={(e) => setForm({ ...form, agencyName: e.target.value })}
+                    placeholder="Agency Name"
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  Last Name
+                  <input
+                    className={commonInput}
+                    value={form.lastName}
+                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    placeholder="Last Name"
+                  />
+                </label>
+                <div className="flex items-end gap-3 text-xs text-slate-600">
+                  <label className="inline-flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="lastNameMode"
+                      value="startsWith"
+                      checked={form.lastNameMode === 'startsWith'}
+                      onChange={(e) => setForm({ ...form, lastNameMode: e.target.value })}
+                    />
+                    Starts With
+                  </label>
+                  <label className="inline-flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="lastNameMode"
+                      value="contains"
+                      checked={form.lastNameMode === 'contains'}
+                      onChange={(e) => setForm({ ...form, lastNameMode: e.target.value })}
+                    />
+                    Contains
+                  </label>
+                </div>
+              </div>
               <label className="block text-sm">
-                Licensed state (resident)
+                First Name
                 <input
                   className={commonInput}
-                  value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  placeholder="e.g., CA"
+                  value={form.firstName}
+                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                  placeholder="First Name"
                 />
               </label>
               <label className="block text-sm">
-                Short bio (no carrier promises; quotes handled on your own systems)
-                <textarea
-                  className={fullWidthTextArea}
-                  value={form.bio}
-                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
-                  placeholder="Licensed independent agent focused on..."
+                City
+                <input
+                  className={commonInput}
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  placeholder="City"
                 />
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block text-sm">
+                  State
+                  <select
+                    className={commonInput}
+                    value={form.state}
+                    onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  >
+                    <option value="">--Select State--</option>
+                    {STATE_OPTIONS.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  Zip Code
+                  <input
+                    className={commonInput}
+                    value={form.zip}
+                    onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                    placeholder="Zip Code"
+                  />
+                </label>
+              </div>
+              <label className="block text-sm">
+                Type of Insurance
+                <div
+                  tabIndex={0}
+                  onBlur={handleBlurDropdown(setInsuranceOpen)}
+                  className="relative"
+                >
+                  <button
+                    type="button"
+                    className={`${commonInput} text-left flex items-center justify-between`}
+                    onClick={() => setInsuranceOpen((v) => !v)}
+                  >
+                    <span className={form.insuranceTypes.length ? 'text-slate-800' : 'text-slate-400'}>
+                      {form.insuranceTypes.length ? form.insuranceTypes.join(', ') : '--Select Insurance Type--'}
+                    </span>
+                    <span className="text-slate-400">▾</span>
+                  </button>
+                  {insuranceOpen && (
+                    <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                      {INSURANCE_TYPES.map((type) => (
+                        <label
+                          key={type}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.insuranceTypes.includes(type)}
+                            onChange={() => toggleValue('insuranceTypes', type)}
+                          />
+                          <span>{type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </label>
+              <div className="text-xs font-semibold text-slate-500">OR</div>
+              <label className="block text-sm">
+                License Type
+                <div
+                  tabIndex={0}
+                  onBlur={handleBlurDropdown(setLicenseOpen)}
+                  className="relative"
+                >
+                  <button
+                    type="button"
+                    className={`${commonInput} text-left flex items-center justify-between`}
+                    onClick={() => setLicenseOpen((v) => !v)}
+                  >
+                    <span className={form.licenseTypes.length ? 'text-slate-800' : 'text-slate-400'}>
+                      {form.licenseTypes.length ? form.licenseTypes.join(', ') : '--Select License Type--'}
+                    </span>
+                    <span className="text-slate-400">▾</span>
+                  </button>
+                  {licenseOpen && (
+                    <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                      {LICENSE_TYPES.map((type) => (
+                        <label
+                          key={type}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.licenseTypes.includes(type)}
+                            onChange={() => toggleValue('licenseTypes', type)}
+                          />
+                          <span>{type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </label>
             </div>
           </div>
@@ -321,6 +663,15 @@ export default function AgentOnboarding() {
                   value={form.specialty}
                   onChange={(e) => setForm({ ...form, specialty: e.target.value })}
                   placeholder="e.g., Small business, High-net-worth personal lines"
+                />
+              </label>
+              <label className="block text-sm">
+                About you (bio)
+                <textarea
+                  className={`${commonInput} min-h-[120px]`}
+                  value={form.bio}
+                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                  placeholder="Share your background, carriers, and how you help clients."
                 />
               </label>
             </div>
@@ -381,19 +732,20 @@ export default function AgentOnboarding() {
           >
             <h3 className="text-sm font-semibold mb-3">Confirm & finish</h3>
             <div className="space-y-2 text-sm text-slate-700">
-              <div>Name: {form.name || '--'}</div>
-              <div>
-                License: {form.producerNumber || form.verifyLicense || '--'} ({form.state || 'State not set'})
-              </div>
-              <div>
-                SCC search terms: NPN {form.verifyNpn || form.producerNumber || '--'}
-              </div>
+              <div>Name: {displayName}</div>
+              <div>Virginia License Number: {licenseNumberDisplay}</div>
+              <div>NPN: {npnDisplay}</div>
+              <div>Last Name ({form.lastNameMode === 'contains' ? 'contains' : 'starts with'}): {form.lastName || '--'}</div>
+              <div>First Name: {form.firstName || '--'}</div>
+              <div>Agency Name ({form.agencyNameMode === 'contains' ? 'contains' : 'starts with'}): {agencyNameDisplay}</div>
+              <div>City/State/Zip: {form.city || '--'}, {form.state || '--'} {form.zip || ''}</div>
+              <div>Type of Insurance: {form.insuranceTypes.length ? form.insuranceTypes.join(', ') : '--'}</div>
+              <div>License Type: {form.licenseTypes.length ? form.licenseTypes.join(', ') : '--'}</div>
               <div>Languages: {form.languages || '--'}</div>
               <div>Products: {form.products || '--'}</div>
               <div>Specialty: {form.specialty || '--'}</div>
               <div>Availability: {form.availability}</div>
               <div>Phone: {form.phone || '--'}</div>
-              <div>Address: {form.address || '--'} {form.zip || ''}</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connectura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.

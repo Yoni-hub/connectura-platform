@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
 
-export default function AuthModal({ open, onClose, intent = 'agent' }) {
+export default function AuthModal({ open, onClose, intent = 'agent', startMode = 'login' }) {
   const { login, register, loading } = useAuth()
   const nav = useNavigate()
   const [mode, setMode] = useState('login')
@@ -23,7 +23,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
 
   useEffect(() => {
     if (open) {
-      setMode('login')
+      setMode(startMode === 'create' ? 'create' : 'login')
       setRemember(false)
       setRoleIntent(intent?.toUpperCase() === 'CUSTOMER' ? 'CUSTOMER' : 'AGENT')
       setForm({
@@ -38,7 +38,7 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
         address: '',
       })
     }
-  }, [open, intent])
+  }, [open, intent, startMode])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -253,7 +253,14 @@ export default function AuthModal({ open, onClose, intent = 'agent' }) {
           <button
             type="button"
             className="font-semibold text-[#006aff]"
-            onClick={() => setMode(mode === 'login' ? 'create' : 'login')}
+            onClick={() => {
+              if (mode === 'login') {
+                onClose()
+                nav('/agent/onboarding', { replace: true })
+                return
+              }
+              setMode('login')
+            }}
           >
             {mode === 'login' ? 'Sign up' : 'Sign in'}
           </button>
