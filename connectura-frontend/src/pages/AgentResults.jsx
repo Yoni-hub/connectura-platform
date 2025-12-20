@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
@@ -7,6 +7,7 @@ import Skeleton from '../components/ui/Skeleton'
 import { useProfile } from '../context/ProfileContext'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
+import MessageAgentModal from '../components/modals/MessageAgentModal'
 
 export default function AgentResults() {
   const { agents, loading, fetchAgents } = useAgents()
@@ -14,6 +15,8 @@ export default function AgentResults() {
   const { user } = useAuth()
   const nav = useNavigate()
   const [params] = useSearchParams()
+  const [messageOpen, setMessageOpen] = useState(false)
+  const [messageAgent, setMessageAgent] = useState(null)
 
   useEffect(() => {
     const query = Object.fromEntries(params.entries())
@@ -27,6 +30,19 @@ export default function AgentResults() {
     }
     shareWithAgent(agent.id)
     nav('/dashboard')
+  }
+
+  const handleMessage = (agent) => {
+    if (!user) {
+      toast.error('Login to send a message')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can message agents')
+      return
+    }
+    setMessageAgent(agent)
+    setMessageOpen(true)
   }
 
   return (
@@ -54,10 +70,12 @@ export default function AgentResults() {
               onVoice={() => nav(`/call/voice/${agent.id}`)}
               onVideo={() => nav(`/call/video/${agent.id}`)}
               onSave={handleSave}
+              onMessage={handleMessage}
             />
           ))}
         </div>
       )}
+      <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
     </main>
   )
 }

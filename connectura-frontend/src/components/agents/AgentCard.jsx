@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import Badge from '../ui/Badge'
 
-export default function AgentCard({ agent, onVoice, onVideo, onSave }) {
+export default function AgentCard({ agent, onVoice, onVideo, onSave, onMessage }) {
   const statusTone = agent.availability === 'online' ? 'green' : agent.availability === 'busy' ? 'amber' : 'gray'
   return (
     <div className="glass rounded-2xl p-5 flex gap-4 items-center hover:shadow-lg transition bg-white">
@@ -28,6 +28,11 @@ export default function AgentCard({ agent, onVoice, onVideo, onSave }) {
           <button onClick={() => onVideo?.(agent)} className="pill-btn bg-slate-900 text-white hover:bg-slate-800">
             Video call
           </button>
+          {onMessage && (
+            <button onClick={() => onMessage(agent)} className="pill-btn-ghost">
+              Message
+            </button>
+          )}
           {onSave && (
             <button onClick={() => onSave(agent)} className="pill-btn-ghost">
               Save preferred

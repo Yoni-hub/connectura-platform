@@ -3,11 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAgents } from '../context/AgentContext'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
-import Modal from '../components/ui/Modal'
 import { api } from '../services/api'
 import { useProfile } from '../context/ProfileContext'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
+import MessageAgentModal from '../components/modals/MessageAgentModal'
 
 export default function AgentProfile() {
   const { id } = useParams()
@@ -16,8 +16,6 @@ export default function AgentProfile() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [messageOpen, setMessageOpen] = useState(false)
-  const [messageBody, setMessageBody] = useState('')
-  const [messageSending, setMessageSending] = useState(false)
   const { shareWithAgent } = useProfile()
   const { user } = useAuth()
   const nav = useNavigate()
@@ -54,25 +52,6 @@ export default function AgentProfile() {
       return
     }
     setMessageOpen(true)
-  }
-
-  const handleSendMessage = async () => {
-    const body = messageBody.trim()
-    if (!body) {
-      toast.error('Message cannot be empty')
-      return
-    }
-    setMessageSending(true)
-    try {
-      await api.post('/messages', { agentId: agent.id, body })
-      toast.success('Message sent')
-      setMessageBody('')
-      setMessageOpen(false)
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send message')
-    } finally {
-      setMessageSending(false)
-    }
   }
 
   if (loading || !agent) {
@@ -145,47 +124,7 @@ export default function AgentProfile() {
           ))}
         </div>
       </div>
-
-      <Modal
-        title="Message agent"
-        open={messageOpen}
-        onClose={() => {
-          if (!messageSending) setMessageOpen(false)
-        }}
-      >
-        <div className="space-y-4">
-          <div className="text-sm text-slate-600">
-            Send a message to <span className="font-semibold text-slate-900">{agent.name}</span>.
-          </div>
-          <label className="block text-sm">
-            Message
-            <textarea
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 min-h-[120px]"
-              value={messageBody}
-              onChange={(e) => setMessageBody(e.target.value)}
-              placeholder="Type your message..."
-            />
-          </label>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="pill-btn-ghost px-4"
-              onClick={() => setMessageOpen(false)}
-              disabled={messageSending}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="pill-btn-primary px-5"
-              onClick={handleSendMessage}
-              disabled={messageSending}
-            >
-              {messageSending ? 'Sending...' : 'Send message'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <MessageAgentModal open={messageOpen} agent={agent} onClose={() => setMessageOpen(false)} />
     </main>
   )
 }

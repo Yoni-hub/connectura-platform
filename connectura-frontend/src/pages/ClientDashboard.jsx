@@ -6,6 +6,7 @@ import { useAgents } from '../context/AgentContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
+import MessageAgentModal from '../components/modals/MessageAgentModal'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
@@ -26,6 +27,8 @@ export default function ClientDashboard() {
   const [client, setClient] = useState(null)
   const [savedAgent, setSavedAgent] = useState(null)
   const [savedAgentLoading, setSavedAgentLoading] = useState(false)
+  const [messageOpen, setMessageOpen] = useState(false)
+  const [messageAgent, setMessageAgent] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -94,6 +97,19 @@ export default function ClientDashboard() {
       active = false
     }
   }, [client?.preferredAgentId, getAgent])
+
+  const handleMessage = (agent) => {
+    if (!user) {
+      toast.error('Login to send a message')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can message agents')
+      return
+    }
+    setMessageAgent(agent)
+    setMessageOpen(true)
+  }
 
   const initials = useMemo(() => {
     if (form.firstName || form.lastName) {
@@ -376,6 +392,7 @@ export default function ClientDashboard() {
                     agent={savedAgent}
                     onVoice={() => nav(`/call/voice/${savedAgent.id}`)}
                     onVideo={() => nav(`/call/video/${savedAgent.id}`)}
+                    onMessage={handleMessage}
                   />
                 )}
                 {!savedAgentLoading && !savedAgent && (
@@ -497,6 +514,7 @@ export default function ClientDashboard() {
           )}
         </section>
       </div>
+      <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
     </main>
   )
 }
