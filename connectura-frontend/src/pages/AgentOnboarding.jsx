@@ -125,7 +125,7 @@ const LICENSE_TYPES = [
 ]
 
 export default function AgentOnboarding() {
-  const { user, logout } = useAuth()
+  const { user, register } = useAuth()
   const nav = useNavigate()
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -139,6 +139,13 @@ export default function AgentOnboarding() {
   const [agentSuspended, setAgentSuspended] = useState(false)
   const [showReviewOverlay, setShowReviewOverlay] = useState(false)
   const [lookupResult, setLookupResult] = useState(null)
+  const [showEmailVerify, setShowEmailVerify] = useState(false)
+  const [verifyEmail, setVerifyEmail] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [otpVerifying, setOtpVerifying] = useState(false)
+  const [identityType, setIdentityType] = useState('agent')
   const [form, setForm] = useState({
     name: '',
     firstName: '',
@@ -209,7 +216,7 @@ export default function AgentOnboarding() {
           bio: agent?.bio || '',
           insuranceTypes: Array.isArray(agent?.insuranceTypes) ? agent.insuranceTypes : [],
           licenseTypes: Array.isArray(agent?.licenseTypes) ? agent.licenseTypes : [],
-          accountEmail: '',
+          accountEmail: agent?.email || '',
           accountPassword: '',
           accountPasswordConfirm: '',
           securityQ1: '',
@@ -251,13 +258,37 @@ export default function AgentOnboarding() {
     }
   }
 
-  const handleSave = async () => {
-    if (!user) {
-      toast.error('Create your agent account to submit onboarding.')
-      openAgentSignup()
-      return false
+  const openEmailVerifyModal = () => {
+    const email = form.accountEmail?.trim().toLowerCase()
+    if (!email) {
+      toast.error('Account email is required to verify.')
+      setActiveIndex(0)
+      setTimeout(() => {
+        const el = document.getElementById('account-email')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+        }
+      }, 100)
+      return
     }
-    if (!user?.agentId) {
+    setVerifyEmail(email)
+    setOtpSent(false)
+    setOtpCode('')
+    setShowEmailVerify(true)
+  }
+
+  const closeEmailVerifyModal = () => {
+    setShowEmailVerify(false)
+    setVerifyEmail('')
+    setOtpSent(false)
+    setOtpCode('')
+    setOtpSending(false)
+    setOtpVerifying(false)
+  }
+
+  const saveOnboarding = async (agentId) => {
+    if (!agentId) {
       toast.error('Please sign in to submit onboarding.')
       return false
     }
@@ -288,7 +319,7 @@ export default function AgentOnboarding() {
         lastName: form.lastName,
         city: form.city,
       }
-      await api.put(`/agents/${user.agentId}`, payload)
+      await api.put(`/agents/${agentId}`, payload)
       toast.success('Onboarding saved. Running license check...')
       localStorage.setItem('connectura_agent_onboarding_pending', 'true')
       localStorage.setItem('connectura_agent_onboarding_submitted', 'true')
@@ -301,8 +332,9 @@ export default function AgentOnboarding() {
     }
   }
 
-  const runLicenseLookup = async () => {
-    if (!user?.agentId) return
+  const runLicenseLookup = async (agentId) => {
+    const targetAgentId = agentId || user?.agentId
+    if (!targetAgentId) return
     const npnValue = form.verifyNpn || form.producerNumber
     if (!npnValue) {
       toast.error('NPN is required for the SCC license lookup.')
@@ -311,7 +343,7 @@ export default function AgentOnboarding() {
     setLookupLoading(true)
     try {
       const licenseValue = form.verifyLicense || form.producerNumber
-      const res = await api.post(`/agents/${user.agentId}/license-lookup`, {
+      const res = await api.post(`/agents/${targetAgentId}/license-lookup`, {
         firstName: form.firstName || '',
         lastName: form.lastName || '',
         zip: form.zip,
@@ -356,6 +388,85 @@ export default function AgentOnboarding() {
     }
   }
 
+  const sendEmailOtp = async () => {
+    if (!verifyEmail) {
+      toast.error('Account email is required to verify.')
+      return false
+    }
+    setOtpSending(true)
+    try {
+      const res = await api.post('/auth/email-otp', { email: verifyEmail })
+      const delivery = res.data?.delivery
+      setOtpSent(true)
+      toast.success(delivery === 'log' ? 'Verification code generated. Check the server logs.' : 'Verification code sent.')
+      return true
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not send verification code')
+      return false
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const submitAfterVerification = async () => {
+    const displayName =
+      (form.name || `${form.firstName} ${form.lastName}`.trim()) || 'Agent'
+    const addressValue = form.address || form.city || ''
+    const payload = {
+      email: verifyEmail,
+      password: form.accountPassword,
+      name: displayName.trim(),
+      role: 'AGENT',
+      languages: splitList(form.languages),
+      states: form.state ? [form.state] : [],
+      specialty: form.specialty || splitList(form.products)[0] || 'Auto',
+      producerNumber: form.producerNumber,
+      address: addressValue,
+      zip: form.zip,
+      products: splitList(form.products),
+    }
+    const newUser = await register(payload)
+    if (!newUser) return false
+    const saved = await saveOnboarding(newUser.agentId)
+    if (!saved) return false
+    await runLicenseLookup(newUser.agentId)
+    setAgentStatus('pending')
+    setAgentUnderReview(true)
+    setShowReviewOverlay(true)
+    toast.success('Email verified. Your agent profile is under review.')
+    return true
+  }
+
+  const verifyEmailOtp = async () => {
+    const code = otpCode.trim()
+    if (!code) {
+      toast.error('Enter the verification code.')
+      return false
+    }
+    setOtpVerifying(true)
+    try {
+      await api.post('/auth/email-otp/verify', { email: verifyEmail, code })
+      const submitted = await submitAfterVerification()
+      if (submitted) {
+        closeEmailVerifyModal()
+      }
+      return submitted
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Verification failed')
+      return false
+    } finally {
+      setOtpVerifying(false)
+    }
+  }
+
+  const handleEmailVerifyAction = async () => {
+    if (!otpSent) {
+      await sendEmailOtp()
+      return
+    }
+    await verifyEmailOtp()
+  }
+
   const handleSubmit = async () => {
     const requiredFields = [
       { key: 'accountEmail', label: 'Account email', step: 0, el: 'account-email' },
@@ -368,16 +479,25 @@ export default function AgentOnboarding() {
       { key: 'verifyNpn', label: 'National Producer Number (NPN)', step: 1, el: 'npn' },
       { key: 'state', label: 'State', step: 1, el: 'state' },
       { key: 'zip', label: 'Zip Code', step: 1, el: 'zip' },
-      { key: 'firstName', label: 'First Name', step: 1, el: 'first-name' },
-      { key: 'lastName', label: 'Last Name', step: 1, el: 'last-name' },
-      { key: 'agencyName', label: 'Agency Name', step: 1, el: 'agency-name' },
+    ]
+
+    if (identityType === 'agency') {
+      requiredFields.push({ key: 'agencyName', label: 'Agency Name', step: 1, el: 'agency-name' })
+    } else {
+      requiredFields.push(
+        { key: 'firstName', label: 'First Name', step: 1, el: 'first-name' },
+        { key: 'lastName', label: 'Last Name', step: 1, el: 'last-name' }
+      )
+    }
+
+    requiredFields.push(
       { key: 'city', label: 'City', step: 1, el: 'city' },
       { key: 'languages', label: 'Languages you support', step: 2, el: 'languages' },
       { key: 'products', label: 'Products / lines you sell', step: 2, el: 'products' },
       { key: 'appointedCarriers', label: 'Insurance companies you are appointed with?', step: 2, el: 'appointed-carriers' },
       { key: 'specialty', label: 'Primary specialty', step: 2, el: 'specialty' },
-      { key: 'bio', label: 'About you (bio)', step: 2, el: 'bio' },
-    ]
+      { key: 'bio', label: 'About you (bio)', step: 2, el: 'bio' }
+    )
 
     const missing = requiredFields.filter(({ key }) => !form[key]?.toString().trim())
     if (form.accountPassword !== form.accountPasswordConfirm) {
@@ -406,15 +526,20 @@ export default function AgentOnboarding() {
       return
     }
 
-    const saved = await handleSave()
+    if (!user) {
+      openEmailVerifyModal()
+      return
+    }
+    const saved = await saveOnboarding(user.agentId)
     if (!saved) return
-    await runLicenseLookup()
+    await runLicenseLookup(user.agentId)
     toast.success(
       'Account created successfully. Your agent onboarding is under review. When your account is approved, we will send you a link to your email to log into your dashboard. Need help? Call us at 1123-456-7890 or email help@connectura.com.'
     )
   }
 
-  const commonInput = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2'
+  const commonInput =
+    'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
   const displayName = (form.name || `${form.firstName} ${form.lastName}`.trim()) || '--'
   const licenseNumberDisplay = form.producerNumber || form.verifyLicense || '--'
   const npnDisplay = form.verifyNpn || form.producerNumber || '--'
@@ -559,7 +684,25 @@ export default function AgentOnboarding() {
           <div
             className={`rounded-xl border p-4 shadow-sm ${activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
           >
-            <h3 className="text-sm font-semibold mb-3">Identity & licensing</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Identity & licensing</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`${identityType === 'agency' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
+                  onClick={() => setIdentityType('agency')}
+                >
+                  agency
+                </button>
+                <button
+                  type="button"
+                  className={`${identityType === 'agent' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
+                  onClick={() => setIdentityType('agent')}
+                >
+                  agent
+                </button>
+              </div>
+            </div>
             <div className="space-y-3">
               <label className="block text-sm">
                 Virginia License Number <span className="text-red-500">*</span>
@@ -586,10 +729,12 @@ export default function AgentOnboarding() {
                 />
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="block text-sm col-span-1 sm:col-span-2">
+                <label
+                  className={`block text-sm col-span-1 sm:col-span-2 ${identityType === 'agent' ? 'opacity-60' : ''}`}
+                >
                   <div className="flex items-center justify-between">
                     <span>
-                      Agency Name <span className="text-red-500">*</span>
+                      Agency Name {identityType === 'agency' && <span className="text-red-500">*</span>}
                     </span>
                     <div className="flex items-center gap-3 text-xs text-slate-600">
                       <label className="inline-flex items-center gap-1">
@@ -597,6 +742,7 @@ export default function AgentOnboarding() {
                           type="radio"
                           name="agencyNameMode"
                           value="startsWith"
+                          disabled={identityType === 'agent'}
                           checked={form.agencyNameMode === 'startsWith'}
                           onChange={(e) => setForm({ ...form, agencyNameMode: e.target.value })}
                         />
@@ -607,6 +753,7 @@ export default function AgentOnboarding() {
                           type="radio"
                           name="agencyNameMode"
                           value="contains"
+                          disabled={identityType === 'agent'}
                           checked={form.agencyNameMode === 'contains'}
                           onChange={(e) => setForm({ ...form, agencyNameMode: e.target.value })}
                         />
@@ -619,28 +766,31 @@ export default function AgentOnboarding() {
                     value={form.agencyName}
                     onChange={(e) => setForm({ ...form, agencyName: e.target.value })}
                     placeholder="Agency Name"
-                    required
+                    required={identityType === 'agency'}
+                    disabled={identityType === 'agent'}
                     id="agency-name"
                   />
                 </label>
 
-                <label className="block text-sm">
-                  Last Name <span className="text-red-500">*</span>
+                <label className={`block text-sm ${identityType === 'agency' ? 'opacity-60' : ''}`}>
+                  Last Name {identityType === 'agent' && <span className="text-red-500">*</span>}
                   <input
                     className={commonInput}
                     value={form.lastName}
                     onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                     placeholder="Last Name"
-                    required
+                    required={identityType === 'agent'}
+                    disabled={identityType === 'agency'}
                     id="last-name"
                   />
                 </label>
-                <div className="flex items-end gap-3 text-xs text-slate-600">
+                <div className={`flex items-end gap-3 text-xs text-slate-600 ${identityType === 'agency' ? 'opacity-60' : ''}`}>
                   <label className="inline-flex items-center gap-1">
                     <input
                       type="radio"
                       name="lastNameMode"
                       value="startsWith"
+                      disabled={identityType === 'agency'}
                       checked={form.lastNameMode === 'startsWith'}
                       onChange={(e) => setForm({ ...form, lastNameMode: e.target.value })}
                     />
@@ -651,6 +801,7 @@ export default function AgentOnboarding() {
                       type="radio"
                       name="lastNameMode"
                       value="contains"
+                      disabled={identityType === 'agency'}
                       checked={form.lastNameMode === 'contains'}
                       onChange={(e) => setForm({ ...form, lastNameMode: e.target.value })}
                     />
@@ -658,14 +809,15 @@ export default function AgentOnboarding() {
                   </label>
                 </div>
               </div>
-                <label className="block text-sm">
-                  First Name <span className="text-red-500">*</span>
+                <label className={`block text-sm ${identityType === 'agency' ? 'opacity-60' : ''}`}>
+                  First Name {identityType === 'agent' && <span className="text-red-500">*</span>}
                   <input
                     className={commonInput}
                     value={form.firstName}
                     onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                     placeholder="First Name"
-                    required
+                    required={identityType === 'agent'}
+                    disabled={identityType === 'agency'}
                     id="first-name"
                   />
                 </label>
@@ -931,6 +1083,46 @@ export default function AgentOnboarding() {
         </div>
       </div>
 
+      {showEmailVerify && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">Verify your email address</h2>
+            <p className="text-slate-700">
+              We will send a one-time verification code to{' '}
+              <span className="font-semibold">{verifyEmail || form.accountEmail || '--'}</span>.
+            </p>
+            {otpSent ? (
+              <label className="block text-sm">
+                Verification code
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="Enter the 6-digit code"
+                />
+              </label>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                Click Verify to send your one-time code.
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="pill-btn-ghost px-5" onClick={closeEmailVerifyModal}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                disabled={otpSending || otpVerifying}
+                onClick={handleEmailVerifyAction}
+              >
+                {otpSending ? 'Sending...' : otpVerifying ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
@@ -984,16 +1176,6 @@ export default function AgentOnboarding() {
                 onClick={() => nav('/')}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="pill-btn-primary px-5"
-                onClick={() => {
-                  setShowReviewOverlay(false)
-                  setActiveIndex(0)
-                }}
-              >
-                Edit
               </button>
             </div>
           </div>

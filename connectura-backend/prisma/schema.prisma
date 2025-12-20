@@ -45,6 +45,7 @@ model Agent {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   customers    Customer[] @relation("AgentCustomers")
+  messages     Message[]  @relation("AgentMessages")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -65,8 +66,21 @@ model Customer {
   drivers          Driver[]
   vehicles         Vehicle[]
   profileData      String    @default("{}")
+  messages         Message[] @relation("CustomerMessages")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  agentId    Int
+  customerId Int
+  body       String
+  senderRole String   @default("CUSTOMER")
+  createdAt  DateTime @default(now())
+
+  agent    Agent    @relation("AgentMessages", fields: [agentId], references: [id], onDelete: Cascade)
+  customer Customer @relation("CustomerMessages", fields: [customerId], references: [id], onDelete: Cascade)
 }
 
 model Driver {

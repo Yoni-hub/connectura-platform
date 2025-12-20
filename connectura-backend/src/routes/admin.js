@@ -4,6 +4,7 @@ const prisma = require('../prisma')
 const { adminGuard } = require('../middleware/auth')
 const { generateToken } = require('../utils/token')
 const { parseJson } = require('../utils/transform')
+const { getEmailOtp } = require('../utils/emailOtp')
 
 const router = express.Router()
 
@@ -70,6 +71,14 @@ router.post('/login', async (req, res) => {
   if (!match) return res.status(400).json({ error: 'Invalid credentials' })
   const token = generateToken({ adminId: admin.id, role: admin.role, type: 'ADMIN' })
   res.json({ token, admin: { id: admin.id, email: admin.email, role: admin.role } })
+})
+
+router.get('/email-otp', adminGuard, (req, res) => {
+  const email = String(req.query?.email || '').trim().toLowerCase()
+  if (!email) return res.status(400).json({ error: 'Email is required' })
+  const otp = getEmailOtp(email)
+  if (!otp) return res.status(404).json({ error: 'No active verification code for this email.' })
+  res.json({ code: otp.code, createdAt: otp.createdAt, expiresAt: otp.expiresAt, attempts: otp.attempts })
 })
 
 // Agents

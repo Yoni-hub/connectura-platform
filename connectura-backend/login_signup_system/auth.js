@@ -3,12 +3,14 @@ const bcrypt = require('bcrypt')
 const prisma = require('../src/prisma')
 const { generateToken } = require('../src/utils/token')
 const { authGuard } = require('../src/middleware/auth')
+const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
 
 const router = express.Router()
 
 const sanitizeUser = (user) => ({
   id: user.id,
   email: user.email,
+  name: user.customer?.name || user.agent?.name || '',
   role: user.role,
   agentId: user.agent?.id,
   customerId: user.customer?.id,
@@ -89,6 +91,37 @@ router.post('/register', async (req, res) => {
     console.error('register error', err)
     res.status(500).json({ error: 'Failed to register' })
   }
+})
+
+router.post('/email-otp', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' })
+  }
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      return res.status(400).json({ error: 'Email already registered. Please sign in.' })
+    }
+    const result = await sendEmailOtp(email)
+    res.json({ sent: true, delivery: result.delivery })
+  } catch (err) {
+    console.error('email otp send error', err)
+    res.status(500).json({ error: 'Failed to send verification code' })
+  }
+})
+
+router.post('/email-otp/verify', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const code = String(req.body?.code || '').trim()
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email and code are required' })
+  }
+  const result = verifyEmailOtp(email, code)
+  if (!result.valid) {
+    return res.status(400).json({ error: result.error || 'Invalid code' })
+  }
+  return res.json({ verified: true })
 })
 
 router.post('/login', async (req, res) => {

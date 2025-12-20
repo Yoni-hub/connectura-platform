@@ -14,6 +14,10 @@ export default function Admin() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [detailTabs, setDetailTabs] = useState([])
   const [activeDetailKey, setActiveDetailKey] = useState(null)
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpResult, setOtpResult] = useState(null)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpError, setOtpError] = useState('')
 
   const isAuthed = Boolean(token)
 
@@ -56,6 +60,9 @@ export default function Admin() {
     setLogs([])
     setDetailTabs([])
     setActiveDetailKey(null)
+    setOtpEmail('')
+    setOtpResult(null)
+    setOtpError('')
   }
 
   const upsertTab = (tab) => {
@@ -380,6 +387,28 @@ export default function Admin() {
       setClients((prev) => prev.filter((c) => c.id !== id))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed')
+    }
+  }
+
+  const handleOtpLookup = async () => {
+    const email = otpEmail.trim().toLowerCase()
+    if (!email) {
+      toast.error('Enter an agent email to lookup the OTP.')
+      return
+    }
+    setOtpLoading(true)
+    setOtpError('')
+    setOtpResult(null)
+    try {
+      const res = await adminApi.get('/admin/email-otp', { params: { email } })
+      setOtpResult({ ...res.data, email })
+      toast.success('OTP loaded')
+    } catch (err) {
+      const message = err.response?.data?.error || 'OTP lookup failed'
+      setOtpError(message)
+      toast.error(message)
+    } finally {
+      setOtpLoading(false)
     }
   }
 
@@ -930,6 +959,46 @@ export default function Admin() {
             </button>
           ))}
         </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Email OTP lookup</h2>
+              <p className="text-xs text-slate-500">Fetch the latest verification code for an agent.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="block text-sm">
+              Agent email
+              <input
+                className="mt-1 w-64 rounded-lg border border-slate-200 px-3 py-2"
+                value={otpEmail}
+                onChange={(e) => setOtpEmail(e.target.value)}
+                placeholder="agent@email.com"
+                type="email"
+              />
+            </label>
+            <button
+              type="button"
+              className="pill-btn-primary px-5"
+              onClick={handleOtpLookup}
+              disabled={otpLoading}
+            >
+              {otpLoading ? 'Looking...' : 'Get OTP'}
+            </button>
+            {otpResult && (
+              <div className="text-sm text-slate-700">
+                <span className="font-semibold text-slate-900">Code:</span> {otpResult.code}
+              </div>
+            )}
+          </div>
+          {otpResult && (
+            <div className="mt-2 text-xs text-slate-500">
+              Created: {new Date(otpResult.createdAt).toLocaleString()} | Expires:{' '}
+              {new Date(otpResult.expiresAt).toLocaleString()} | Attempts: {otpResult.attempts}
+            </div>
+          )}
+          {otpError && <div className="mt-2 text-xs text-red-600">{otpError}</div>}
+        </div>
         {activeDetailTab && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm max-w-xl md:max-w-3xl">
             {renderDetailContent(activeDetailTab)}
@@ -943,7 +1012,23 @@ export default function Admin() {
         </div>
       </div>
     )
-  }, [isAuthed, view, loading, agents, clients, logs, admin, form.email, form.password, detailTabs, activeDetailTab])
+  }, [
+    isAuthed,
+    view,
+    loading,
+    agents,
+    clients,
+    logs,
+    admin,
+    form.email,
+    form.password,
+    detailTabs,
+    activeDetailTab,
+    otpEmail,
+    otpResult,
+    otpLoading,
+    otpError,
+  ])
 
   return <main className="page-shell py-8">{content}</main>
 }

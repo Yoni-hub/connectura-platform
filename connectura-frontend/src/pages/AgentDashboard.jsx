@@ -33,6 +33,7 @@ export default function AgentDashboard() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [appointments, setAppointments] = useState(sampleAppointments)
   const [messages, setMessages] = useState(sampleMessages)
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [availabilitySchedule, setAvailabilitySchedule] = useState(
     weekdays.reduce((acc, day) => {
       acc[day] = { from: '09:00', to: '17:00' }
@@ -74,6 +75,24 @@ export default function AgentDashboard() {
     }
     fetchAgent()
   }, [user?.agentId])
+
+  const loadMessages = async () => {
+    if (!user?.agentId) return
+    setMessagesLoading(true)
+    try {
+      const res = await api.get(`/messages/agent/${user.agentId}`)
+      setMessages(res.data.messages || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not load messages')
+    } finally {
+      setMessagesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    loadMessages()
+  }, [activeTab, user?.agentId])
 
   const parsedReviews = useMemo(() => agent?.reviews || [], [agent])
 
@@ -273,7 +292,7 @@ export default function AgentDashboard() {
                   </form>
                 )}
               </div>
-            ) : activeTab === 'Profile' ? (
+                ) : activeTab === 'Profile' ? (
                 <>
                   <form className="surface p-5 space-y-3" onSubmit={handleSave}>
                     <div className="flex items-center gap-2">
@@ -376,6 +395,39 @@ export default function AgentDashboard() {
                     </div>
                   </form>
                 </>
+              ) : activeTab === 'Messages' ? (
+                <div className="surface p-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-xl font-semibold">Messages</h2>
+                    <button type="button" className="pill-btn-ghost px-4" onClick={loadMessages} disabled={messagesLoading}>
+                      {messagesLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+                  </div>
+                  {messagesLoading && <Skeleton className="h-24" />}
+                  {!messagesLoading && messages.length === 0 && (
+                    <div className="text-sm text-slate-500">No messages yet.</div>
+                  )}
+                  {!messagesLoading && messages.length > 0 && (
+                    <div className="space-y-3">
+                      {messages.map((message) => (
+                        <div key={message.id} className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-semibold text-slate-900">
+                              {message.customer?.name || message.customer?.email || 'Customer'}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {message.createdAt ? new Date(message.createdAt).toLocaleString() : ''}
+                            </div>
+                          </div>
+                          {message.customer?.email && (
+                            <div className="text-xs text-slate-500">{message.customer.email}</div>
+                          )}
+                          <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{message.body}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 null
               )}

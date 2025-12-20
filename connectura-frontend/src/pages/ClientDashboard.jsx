@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
+import { useAgents } from '../context/AgentContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
+import AgentCard from '../components/agents/AgentCard'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
@@ -17,10 +19,13 @@ const parseFullName = (fullName = '') => {
 
 export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout } = useAuth()
+  const { getAgent } = useAgents()
   const nav = useNavigate()
   const [activeTab, setActiveTab] = useState('Overview')
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState(null)
+  const [savedAgent, setSavedAgent] = useState(null)
+  const [savedAgentLoading, setSavedAgentLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -69,6 +74,26 @@ export default function ClientDashboard() {
     }
     fetchProfile()
   }, [user?.customerId, user?.email])
+
+  useEffect(() => {
+    const preferredId = client?.preferredAgentId
+    if (!preferredId) {
+      setSavedAgent(null)
+      return
+    }
+    let active = true
+    setSavedAgentLoading(true)
+    getAgent(preferredId)
+      .then((agent) => {
+        if (active) setSavedAgent(agent)
+      })
+      .finally(() => {
+        if (active) setSavedAgentLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [client?.preferredAgentId, getAgent])
 
   const initials = useMemo(() => {
     if (form.firstName || form.lastName) {
@@ -344,6 +369,19 @@ export default function ClientDashboard() {
             <div className="surface p-5">
               <h2 className="text-xl font-semibold mb-2">Agents</h2>
               <p className="text-slate-600">Saved and matched agents will show up here.</p>
+              <div className="mt-4">
+                {savedAgentLoading && <Skeleton className="h-24" />}
+                {!savedAgentLoading && savedAgent && (
+                  <AgentCard
+                    agent={savedAgent}
+                    onVoice={() => nav(`/call/voice/${savedAgent.id}`)}
+                    onVideo={() => nav(`/call/video/${savedAgent.id}`)}
+                  />
+                )}
+                {!savedAgentLoading && !savedAgent && (
+                  <div className="text-sm text-slate-500">No saved agents yet.</div>
+                )}
+              </div>
             </div>
           )}
 

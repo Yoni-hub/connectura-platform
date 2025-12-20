@@ -75,9 +75,15 @@ export default function Navbar() {
             <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
               Find agents
             </Link>
-            <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#0b3b8c]">
-              Build your insurance profile
-            </button>
+            {user?.role === 'CUSTOMER' ? (
+              <Link to="/client/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
+                {user?.name || user?.email || 'Client'}
+              </Link>
+            ) : (
+              <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#0b3b8c]">
+                Build your insurance profile
+              </button>
+            )}
             {user?.role === 'AGENT' ? (
               (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
                 <Link to="/agent/onboarding" className="text-slate-700 hover:text-[#0b3b8c]">
@@ -105,16 +111,26 @@ export default function Navbar() {
               <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                 Find agents
               </Link>
-              <button
-                type="button"
-                className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                onClick={() => {
-                  triggerAuth('customer')
-                  setMenuOpen(false)
-                }}
-              >
-                Build your insurance profile
-              </button>
+              {user?.role === 'CUSTOMER' ? (
+                <Link
+                  to="/client/dashboard"
+                  className="text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {user?.name || user?.email || 'Client'}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={() => {
+                    triggerAuth('customer')
+                    setMenuOpen(false)
+                  }}
+                >
+                  Build your insurance profile
+                </button>
+              )}
               {user?.role === 'AGENT' ? (
                 (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
                   <Link

@@ -67,6 +67,19 @@ CREATE TABLE "Vehicle" (
     CONSTRAINT "Vehicle_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE "Message" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "agentId" INTEGER NOT NULL,
+    "customerId" INTEGER NOT NULL,
+    "body" TEXT NOT NULL,
+    "senderRole" TEXT NOT NULL DEFAULT 'CUSTOMER',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Message_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "Agent" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Message_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "Agent_userId_key" ON "Agent"("userId");
 CREATE UNIQUE INDEX "Customer_userId_key" ON "Customer"("userId");
+CREATE INDEX "Message_agentId_idx" ON "Message"("agentId");
+CREATE INDEX "Message_customerId_idx" ON "Message"("customerId");

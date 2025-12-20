@@ -11,6 +11,7 @@ const searchRoutes = require('./routes/search')
 const quoteRoutes = require('./routes/quotes')
 const contactRoutes = require('./routes/contact')
 const adminRoutes = require('./routes/admin')
+const messageRoutes = require('./routes/messages')
 const prisma = require('./prisma')
 
 const app = express()
@@ -37,6 +38,7 @@ app.use('/search', searchRoutes)
 app.use('/', quoteRoutes)
 app.use('/contact', contactRoutes)
 app.use('/admin', adminRoutes)
+app.use('/messages', messageRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' })
