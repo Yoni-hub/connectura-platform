@@ -21,6 +21,7 @@ CREATE TABLE "Agent" (
     "zip" TEXT,
     "phone" TEXT,
     "products" TEXT NOT NULL DEFAULT '[]',
+    "appointedCarriers" TEXT NOT NULL DEFAULT '[]',
     "availability" TEXT NOT NULL,
     "rating" REAL NOT NULL,
     "reviews" TEXT NOT NULL,

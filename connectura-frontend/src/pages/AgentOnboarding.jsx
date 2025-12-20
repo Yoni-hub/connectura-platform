@@ -153,6 +153,7 @@ export default function AgentOnboarding() {
     state: '',
     languages: '',
     products: '',
+    appointedCarriers: '',
     specialty: '',
     address: '',
     zip: '',
@@ -199,6 +200,7 @@ export default function AgentOnboarding() {
           state: Array.isArray(agent?.states) ? agent.states[0] || '' : '',
           languages: joinList(agent?.languages || []),
           products: joinList(agent?.products || []),
+          appointedCarriers: joinList(agent?.appointedCarriers || []),
           specialty: agent?.specialty || '',
           address,
           zip: agent?.zip || '',
@@ -272,6 +274,7 @@ export default function AgentOnboarding() {
         states: form.state ? [form.state] : [],
         languages: splitList(form.languages),
         products: splitList(form.products),
+        appointedCarriers: splitList(form.appointedCarriers),
         specialty: form.specialty || splitList(form.products)[0] || 'Auto',
         address: addressValue,
         zip: form.zip,
@@ -371,6 +374,7 @@ export default function AgentOnboarding() {
       { key: 'city', label: 'City', step: 1, el: 'city' },
       { key: 'languages', label: 'Languages you support', step: 2, el: 'languages' },
       { key: 'products', label: 'Products / lines you sell', step: 2, el: 'products' },
+      { key: 'appointedCarriers', label: 'Insurance companies you are appointed with?', step: 2, el: 'appointed-carriers' },
       { key: 'specialty', label: 'Primary specialty', step: 2, el: 'specialty' },
       { key: 'bio', label: 'About you (bio)', step: 2, el: 'bio' },
     ]
@@ -826,6 +830,17 @@ export default function AgentOnboarding() {
                 />
               </label>
               <label className="block text-sm">
+                Insurance companies you are appointed with?
+                <input
+                  className={commonInput}
+                  value={form.appointedCarriers}
+                  onChange={(e) => setForm({ ...form, appointedCarriers: e.target.value })}
+                  placeholder="e.g., Travelers, Progressive, Nationwide"
+                  required
+                  id="appointed-carriers"
+                />
+              </label>
+              <label className="block text-sm">
                 Primary specialty <span className="text-red-500">*</span>
                 <input
                   className={commonInput}
@@ -882,6 +897,7 @@ export default function AgentOnboarding() {
               <div>License Type: {form.licenseTypes.length ? form.licenseTypes.join(', ') : '--'}</div>
               <div>Languages: {form.languages || '--'}</div>
               <div>Products: {form.products || '--'}</div>
+              <div>Appointed carriers: {form.appointedCarriers || '--'}</div>
               <div>Specialty: {form.specialty || '--'}</div>
               <div>Account email: {form.accountEmail || '--'}</div>
               <div>

@@ -22,6 +22,7 @@ const formatAgent = (agent) => ({
   address: agent.address,
   zip: agent.zip,
   products: parseJson(agent.products, []),
+  appointedCarriers: parseJson(agent.appointedCarriers, []),
   availability: agent.availability,
   rating: agent.rating,
   reviews: parseJson(agent.reviews, []),
@@ -156,6 +157,7 @@ router.put('/agents/:id', adminGuard, async (req, res) => {
   if (payload.languages !== undefined) data.languages = JSON.stringify(payload.languages)
   if (payload.states !== undefined) data.states = JSON.stringify(payload.states)
   if (payload.products !== undefined) data.products = JSON.stringify(payload.products)
+  if (payload.appointedCarriers !== undefined) data.appointedCarriers = JSON.stringify(payload.appointedCarriers)
   if (payload.status !== undefined) data.status = payload.status
   if (payload.underReview !== undefined) data.underReview = payload.underReview
   if (payload.isSuspended !== undefined) data.isSuspended = payload.isSuspended

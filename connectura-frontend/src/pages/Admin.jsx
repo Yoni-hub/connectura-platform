@@ -108,6 +108,7 @@ export default function Admin() {
           languages: joinList(detail.languages),
           states: joinList(detail.states),
           products: joinList(detail.products),
+          appointedCarriers: joinList(detail.appointedCarriers),
           specialty: detail.specialty || '',
           producerNumber: detail.producerNumber || '',
           status: detail.status || 'pending',
@@ -175,6 +176,7 @@ export default function Admin() {
       languages: splitList(tab.form.languages),
       states: splitList(tab.form.states),
       products: splitList(tab.form.products),
+      appointedCarriers: splitList(tab.form.appointedCarriers),
       status: tab.form.status,
       underReview: Boolean(tab.form.underReview),
       isSuspended: Boolean(tab.form.isSuspended),
@@ -204,6 +206,7 @@ export default function Admin() {
           languages: joinList(updated.languages),
           states: joinList(updated.states),
           products: joinList(updated.products),
+          appointedCarriers: joinList(updated.appointedCarriers),
           specialty: updated.specialty || '',
           producerNumber: updated.producerNumber || '',
           status: updated.status || 'pending',
@@ -668,7 +671,7 @@ export default function Admin() {
               </label>
             </div>
           </div>
-          <div className="grid gap-2.5 md:grid-cols-3">
+          <div className="grid gap-2.5 md:grid-cols-4">
             <label className="block text-[13px] font-semibold text-slate-700">
               Languages (comma-separated)
               <input
@@ -687,6 +690,14 @@ export default function Admin() {
                 className={input}
                 value={tab.form.products}
                 onChange={(e) => patchTabForm(tab.key, { products: e.target.value })}
+              />
+            </label>
+            <label className="block text-[13px] font-semibold text-slate-700">
+              Appointed carriers (comma-separated)
+              <input
+                className={input}
+                value={tab.form.appointedCarriers}
+                onChange={(e) => patchTabForm(tab.key, { appointedCarriers: e.target.value })}
               />
             </label>
           </div>

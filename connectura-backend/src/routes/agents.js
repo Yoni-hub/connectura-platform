@@ -23,6 +23,7 @@ const formatAgent = (agent) => ({
   address: agent.address,
   zip: agent.zip,
   products: parseJson(agent.products, []),
+  appointedCarriers: parseJson(agent.appointedCarriers, []),
   availability: agent.availability,
   rating: agent.rating,
   reviews: parseJson(agent.reviews, []),
@@ -62,8 +63,21 @@ router.put('/:id', authGuard, async (req, res) => {
   if (!agent || agent.userId !== req.user.id) {
     return res.status(403).json({ error: 'Cannot edit this agent' })
   }
-  const { name, email, phone, bio, languages, states, specialty, availability, producerNumber, address, zip, products } =
-    req.body
+  const {
+    name,
+    email,
+    phone,
+    bio,
+    languages,
+    states,
+    specialty,
+    availability,
+    producerNumber,
+    address,
+    zip,
+    products,
+    appointedCarriers,
+  } = req.body
 
   try {
     const updated = await prisma.agent.update({
@@ -80,6 +94,7 @@ router.put('/:id', authGuard, async (req, res) => {
         address: address ?? agent.address,
         zip: zip ?? agent.zip,
         products: products ? JSON.stringify(products) : agent.products,
+        appointedCarriers: appointedCarriers ? JSON.stringify(appointedCarriers) : agent.appointedCarriers,
       },
       include: { user: true },
     })

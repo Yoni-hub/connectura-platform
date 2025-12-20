@@ -18,6 +18,7 @@ const agentsData = [
     address: '123 Market St, Dallas, TX',
     zip: '75201',
     products: ['Auto', 'Home', 'Renters'],
+    appointedCarriers: ['Travelers', 'Progressive', 'Nationwide'],
     reviews: [
       { author: 'Luis', comment: 'Sarah explained coverages clearly.', rating: 5 },
       { author: 'Aisha', comment: 'Great bilingual support.', rating: 5 },
@@ -37,6 +38,7 @@ const agentsData = [
     address: '456 Canyon Rd, Albuquerque, NM',
     zip: '87101',
     products: ['Auto', 'Motorcycle'],
+    appointedCarriers: ['Geico', 'Progressive'],
     reviews: [
       { author: 'Renee', comment: 'Understood my bike coverage needs.', rating: 4.5 },
       { author: 'Jorge', comment: 'Quick quote and follow up.', rating: 4.7 },
@@ -56,6 +58,7 @@ const agentsData = [
     address: '789 Lake Shore Dr, Chicago, IL',
     zip: '60601',
     products: ['Auto', 'Home', 'Umbrella'],
+    appointedCarriers: ['State Farm', 'Liberty Mutual'],
     reviews: [
       { author: 'Marcus', comment: 'Helpful with condo questions.', rating: 4.8 },
       { author: 'Lakshmi', comment: 'Loved the bilingual guidance.', rating: 5 },
@@ -125,6 +128,7 @@ async function seedAgents() {
             address: agent.address,
             zip: agent.zip,
             products: JSON.stringify(agent.products),
+            appointedCarriers: JSON.stringify(agent.appointedCarriers || []),
             availability: agent.availability,
             rating: agent.rating,
             reviews: JSON.stringify(agent.reviews),

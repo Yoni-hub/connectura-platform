@@ -35,6 +35,7 @@ model Agent {
   zip            String?
   phone          String?
   products       String   @default("[]")
+  appointedCarriers String @default("[]")
   status        String    @default("approved")
   isSuspended   Boolean   @default(false)
   underReview   Boolean   @default(false)
