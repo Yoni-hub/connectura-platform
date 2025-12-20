@@ -1,5 +1,5 @@
 
-> connectura-backend@1.0.0 dev
+> connsura-backend@1.0.0 dev
 > nodemon src/server.js
 
 [33m[nodemon] 3.1.11[39m
@@ -8,10 +8,10 @@
 [33m[nodemon] watching extensions: js,mjs,cjs,json[39m
 [32m[nodemon] starting `node src/server.js`[39m
 [dotenv@17.2.3] injecting env (3) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
-Connectura API running on http://localhost:8000
+Connsura API running on http://localhost:8000
 [31m[nodemon] app crashed - waiting for file changes before starting...[39m
 [32m[nodemon] restarting child process[39m
 [32m[nodemon] starting `node src/server.js`[39m
 [dotenv@17.2.3] injecting env (3) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
-Connectura API running on http://localhost:8000
+Connsura API running on http://localhost:8000
 ^C^C

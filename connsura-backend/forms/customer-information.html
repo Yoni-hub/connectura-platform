@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connsura Form System</title>
+  <style>
+    :root {
+      --bg: #f6f0e7;
+      --bg-soft: #fdf8f3;
+      --card: #ffffff;
+      --border: #e5d8ce;
+      --border-strong: #d7c8be;
+      --ink: #2f3340;
+      --muted: #667085;
+      --accent: #7a0638;
+      --accent-soft: #f3e6eb;
+      --shadow: 0 22px 70px rgba(122, 6, 56, 0.12);
+      --shadow-soft: 0 12px 34px rgba(17, 24, 39, 0.06);
+      --radius-lg: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, #f7f1ea 0, #f3ece6 35%, #f7f1ea 100%);
+      color: var(--ink);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
+    }
+    .page {
+      max-width: 1280px;
+      width: 100%;
+      margin: 18px auto 28px;
+      padding: 26px 28px 32px;
+      background: linear-gradient(180deg, #fffdfa 0%, #fbf5ef 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    label {
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      font-size: 14px;
+    }
+    select {
+      height: 40px;
+      padding: 8px 12px;
+      font-size: 15px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      min-width: 260px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+    select:focus {
+      outline: 2px solid rgba(122, 6, 56, 0.12);
+      border-color: var(--accent);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      column-gap: 20px;
+      align-items: start;
+    }
+    .step-list {
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 14px 12px;
+      list-style: none;
+      margin: 0;
+      min-height: 760px;
+      border-radius: 20px;
+      box-shadow: var(--shadow-soft);
+    }
+    .step-list li {
+      padding: 12px 14px;
+      border-left: 4px solid transparent;
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 700;
+      border-radius: 14px;
+      transition: all 0.15s ease;
+    }
+    .step-list li:hover {
+      background: #f9f4ef;
+    }
+    .step-list li.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px #ead4dd;
+    }
+    .content-shell {
+      border: 1px solid var(--border);
+      background: #fff;
+      min-height: 760px;
+      display: flex;
+      flex-direction: column;
+      border-radius: 22px;
+      box-shadow: var(--shadow-soft);
+    }
+    .step-content {
+      padding: 18px 18px 22px;
+      flex: 1;
+      overflow: auto;
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      background: #fbf5ef;
+      border-radius: 0 0 22px 22px;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      min-width: 110px;
+      text-align: center;
+      border-radius: 999px;
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(122, 6, 56, 0.08);
+    }
+    #prevBtn, #nextBtn {
+      background: #f7f2ed;
+    }
+    #saveBtn, #shareBtn {
+      background: linear-gradient(120deg, #8c0a3f, #64052e);
+      color: #fff;
+      border-color: #7a0638;
+      box-shadow: 0 12px 30px rgba(122, 6, 56, 0.22);
+    }
+    .other-input {
+      display: none;
+      width: 100%;
+      min-width: 200px;
+      max-width: 100%;
+      padding: 10px 12px;
+      height: 42px;
+      border: 1px solid var(--border-strong);
+      background: #fff;
+      font-size: 15px;
+      box-sizing: border-box;
+      border-radius: 12px;
+    }
+    .extra-card {
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .extra-card textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 15px;
+      resize: vertical;
+      border-radius: 14px;
+    }
+    .upload-btn {
+      display: inline-block;
+      border: 1px solid var(--border);
+      background: #f7f2ed;
+      color: var(--ink);
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .upload-btn:hover {
+      background: #f0e5dd;
+    }
+    .upload-input {
+      display: none;
+    }
+    .placeholder {
+      color: #6b7280;
+      font-size: 15px;
+      padding: 10px;
+    }
+    .form-card {
+      background: #fff;
+      border: 1px solid #eee4da;
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: inset 0 1px 0 #fff, 0 12px 26px rgba(122, 6, 56, 0.06);
+      margin-bottom: 14px;
+    }
+    .form-card.extra-card {
+      background: #fbf7f3;
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 12px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      column-gap: 16px;
+      row-gap: 14px;
+      align-items: center;
+    }
+    .form-grid.wide {
+      grid-template-columns: 200px 1fr;
+    }
+    .field-label {
+      font-weight: 700;
+      color: #374151;
+      font-size: 14px;
+    }
+    .field-control input,
+    .field-control select,
+    .field-control textarea {
+      width: 100%;
+      border: 1px solid #e4d8cf;
+      border-radius: 12px;
+      padding: 11px 13px;
+      font-size: 15px;
+      background: #fdfcfb;
+      color: var(--ink);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+    .field-control textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+    .field-control input:focus,
+    .field-control select:focus,
+    .field-control textarea:focus {
+      outline: 2px solid rgba(122, 6, 56, 0.18);
+      border-color: var(--accent);
+      background: #fff;
+    }
+    .required {
+      color: var(--accent);
+    }
+    .section-spacer {
+      margin-top: 10px;
+      padding-top: 4px;
+    }
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+        row-gap: 14px;
+      }
+      .step-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        min-height: auto;
+      }
+      .content-shell {
+        min-height: 0;
+      }
+    }
+    @media (max-width: 768px) {
+      .page {
+        padding: 18px 16px 24px;
+      }
+      .form-grid,
+      .form-grid.wide {
+        grid-template-columns: 1fr;
+      }
+      label {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <label for="productSelect">Select Insurance Product:</label>
+      <select id="productSelect">
+        <option value="personal-auto" selected>Personal Auto</option>
+        <option value="homeowners">Homeowners</option>
+        <option value="renters">Renters</option>
+        <option value="motorcycle-offroad">Motorcycle / Off-Road</option>
+        <option value="commercial-auto">Commercial Auto</option>
+        <option value="general-liability">General Liability Insurance</option>
+        <option value="commercial-property">Commercial Property Insurance</option>
+        <option value="workers-comp">Workers' Compensation</option>
+        <option value="professional-liability">Professional Liability (Errors & Omissions)</option>
+        <option value="umbrella">Umbrella Insurance</option>
+        <option value="travel">Travel Insurance</option>
+        <option value="pet">Pet Insurance</option>
+        <option value="flood-earthquake">Flood or Earthquake Insurance</option>
+        <option value="health">Health Insurance</option>
+        <option value="life">Life Insurance</option>
+        <option value="disability">Disability Insurance</option>
+        <option value="dental-vision">Dental & Vision Insurance</option>
+        <option value="long-term-care">Long-Term Care Insurance</option>
+        <option value="cyber-liability">Cyber Liability Insurance</option>
+      </select>
+    </div>
+
+    <div class="layout">
+      <ol class="step-list" id="stepNav"></ol>
+      <div class="content-shell">
+        <div class="step-content" id="stepContent">
+          <div class="placeholder">Loading...</div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" id="prevBtn">Previous</button>
+          <button type="button" class="btn" id="nextBtn">Next</button>
+          <button type="button" class="btn" id="saveBtn">Save</button>
+          <button type="button" class="btn" id="shareBtn">Share</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cacheBust = Date.now();
+    const defaultButtons = { prev: 'Previous', next: 'Next', save: 'Save', share: 'Share' };
+
+    function buildProductConfig(steps, customButtons) {
+      const buttons = customButtons || defaultButtons;
+      const visibleByStep = {};
+      steps.forEach((_, idx) => {
+        const stepNum = idx + 1;
+        visibleByStep[stepNum] = {
+          prev: stepNum > 1,
+          next: stepNum < steps.length,
+          save: true,
+          share: stepNum === steps.length,
+        };
+      });
+      return { steps, buttons, visibleByStep };
+    }
+
+    let selectObserver = null;
+    const productConfigs = {
+      'personal-auto': buildProductConfig([
+        { title: 'Named Insured', file: 'products/personal-auto/steps/step1.html' },
+        { title: 'Current Mailing Address', file: 'products/personal-auto/steps/step2.html' },
+        { title: 'Driver Information', file: 'products/personal-auto/steps/step3.html' },
+        { title: 'Vehicle Information', file: 'products/personal-auto/steps/step4.html' },
+        { title: 'Coverages', file: 'products/personal-auto/steps/step5.html' },
+        { title: 'Prior Policy Information', file: 'products/personal-auto/steps/step6.html' },
+        { title: 'Additional Information', file: 'products/personal-auto/steps/step7.html' },
+      ]),
+      homeowners: buildProductConfig([
+        { title: 'Property & Insured', file: 'products/homeowners/steps/step1.html' },
+        { title: 'Coverages', file: 'products/homeowners/steps/step2.html' },
+        { title: 'Loss History', file: 'products/homeowners/steps/step3.html' },
+      ]),
+      renters: buildProductConfig([
+        { title: 'Applicant & Address', file: 'products/renters/steps/step1.html' },
+        { title: 'Contents Coverage', file: 'products/renters/steps/step2.html' },
+      ]),
+      'motorcycle-offroad': buildProductConfig([
+        { title: 'Applicant & Contact', file: 'products/motorcycle-offroad/steps/step1.html' },
+        { title: 'Motorcycle / Off-Road Unit', file: 'products/motorcycle-offroad/steps/step2.html' },
+        { title: 'Coverages & History', file: 'products/motorcycle-offroad/steps/step3.html' },
+      ]),
+      'commercial-auto': buildProductConfig([
+        { title: 'Business & Operations', file: 'products/commercial-auto/steps/step1.html' },
+        { title: 'Vehicle Schedule', file: 'products/commercial-auto/steps/step2.html' },
+        { title: 'Drivers', file: 'products/commercial-auto/steps/step3.html' },
+        { title: 'Coverages & Loss History', file: 'products/commercial-auto/steps/step4.html' },
+      ]),
+      'general-liability': buildProductConfig([
+        { title: 'Business & Operations', file: 'products/general-liability/steps/step1.html' },
+        { title: 'Coverages & Limits', file: 'products/general-liability/steps/step2.html' },
+        { title: 'Risk Controls & Loss History', file: 'products/general-liability/steps/step3.html' },
+      ]),
+      'commercial-property': buildProductConfig([
+        { title: 'Location & Building Details', file: 'products/commercial-property/steps/step1.html' },
+        { title: 'Protections & Exposure', file: 'products/commercial-property/steps/step2.html' },
+        { title: 'Coverages & Valuation', file: 'products/commercial-property/steps/step3.html' },
+      ]),
+      'workers-comp': buildProductConfig([
+        { title: 'Employer Information', file: 'products/workers-comp/steps/step1.html' },
+        { title: 'Exposure & Payroll', file: 'products/workers-comp/steps/step2.html' },
+        { title: 'Safety & Loss History', file: 'products/workers-comp/steps/step3.html' },
+      ]),
+      'professional-liability': buildProductConfig([
+        { title: 'Firm Profile', file: 'products/professional-liability/steps/step1.html' },
+        { title: 'Coverage Details', file: 'products/professional-liability/steps/step2.html' },
+        { title: 'Claims & Risk Controls', file: 'products/professional-liability/steps/step3.html' },
+      ]),
+      umbrella: buildProductConfig([
+        { title: 'Underlying Policies', file: 'products/umbrella/steps/step1.html' },
+        { title: 'Exposure Summary', file: 'products/umbrella/steps/step2.html' },
+        { title: 'Umbrella Coverage & Loss History', file: 'products/umbrella/steps/step3.html' },
+      ]),
+      travel: buildProductConfig([
+        { title: 'Trip Details', file: 'products/travel/steps/step1.html' },
+        { title: 'Traveler Information', file: 'products/travel/steps/step2.html' },
+        { title: 'Coverage Selections', file: 'products/travel/steps/step3.html' },
+      ]),
+      pet: buildProductConfig([
+        { title: 'Owner & Pet Details', file: 'products/pet/steps/step1.html' },
+        { title: 'Health & Coverage', file: 'products/pet/steps/step2.html' },
+      ]),
+      'flood-earthquake': buildProductConfig([
+        { title: 'Property Location', file: 'products/flood-earthquake/steps/step1.html' },
+        { title: 'Building Details', file: 'products/flood-earthquake/steps/step2.html' },
+        { title: 'Coverage & History', file: 'products/flood-earthquake/steps/step3.html' },
+      ]),
+      health: buildProductConfig([
+        { title: 'Household Information', file: 'products/health/steps/step1.html' },
+        { title: 'Coverage Preferences', file: 'products/health/steps/step2.html' },
+        { title: 'Disclosures', file: 'products/health/steps/step3.html' },
+      ]),
+      life: buildProductConfig([
+        { title: 'Proposed Insured', file: 'products/life/steps/step1.html' },
+        { title: 'Coverage & Beneficiaries', file: 'products/life/steps/step2.html' },
+        { title: 'Health & Lifestyle', file: 'products/life/steps/step3.html' },
+      ]),
+      disability: buildProductConfig([
+        { title: 'Employment & Income', file: 'products/disability/steps/step1.html' },
+        { title: 'Benefit Design', file: 'products/disability/steps/step2.html' },
+        { title: 'Health & Risks', file: 'products/disability/steps/step3.html' },
+      ]),
+      'dental-vision': buildProductConfig([
+        { title: 'Enrollee & Dependents', file: 'products/dental-vision/steps/step1.html' },
+        { title: 'Coverage Elections', file: 'products/dental-vision/steps/step2.html' },
+      ]),
+      'long-term-care': buildProductConfig([
+        { title: 'Applicant Profile', file: 'products/long-term-care/steps/step1.html' },
+        { title: 'Coverage Design', file: 'products/long-term-care/steps/step2.html' },
+        { title: 'Care Preferences & Health', file: 'products/long-term-care/steps/step3.html' },
+      ]),
+      'cyber-liability': buildProductConfig([
+        { title: 'Organization & Data Profile', file: 'products/cyber-liability/steps/step1.html' },
+        { title: 'Security Controls', file: 'products/cyber-liability/steps/step2.html' },
+        { title: 'Incidents & Coverage', file: 'products/cyber-liability/steps/step3.html' },
+      ]),
+    };
+
+    const productSelect = document.getElementById('productSelect');
+    const stepNav = document.getElementById('stepNav');
+    const stepContent = document.getElementById('stepContent');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const shareBtn = document.getElementById('shareBtn');
+
+    let currentProduct = 'personal-auto';
+    let currentStep = 1;
+
+    function setButtonLabels(cfg) {
+      const labels = (cfg && cfg.buttons) || defaultButtons;
+      prevBtn.textContent = labels.prev || 'Previous';
+      nextBtn.textContent = labels.next || 'Next';
+      saveBtn.textContent = labels.save || 'Save';
+      shareBtn.textContent = labels.share || 'Share';
+    }
+
+    function runInlineScripts(root) {
+      const scripts = root.querySelectorAll('script');
+      scripts.forEach((old) => {
+        const s = document.createElement('script');
+        Array.from(old.attributes).forEach((attr) => s.setAttribute(attr.name, attr.value));
+        s.textContent = old.textContent;
+        old.replaceWith(s);
+      });
+    }
+
+    function addOtherSupport(select) {
+      if (!select || select.dataset.hasOther === '1') return;
+      const hasOther = Array.from(select.options).some((opt) => opt.value === 'other' || opt.textContent.trim().toLowerCase() === 'other');
+      if (!hasOther) {
+        const opt = document.createElement('option');
+        opt.value = 'other';
+        opt.textContent = 'Other';
+        select.appendChild(opt);
+      }
+
+      const wrapper = select.closest('.field-control') || select.parentElement;
+      const baseId = select.id || select.name || `select-${Math.random().toString(36).slice(2, 7)}`;
+      const originalName = select.getAttribute('name') || baseId;
+      const inputId = `${baseId}-other`;
+      let otherInput = wrapper.querySelector(`[data-other-for="${inputId}"]`);
+      if (!otherInput) {
+        otherInput = document.createElement('input');
+        otherInput.type = 'text';
+        otherInput.className = 'other-input';
+        otherInput.placeholder = 'Please specify';
+        otherInput.id = inputId;
+        otherInput.setAttribute('data-other-for', inputId);
+        wrapper.appendChild(otherInput);
+      }
+
+      function syncOther() {
+        const val = (select.value || '').toLowerCase();
+        const txt = (select.options[select.selectedIndex]?.textContent || '').trim().toLowerCase();
+        const show = val === 'other' || txt === 'other';
+        otherInput.style.display = show ? 'block' : 'none';
+        select.style.display = show ? 'none' : '';
+        if (show) {
+          select.name = `${originalName}__select`;
+          otherInput.name = originalName;
+          if (!otherInput.value) otherInput.focus();
+        } else {
+          select.name = originalName;
+          otherInput.name = '';
+          otherInput.value = '';
+        }
+      }
+
+      otherInput.addEventListener('blur', () => {
+        if (!otherInput.value) {
+          select.value = '';
+          syncOther();
+        }
+      });
+      select.addEventListener('change', syncOther);
+      syncOther();
+      select.dataset.hasOther = '1';
+    }
+
+    function enhanceAllSelects(root) {
+      root.querySelectorAll('select').forEach(addOtherSupport);
+    }
+
+    function observeSelects() {
+      if (selectObserver) selectObserver.disconnect();
+      selectObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            if (node.tagName === 'SELECT') addOtherSupport(node);
+            node.querySelectorAll && node.querySelectorAll('select').forEach(addOtherSupport);
+          });
+        });
+      });
+      selectObserver.observe(stepContent, { childList: true, subtree: true });
+    }
+
+    async function loadStep(step) {
+      const cfg = productConfigs[currentProduct];
+      if (!cfg) return;
+      const stepDef = cfg.steps[step - 1];
+      if (!stepDef) return;
+      currentStep = step;
+
+      stepNav.querySelectorAll('li').forEach((li) =>
+        li.classList.toggle('active', Number(li.dataset.step) === step)
+      );
+
+      stepContent.innerHTML = '<div class="placeholder">Loading...</div>';
+      try {
+        const res = await fetch(`${stepDef.file}?v=${cacheBust}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Load error');
+        const html = await res.text();
+        stepContent.innerHTML = html;
+        runInlineScripts(stepContent);
+        enhanceAllSelects(stepContent);
+        observeSelects();
+
+        const uniqueKey = `${currentProduct}-${step}`;
+        const missingId = `missing-info-${uniqueKey}`;
+        const fileId = `missing-upload-${uniqueKey}`;
+        const extra = document.createElement('div');
+        extra.className = 'form-card extra-card';
+        extra.innerHTML = `
+          <div class="card-title">Additional Details</div>
+          <div class="form-grid wide">
+            <label class="field-label" for="${missingId}">Any missing Information, not included in the form ? Write it here:</label>
+            <div class="field-control">
+              <textarea id="${missingId}" name="${missingId}" placeholder="Add any extra info here"></textarea>
+            </div>
+            <label class="field-label" for="${fileId}">Upload File:</label>
+            <div class="field-control">
+              <label class="upload-btn" for="${fileId}">Upload File</label>
+              <input class="upload-input" id="${fileId}" name="${fileId}" type="file" accept="*/*" />
+            </div>
+          </div>
+        `;
+        stepContent.appendChild(extra);
+      } catch (err) {
+        stepContent.innerHTML = '<div class="placeholder">Could not load step.</div>';
+      }
+
+      const last = cfg.steps.length;
+      const vis = (cfg.visibleByStep && cfg.visibleByStep[step]) || null;
+      const showPrev = vis ? !!vis.prev : step > 1;
+      const showNext = vis ? !!vis.next : step < last;
+      const showSave = vis ? !!vis.save : step === last;
+      const showShare = vis ? !!vis.share : step === last;
+      prevBtn.style.display = showPrev ? 'inline-block' : 'none';
+      nextBtn.style.display = showNext ? 'inline-block' : 'none';
+      saveBtn.style.display = showSave ? 'inline-block' : 'none';
+      shareBtn.style.display = showShare ? 'inline-block' : 'none';
+    }
+
+    function buildNav(cfg) {
+      stepNav.innerHTML = '';
+      cfg.steps.forEach((step, idx) => {
+        const li = document.createElement('li');
+        li.dataset.step = idx + 1;
+        li.textContent = `${idx + 1}. ${step.title}`;
+        li.addEventListener('click', () => loadStep(idx + 1));
+        stepNav.appendChild(li);
+      });
+    }
+
+    function setProduct(productKey) {
+      const cfg = productConfigs[productKey];
+      currentProduct = productKey;
+      if (!cfg) {
+        stepNav.innerHTML = '';
+        stepContent.innerHTML = '<div class="placeholder">Product not configured yet.</div>';
+        prevBtn.style.display = nextBtn.style.display = saveBtn.style.display = shareBtn.style.display = 'none';
+        return;
+      }
+      setButtonLabels(cfg);
+      buildNav(cfg);
+      loadStep(1);
+    }
+
+    productSelect.addEventListener('change', (e) => setProduct(e.target.value));
+    prevBtn.addEventListener('click', () => { if (currentStep > 1) loadStep(currentStep - 1); });
+    nextBtn.addEventListener('click', () => {
+      const cfg = productConfigs[currentProduct];
+      if (cfg && currentStep < cfg.steps.length) loadStep(currentStep + 1);
+    });
+    saveBtn.addEventListener('click', () => alert('Saved'));
+    shareBtn.addEventListener('click', () => alert('Shared'));
+
+    window.addEventListener('message', (event) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      const { type } = event.data;
+      if (type === 'connsura-save') {
+        saveBtn?.click();
+      }
+      if (type === 'connsura-reset') {
+        loadStep(1);
+      }
+    });
+
+    setProduct(currentProduct);
+  </script>
+</body>
+</html>
