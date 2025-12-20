@@ -18,6 +18,18 @@ const parseFullName = (fullName = '') => {
   return { firstName, middleName, lastName }
 }
 
+const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '')
+
+const getInitials = (name = '', fallback = 'AG') => {
+  const parts = name.trim().split(' ').filter(Boolean)
+  if (!parts.length) return fallback
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+}
+
 export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout } = useAuth()
   const { getAgent } = useAgents()
@@ -29,6 +41,13 @@ export default function ClientDashboard() {
   const [savedAgentLoading, setSavedAgentLoading] = useState(false)
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageAgent, setMessageAgent] = useState(null)
+  const [threads, setThreads] = useState([])
+  const [threadsLoading, setThreadsLoading] = useState(false)
+  const [activeThread, setActiveThread] = useState(null)
+  const [threadMessages, setThreadMessages] = useState([])
+  const [threadLoading, setThreadLoading] = useState(false)
+  const [replyBody, setReplyBody] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -97,6 +116,84 @@ export default function ClientDashboard() {
       active = false
     }
   }, [client?.preferredAgentId, getAgent])
+
+  const loadThreads = async () => {
+    if (!user?.customerId) return
+    setThreadsLoading(true)
+    try {
+      const res = await api.get(`/messages/customer/${user.customerId}/threads`)
+      setThreads(res.data.threads || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not load messages')
+    } finally {
+      setThreadsLoading(false)
+    }
+  }
+
+  const loadThread = async (agentId) => {
+    if (!user?.customerId || !agentId) return
+    setThreadLoading(true)
+    try {
+      const res = await api.get(`/messages/customer/${user.customerId}/thread/${agentId}`)
+      setThreadMessages(res.data.messages || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not load conversation')
+    } finally {
+      setThreadLoading(false)
+    }
+  }
+
+  const handleSendReply = async () => {
+    const trimmed = replyBody.trim()
+    if (!trimmed) {
+      toast.error('Message cannot be empty')
+      return
+    }
+    if (!activeThread?.agent?.id) {
+      toast.error('Select an agent to message')
+      return
+    }
+    setSendingReply(true)
+    try {
+      await api.post('/messages', { agentId: activeThread.agent.id, body: trimmed })
+      setReplyBody('')
+      await loadThread(activeThread.agent.id)
+      await loadThreads()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send message')
+    } finally {
+      setSendingReply(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    loadThreads()
+  }, [activeTab, user?.customerId])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    if (!threads.length) {
+      setActiveThread(null)
+      setThreadMessages([])
+      return
+    }
+    const match = activeThread
+      ? threads.find((thread) => thread.agent?.id === activeThread.agent?.id)
+      : null
+    setActiveThread(match || threads[0])
+  }, [threads, activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    if (activeThread?.agent?.id) {
+      loadThread(activeThread.agent.id)
+    }
+  }, [activeTab, activeThread?.agent?.id])
+
+  useEffect(() => {
+    setReplyBody('')
+  }, [activeThread?.agent?.id])
 
   const handleMessage = (agent) => {
     if (!user) {
@@ -403,9 +500,144 @@ export default function ClientDashboard() {
           )}
 
           {!loading && activeTab === 'Messages' && (
-            <div className="surface p-5">
-              <h2 className="text-xl font-semibold mb-2">Messages</h2>
-              <p className="text-slate-600">Conversations with agents will appear here.</p>
+            <div className="surface p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-xl font-semibold">Messages</h2>
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-4"
+                  onClick={loadThreads}
+                  disabled={threadsLoading}
+                >
+                  {threadsLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
+                <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agents</div>
+                  {threadsLoading && <Skeleton className="h-20" />}
+                  {!threadsLoading && threads.length === 0 && (
+                    <div className="text-sm text-slate-500">No messages yet.</div>
+                  )}
+                  {!threadsLoading && threads.length > 0 && (
+                    <div className="space-y-2">
+                      {threads.map((thread) => {
+                        const agentLabel = thread.agent?.name || thread.agent?.email || 'Agent'
+                        const previewPrefix = thread.lastMessage?.senderRole === 'CUSTOMER' ? 'You: ' : ''
+                        const preview = `${previewPrefix}${thread.lastMessage?.body || ''}`.trim()
+                        const isActive = activeThread?.agent?.id === thread.agent?.id
+                        return (
+                          <button
+                            key={thread.agent.id}
+                            type="button"
+                            onClick={() => setActiveThread(thread)}
+                            className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                              isActive
+                                ? 'border-[#0b3b8c] bg-[#e8f0ff]'
+                                : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-600 grid place-items-center font-semibold overflow-hidden">
+                                  {thread.agent?.photo ? (
+                                    <img src={thread.agent.photo} alt={agentLabel} className="h-full w-full object-cover" />
+                                  ) : (
+                                    getInitials(agentLabel)
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-slate-900 truncate">{agentLabel}</div>
+                                  <div className="text-xs text-slate-500 truncate">
+                                    {preview || 'Start a conversation'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {formatTimestamp(thread.lastMessage?.createdAt)}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col min-h-[360px]">
+                  {!activeThread && (
+                    <div className="text-sm text-slate-500">Select an agent to start chatting.</div>
+                  )}
+                  {activeThread && (
+                    <>
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div>
+                          <div className="font-semibold text-slate-900">
+                            {activeThread.agent?.name || activeThread.agent?.email || 'Agent'}
+                          </div>
+                          {activeThread.agent?.email && (
+                            <div className="text-xs text-slate-500">{activeThread.agent.email}</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {formatTimestamp(activeThread.lastMessage?.createdAt)}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 space-y-3 overflow-y-auto py-4">
+                        {threadLoading && <Skeleton className="h-24" />}
+                        {!threadLoading && threadMessages.length === 0 && (
+                          <div className="text-sm text-slate-500">No messages in this conversation.</div>
+                        )}
+                        {!threadLoading &&
+                          threadMessages.map((message) => {
+                            const isCustomer = message.senderRole === 'CUSTOMER'
+                            return (
+                              <div
+                                key={message.id}
+                                className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}
+                              >
+                                <div
+                                  className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
+                                    isCustomer
+                                      ? 'bg-[#0b3b8c] text-white'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  {message.body}
+                                  <div
+                                    className={`mt-1 text-[11px] ${
+                                      isCustomer ? 'text-white/70' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {formatTimestamp(message.createdAt)}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                      </div>
+
+                      <div className="flex gap-3 border-t border-slate-100 pt-3">
+                        <textarea
+                          className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[44px]"
+                          value={replyBody}
+                          onChange={(e) => setReplyBody(e.target.value)}
+                          placeholder="Write a message..."
+                        />
+                        <button
+                          type="button"
+                          className="pill-btn-primary px-5"
+                          onClick={handleSendReply}
+                          disabled={sendingReply}
+                        >
+                          {sendingReply ? 'Sending...' : 'Send'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
