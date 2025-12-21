@@ -16,6 +16,7 @@ const prisma = require('./prisma')
 
 const app = express()
 const PORT = process.env.PORT || 8000
+const HOST = process.env.HOST || '127.0.0.1'
 
 app.use(
   cors({
@@ -50,8 +51,12 @@ app.use((err, req, res, next) => {
 })
 
 async function ensureAdminSeed() {
-  const email = process.env.ADMIN_EMAIL || 'admin@connsura.com'
-  const password = process.env.ADMIN_PASSWORD || 'ChangeMe123!'
+  const email = process.env.ADMIN_EMAIL
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password) {
+    console.warn('ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin seed.')
+    return
+  }
   const existing = await prisma.adminUser.findUnique({ where: { email } })
   if (existing) return
   const hashed = await bcrypt.hash(password, 10)
@@ -68,7 +73,7 @@ async function ensureAdminSeed() {
 ensureAdminSeed()
   .catch((err) => console.error('Admin seed error', err))
   .finally(() => {
-    app.listen(PORT, () => {
-      console.log(`Connsura API running on http://localhost:${PORT}`)
+    app.listen(PORT, HOST, () => {
+      console.log(`Connsura API running on http://${HOST}:${PORT}`)
     })
   })

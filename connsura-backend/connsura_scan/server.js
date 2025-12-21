@@ -9,6 +9,7 @@ const os = require('os');
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const PORT = process.env.PORT || 5080;
+const HOST = process.env.HOST || '127.0.0.1';
 
 let lastUpload = null;
 
@@ -56,7 +57,7 @@ app.get('/api/host-info', (req, res) => {
   res.json({ ok: true, port: PORT, hosts: getLanHosts() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Connsura Scan server running at http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Connsura Scan server running at http://${HOST}:${PORT}`);
   console.log('Open this URL on PC, then scan the QR code with your phone to upload a photo.');
 });

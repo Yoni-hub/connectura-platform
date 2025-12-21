@@ -2,6 +2,10 @@ const { PrismaClient } = require('@prisma/client')
 const bcrypt = require('bcrypt')
 
 const prisma = new PrismaClient()
+const seedPassword = process.env.SEED_USER_PASSWORD
+if (!seedPassword) {
+  throw new Error('SEED_USER_PASSWORD is required to run the seed script')
+}
 
 const agentsData = [
   {
@@ -109,13 +113,12 @@ async function reset() {
   await prisma.user.deleteMany()
 }
 
-async function seedAgents() {
+async function seedAgents(hashedPassword) {
   for (const agent of agentsData) {
-    const hashed = await bcrypt.hash('password123', 10)
     await prisma.user.create({
       data: {
         email: agent.email,
-        password: hashed,
+        password: hashedPassword,
         role: 'AGENT',
         agent: {
           create: {
@@ -140,9 +143,8 @@ async function seedAgents() {
   }
 }
 
-async function seedCustomers() {
+async function seedCustomers(hashedPassword) {
   for (const customer of customersData) {
-    const hashed = await bcrypt.hash('password123', 10)
     const preferredAgent = await prisma.user.findUnique({
       where: { email: customer.preferredAgentEmail },
       include: { agent: true },
@@ -150,7 +152,7 @@ async function seedCustomers() {
     await prisma.user.create({
       data: {
         email: customer.email,
-        password: hashed,
+        password: hashedPassword,
         role: 'CUSTOMER',
         customer: {
           create: {
@@ -188,8 +190,9 @@ async function seedCustomers() {
 
 async function main() {
   await reset()
-  await seedAgents()
-  await seedCustomers()
+  const hashedPassword = await bcrypt.hash(seedPassword, 10)
+  await seedAgents(hashedPassword)
+  await seedCustomers(hashedPassword)
   console.log('Seed data created: 3 agents, 2 customers')
 }
 

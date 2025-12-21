@@ -1,9 +1,8 @@
 # Connsura Admin API (backend)
 
-Default admin seed (dev):
-- Email: `admin@connsura.com`
-- Password: `ChangeMe123!`
-Override via env vars `ADMIN_EMAIL` and `ADMIN_PASSWORD` before starting the API.
+Admin seed (dev):
+- Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` before starting the API.
+- If unset, the API skips seeding a default admin user.
 
 Auth
 - POST `/admin/login` { email, password } → { token, admin }
