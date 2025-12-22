@@ -1,6 +1,7 @@
 # Secrets and env
 .env
 .env.*
+*_remote.env
 *.pem
 *.key
 id_rsa*
