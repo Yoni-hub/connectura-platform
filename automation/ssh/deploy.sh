@@ -14,17 +14,23 @@ fi
 : "${REPO_URL:?REPO_URL not set}"
 : "${REPO_BRANCH:?REPO_BRANCH not set}"
 
-APP_DIR="/opt/connsura"
+BASE_DIR="/opt/connsura"
+APP_DIR="${BASE_DIR}/app"
 DEPLOY_DIR="${APP_DIR}/deploy"
-ENV_DIR="${APP_DIR}/env"
-DATA_DIR="${APP_DIR}/data"
-UPLOADS_DIR="${APP_DIR}/uploads"
+ENV_DIR="${BASE_DIR}/env"
+DATA_DIR="${BASE_DIR}/data"
+UPLOADS_DIR="${BASE_DIR}/uploads"
 
-mkdir -p "$DEPLOY_DIR" "$ENV_DIR" "$DATA_DIR" "$UPLOADS_DIR"
+mkdir -p "$APP_DIR" "$DEPLOY_DIR" "$ENV_DIR" "$DATA_DIR" "$UPLOADS_DIR"
 
 if [[ ! -d "${APP_DIR}/.git" ]]; then
-  git clone --branch "${REPO_BRANCH}" "${REPO_URL}" "${APP_DIR}"
+  echo "Initializing git repo in ${APP_DIR}..."
+  git -C "${APP_DIR}" init
+  git -C "${APP_DIR}" remote add origin "${REPO_URL}"
+  git -C "${APP_DIR}" fetch origin "${REPO_BRANCH}"
+  git -C "${APP_DIR}" checkout -b "${REPO_BRANCH}" "origin/${REPO_BRANCH}"
 else
+  git -C "${APP_DIR}" remote set-url origin "${REPO_URL}"
   git -C "${APP_DIR}" fetch origin "${REPO_BRANCH}"
   git -C "${APP_DIR}" checkout "${REPO_BRANCH}"
   git -C "${APP_DIR}" pull origin "${REPO_BRANCH}"
