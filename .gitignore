@@ -24,5 +24,9 @@ uploads/
 __pycache__/
 *.pyc
 
+# Logs
+backend-dev.log
+frontend-dev.log
+
 # OS
 .DS_Store
