@@ -78,7 +78,9 @@ export default function AgentProfile() {
             <div className="text-sm text-slate-500">States: {agent.states.join(', ')}</div>
             <div className="text-sm text-slate-500">Specialty: {agent.specialty}</div>
             <div className="text-sm text-slate-500">Products: {agent.products?.join(', ') || '—'}</div>
-            <div className="text-sm text-slate-500">Producer number: {agent.producerNumber || '—'}</div>
+            <div className="text-sm text-slate-500">Producer #: {agent.producerNumber || '—'}</div>
+            <div className="text-sm text-slate-500">Email: {agent.email || '—'}</div>
+            <div className="text-sm text-slate-500">Phone: {agent.phone || '—'}</div>
             <div className="text-sm text-slate-500">Address: {agent.address || '—'} {agent.zip || ''}</div>
             <div className="flex gap-2 flex-wrap pt-2">
               <button onClick={() => nav(`/call/voice/${agent.id}`)} className="pill-btn-primary">

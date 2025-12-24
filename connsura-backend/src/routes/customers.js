@@ -1,9 +1,46 @@
 const express = require('express')
+const fs = require('fs')
+const path = require('path')
+const multer = require('multer')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 
 const router = express.Router()
+
+const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'customers')
+fs.mkdirSync(uploadDir, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir)
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg'
+    const customerId = req.params.id || 'customer'
+    cb(null, `customer-${customerId}-${Date.now()}${ext}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image uploads are allowed.'))
+    }
+    return cb(null, true)
+  },
+})
+
+const handlePhotoUpload = (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message })
+    }
+    return next()
+  })
+}
 
 const formatCustomerProfile = (customer) => ({
   id: customer.id,
@@ -30,6 +67,27 @@ router.get('/:id/profile', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' })
   }
   res.json({ profile: formatCustomerProfile(customer) })
+})
+
+router.post('/:id/photo', authGuard, handlePhotoUpload, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer || customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'No photo uploaded' })
+  }
+  const photoPath = `/uploads/customers/${req.file.filename}`
+  const currentProfileData = parseJson(customer.profileData, {})
+  const updatedProfileData = { ...currentProfileData, photo: photoPath }
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: { profileData: JSON.stringify(updatedProfileData) },
+    include: { drivers: true, vehicles: true },
+  })
+  res.json({ profile: formatCustomerProfile(updated), photo: photoPath })
 })
 
 router.post('/:id/profile', authGuard, async (req, res) => {

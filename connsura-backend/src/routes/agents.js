@@ -1,4 +1,7 @@
 const express = require('express')
+const fs = require('fs')
+const path = require('path')
+const multer = require('multer')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
@@ -8,6 +11,40 @@ const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 
 const router = express.Router()
+
+const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'agents')
+fs.mkdirSync(uploadDir, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir)
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg'
+    const agentId = req.params.id || 'agent'
+    cb(null, `agent-${agentId}-${Date.now()}${ext}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image uploads are allowed.'))
+    }
+    return cb(null, true)
+  },
+})
+
+const handlePhotoUpload = (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message })
+    }
+    return next()
+  })
+}
 
 const formatAgent = (agent) => ({
   id: agent.id,
@@ -54,6 +91,25 @@ router.get('/:id', async (req, res) => {
   const agent = await prisma.agent.findUnique({ where: { id: Number(req.params.id) }, include: { user: true } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
   res.json({ agent: formatAgent(agent) })
+})
+
+router.post('/:id/photo', authGuard, handlePhotoUpload, async (req, res) => {
+  const agentId = Number(req.params.id)
+  if (req.user.role !== 'AGENT') return res.status(403).json({ error: 'Forbidden' })
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
+  if (!agent || agent.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this agent' })
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'No photo uploaded' })
+  }
+  const photoPath = `/uploads/agents/${req.file.filename}`
+  const updated = await prisma.agent.update({
+    where: { id: agentId },
+    data: { photo: photoPath },
+    include: { user: true },
+  })
+  res.json({ agent: formatAgent(updated), photo: photoPath })
 })
 
 router.put('/:id', authGuard, async (req, res) => {
