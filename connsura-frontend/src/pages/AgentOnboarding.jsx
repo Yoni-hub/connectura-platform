@@ -514,8 +514,84 @@ export default function AgentOnboarding() {
     )
   }
 
+  const focusField = (id) => {
+    if (typeof document === 'undefined') return
+    const el = document.getElementById(id)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.focus()
+    }
+  }
+
+  const getStepRequirements = (stepIndex) => {
+    if (stepIndex === 0) {
+      return [
+        { key: 'accountEmail', label: 'Account email', el: 'account-email' },
+        { key: 'accountPassword', label: 'Password', el: 'account-password' },
+        { key: 'accountPasswordConfirm', label: 'Repeat password', el: 'account-password-confirm' },
+        { key: 'securityQ1', label: 'Security phrase 1', el: 'security-phrase-1' },
+        { key: 'securityQ2', label: 'Security phrase 2', el: 'security-phrase-2' },
+        { key: 'securityQ3', label: 'Security phrase 3', el: 'security-phrase-3' },
+      ]
+    }
+    if (stepIndex === 1) {
+      const fields = [
+        { key: 'producerNumber', label: 'Virginia License Number', el: 'producer-number' },
+        { key: 'verifyNpn', label: 'National Producer Number (NPN)', el: 'npn' },
+        { key: 'state', label: 'State', el: 'state' },
+        { key: 'zip', label: 'Zip Code', el: 'zip' },
+        { key: 'city', label: 'City', el: 'city' },
+      ]
+      if (identityType === 'agency') {
+        fields.push({ key: 'agencyName', label: 'Agency Name', el: 'agency-name' })
+      } else {
+        fields.push(
+          { key: 'firstName', label: 'First Name', el: 'first-name' },
+          { key: 'lastName', label: 'Last Name', el: 'last-name' }
+        )
+      }
+      return fields
+    }
+    if (stepIndex === 2) {
+      return [
+        { key: 'languages', label: 'Languages you support', el: 'languages' },
+        { key: 'products', label: 'Products / lines you sell', el: 'products' },
+        { key: 'appointedCarriers', label: 'Insurance companies you are appointed with?', el: 'appointed-carriers' },
+        { key: 'specialty', label: 'Primary specialty', el: 'specialty' },
+        { key: 'bio', label: 'About you (bio)', el: 'bio' },
+      ]
+    }
+    return []
+  }
+
+  const validateStep = (stepIndex) => {
+    if (stepIndex === 0 && form.accountPassword !== form.accountPasswordConfirm) {
+      toast.error('Passwords must match.')
+      focusField('account-password')
+      return false
+    }
+    const requiredFields = getStepRequirements(stepIndex)
+    const missing = requiredFields.filter(({ key }) => !form[key]?.toString().trim())
+    if (missing.length) {
+      const first = missing[0]
+      toast.error(`Please fill the required fields: ${missing.map((m) => m.label).join(', ')}.`)
+      focusField(first.el)
+      return false
+    }
+    return true
+  }
+
+  const handleStepAdvance = (nextIndex) => {
+    if (nextIndex <= activeIndex) {
+      setActiveIndex(nextIndex)
+      return
+    }
+    if (!validateStep(activeIndex)) return
+    setActiveIndex(nextIndex)
+  }
+
   const commonInput =
-    'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
+    'mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
   const displayName = (form.name || `${form.firstName} ${form.lastName}`.trim()) || '--'
   const licenseNumberDisplay = form.producerNumber || form.verifyLicense || '--'
   const npnDisplay = form.verifyNpn || form.producerNumber || '--'
@@ -552,27 +628,34 @@ export default function AgentOnboarding() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          {steps.map((step, idx) => (
-            <button
-              type="button"
-              key={step.id}
-              className={`rounded-xl border p-3 text-sm ${
-                idx === activeIndex ? 'border-[#0b3b8c] bg-[#e8f0ff]' : 'border-slate-200 bg-white'
-              }`}
-              onClick={() => setActiveIndex(idx)}
-            >
-              <div className="font-semibold text-slate-900">{step.title}</div>
-              <div className="text-slate-600 text-xs mt-1 leading-snug">{step.blurb}</div>
-            </button>
-          ))}
+          {steps.map((step, idx) => {
+            const isActive = idx === activeIndex
+            const isUnlocked = idx <= activeIndex
+            return (
+              <button
+                type="button"
+                key={step.id}
+                disabled={!isUnlocked}
+                className={`rounded-xl border p-3 text-sm ${
+                  isActive ? 'border-[#0b3b8c] bg-[#e8f0ff]' : 'border-slate-200 bg-white'
+                } ${isUnlocked ? '' : 'cursor-not-allowed opacity-60'}`}
+                onClick={() => setActiveIndex(idx)}
+              >
+                <div className="font-semibold text-slate-900">{step.title}</div>
+                <div className="text-slate-600 text-xs mt-1 leading-snug">{step.blurb}</div>
+              </button>
+            )
+          })}
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
+            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
+              activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
+            }`}
           >
-            <h3 className="text-sm font-semibold mb-3">Connsura account credentials</h3>
-            <div className="space-y-3">
+            <h3 className="text-sm font-semibold mb-2">Connsura account credentials</h3>
+            <div className="space-y-2">
               <label className="block text-sm">
                 Email <span className="text-red-500">*</span>
                 <input
@@ -646,11 +729,11 @@ export default function AgentOnboarding() {
                 In case you lose your account, you have to remember your security phrases.
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 pt-6 mt-auto">
+            <div className="flex items-center justify-end gap-3 pt-4 mt-auto">
               <button
                 type="button"
                 className="pill-btn-primary px-6"
-                onClick={() => setActiveIndex(1)}
+                onClick={() => handleStepAdvance(1)}
               >
                 Next
               </button>
@@ -658,9 +741,11 @@ export default function AgentOnboarding() {
           </div>
 
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
+            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
+              activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
+            }`}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold">Identity & licensing</h3>
               <div className="flex items-center gap-2">
                 <button
@@ -679,7 +764,7 @@ export default function AgentOnboarding() {
                 </button>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="block text-sm">
                 Virginia License Number <span className="text-red-500">*</span>
                 <input
@@ -912,18 +997,18 @@ export default function AgentOnboarding() {
                 </div>
               </label>
             </div>
-            <div className="flex items-center justify-between gap-3 pt-6 mt-auto">
+            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
               <button
                 type="button"
                 className="pill-btn-ghost px-6"
-                onClick={() => setActiveIndex(0)}
+                onClick={() => handleStepAdvance(0)}
               >
                 Back
               </button>
               <button
                 type="button"
                 className="pill-btn-primary px-6"
-                onClick={() => setActiveIndex(2)}
+                onClick={() => handleStepAdvance(2)}
               >
                 Next
               </button>
@@ -931,10 +1016,12 @@ export default function AgentOnboarding() {
           </div>
 
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
+            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
+              activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
+            }`}
           >
-            <h3 className="text-sm font-semibold mb-3">Products & audiences</h3>
-            <div className="space-y-3">
+            <h3 className="text-sm font-semibold mb-2">Products & audiences</h3>
+            <div className="space-y-2">
               <label className="block text-sm">
                 Languages you support <span className="text-red-500">*</span>
                 <input
@@ -982,7 +1069,7 @@ export default function AgentOnboarding() {
               <label className="block text-sm">
                 About you (bio) <span className="text-red-500">*</span>
                 <textarea
-                  className={`${commonInput} min-h-[120px]`}
+                  className={`${commonInput} min-h-[96px]`}
                   value={form.bio}
                   onChange={(e) => setForm({ ...form, bio: e.target.value })}
                   placeholder="Share your background, carriers, and how you help clients."
@@ -991,18 +1078,18 @@ export default function AgentOnboarding() {
                 />
               </label>
             </div>
-            <div className="flex items-center justify-between gap-3 pt-6 mt-auto">
+            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
               <button
                 type="button"
                 className="pill-btn-ghost px-6"
-                onClick={() => setActiveIndex(1)}
+                onClick={() => handleStepAdvance(1)}
               >
                 Back
               </button>
               <button
                 type="button"
                 className="pill-btn-primary px-6"
-                onClick={() => setActiveIndex(3)}
+                onClick={() => handleStepAdvance(3)}
               >
                 Next
               </button>
@@ -1010,9 +1097,11 @@ export default function AgentOnboarding() {
           </div>
 
           <div
-            className={`rounded-xl border p-4 shadow-sm ${activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40' : 'border-slate-200 bg-white'} flex flex-col h-full`}
+            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
+              activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
+            }`}
           >
-            <h3 className="text-sm font-semibold mb-3">Confirm & finish</h3>
+            <h3 className="text-sm font-semibold mb-2">Confirm & finish</h3>
             <div className="space-y-2 text-sm text-slate-700">
               <div>Name: {displayName}</div>
               <div>Virginia License Number: {licenseNumberDisplay}</div>
@@ -1035,27 +1124,24 @@ export default function AgentOnboarding() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connsura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
             </div>
-            <div className="flex items-center justify-start pt-6 mt-auto">
+            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
               <button
                 type="button"
                 className="pill-btn-ghost px-6"
-                onClick={() => setActiveIndex(2)}
+                onClick={() => handleStepAdvance(2)}
               >
                 Back
               </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-8"
+                disabled={saving || lookupLoading}
+                onClick={handleSubmit}
+              >
+                {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
+              </button>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            className="pill-btn-primary px-8"
-            disabled={saving || lookupLoading}
-            onClick={handleSubmit}
-          >
-            {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
-          </button>
         </div>
       </div>
 

@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { api } from '../services/api'
+import { API_URL, api } from '../services/api'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
+import AgentCard from '../components/agents/AgentCard'
 
 const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Appointments', 'Settings']
 
@@ -18,6 +19,12 @@ const getInitials = (name = '', fallback = 'CU') => {
     .map((part) => part[0])
     .join('')
     .toUpperCase()
+}
+
+const resolvePhotoUrl = (value = '') => {
+  if (!value) return ''
+  if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) return value
+  return `${API_URL}${value}`
 }
 
 export default function AgentDashboard() {
@@ -38,6 +45,9 @@ export default function AgentDashboard() {
   const [threadLoading, setThreadLoading] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState('')
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [form, setForm] = useState({
     name: '',
     address: '',
@@ -56,6 +66,8 @@ export default function AgentDashboard() {
         const res = await api.get(`/agents/${user.agentId}`)
         const current = res.data.agent
         setAgent({ ...current, phone: current.phone || '', email: current.email || user?.email || '' })
+        setPhotoPreview(resolvePhotoUrl(current.photo))
+        setPhotoFile(null)
         setForm({
           name: current.name || '',
           address: current.address || '',
@@ -152,11 +164,54 @@ export default function AgentDashboard() {
     setReplyBody('')
   }, [activeThread?.customer?.id])
 
+  useEffect(() => {
+    return () => {
+      if (photoPreview && photoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreview)
+      }
+    }
+  }, [photoPreview])
+
+  const handlePhotoChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB.')
+      return
+    }
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
     if (!agent) return
     setSaving(true)
     try {
+      let uploadedPhoto = ''
+      if (photoFile) {
+        setPhotoUploading(true)
+        try {
+          const data = new FormData()
+          data.append('photo', photoFile)
+          const res = await api.post(`/agents/${agent.id}/photo`, data)
+          uploadedPhoto = res.data?.agent?.photo || res.data?.photo || ''
+          if (uploadedPhoto) {
+            setPhotoPreview(resolvePhotoUrl(uploadedPhoto))
+          }
+          setPhotoFile(null)
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Photo upload failed')
+          setSaving(false)
+          return
+        } finally {
+          setPhotoUploading(false)
+        }
+      }
       const payload = {
         name: form.name,
         availability: form.availability,
@@ -168,9 +223,13 @@ export default function AgentDashboard() {
       }
       const res = await api.put(`/agents/${agent.id}`, payload)
       const updated = res.data.agent
-      setAgent({ ...updated, phone: form.phone, email: form.email })
+      const photoValue = uploadedPhoto || updated.photo
+      setAgent({ ...updated, phone: form.phone, email: form.email, photo: photoValue })
       if (setUser && user) {
         setUser({ ...user, email: form.email })
+      }
+      if (photoValue) {
+        setPhotoPreview(resolvePhotoUrl(photoValue))
       }
       setForm({
         name: updated.name || '',
@@ -207,6 +266,43 @@ export default function AgentDashboard() {
   }
 
   const initials = agent?.name ? agent.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'AG'
+  const previewAgent = {
+    id: agent?.id || 0,
+    name: form.name || agent?.name || 'Agent',
+    photo: photoPreview || resolvePhotoUrl(agent?.photo),
+    rating: typeof agent?.rating === 'number' ? agent.rating : 4.8,
+    availability: form.availability || agent?.availability || 'online',
+    specialty: agent?.specialty || 'Insurance advisor',
+    languages: Array.isArray(agent?.languages) && agent.languages.length ? agent.languages : ['English'],
+    states:
+      Array.isArray(agent?.states) && agent.states.length
+        ? agent.states
+        : form.state
+          ? [form.state]
+          : ['Virginia'],
+  }
+  const previewStatusTone =
+    previewAgent.availability === 'online'
+      ? 'green'
+      : previewAgent.availability === 'busy'
+        ? 'amber'
+        : 'gray'
+  const previewPhoto = photoPreview || resolvePhotoUrl(agent?.photo)
+  const previewProducerNumber = agent?.producerNumber || '—'
+  const previewProducts =
+    Array.isArray(agent?.products) && agent.products.length ? agent.products.join(', ') : '—'
+  const previewEmail = form.email || agent?.email || user?.email || '—'
+  const previewPhone = form.phone || agent?.phone || '—'
+  const previewState =
+    form.state || (Array.isArray(agent?.states) ? agent.states[0] : '') || ''
+  const previewZip = form.zip || agent?.zip || ''
+  const previewAddress = [
+    form.address || agent?.address || '',
+    [previewState, previewZip].filter(Boolean).join(' '),
+  ]
+    .filter(Boolean)
+    .join(', ') || '—'
+  const previewBio = agent?.bio || 'Licensed agent on Connsura.'
 
   return (
     <main className="page-shell py-8">
@@ -265,9 +361,9 @@ export default function AgentDashboard() {
           {agent && (
             <>
               {activeTab === 'Settings' ? (
-              <div className="surface p-5 space-y-3">
+              <div className="surface p-4 space-y-2 max-w-md w-full">
                 <h2 className="text-xl font-semibold">Settings</h2>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                     <div className="text-sm text-slate-500">Email</div>
                     <div className="font-semibold">{user?.email || 'Not set'}</div>
@@ -312,13 +408,13 @@ export default function AgentDashboard() {
                   </button>
                 </div>
                 {changingPassword && (
-                  <form className="space-y-3" onSubmit={handlePasswordSubmit}>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                  <form className="space-y-2" onSubmit={handlePasswordSubmit}>
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <label className="block text-sm">
                         New password
                         <input
                           type={showPassword ? 'text' : 'password'}
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                         />
@@ -327,7 +423,7 @@ export default function AgentDashboard() {
                         Confirm password
                         <input
                           type="password"
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                         />
@@ -342,17 +438,44 @@ export default function AgentDashboard() {
                 )}
               </div>
                 ) : activeTab === 'Profile' ? (
-                <>
-                  <form className="surface p-5 space-y-3" onSubmit={handleSave}>
+                <div className="grid gap-6 lg:grid-cols-[420px,1fr]">
+                  <form className="surface p-4 space-y-2 max-w-md w-full" onSubmit={handleSave}>
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-semibold">Profile & availability</h2>
                       <Badge label="Visible to customers" tone="green" />
                     </div>
 
+                    <div className="flex items-center gap-3">
+                      <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Agent profile" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-semibold">{initials}</span>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <label
+                          className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
+                            photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                          }`}
+                        >
+                          Upload photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handlePhotoChange}
+                            disabled={photoUploading || saving}
+                          />
+                        </label>
+                        <div className="text-xs text-slate-500">JPG or PNG, up to 2MB.</div>
+                      </div>
+                    </div>
+
                     <label className="block text-sm">
                       Agent/Agency name
                     <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
@@ -362,7 +485,7 @@ export default function AgentDashboard() {
                   Email
                     <input
                       type="email"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
@@ -371,7 +494,7 @@ export default function AgentDashboard() {
                 <label className="block text-sm">
                   Phone number
                   <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="e.g., (555) 123-4567"
@@ -381,7 +504,7 @@ export default function AgentDashboard() {
                 <label className="block text-sm">
                   Address
                   <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                     value={form.address}
                         onChange={(e) => setForm({ ...form, address: e.target.value })}
                       />
@@ -391,7 +514,7 @@ export default function AgentDashboard() {
                       <label className="block text-sm">
                         ZIP
                         <input
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                           value={form.zip}
                           onChange={(e) => setForm({ ...form, zip: e.target.value })}
                         />
@@ -399,7 +522,7 @@ export default function AgentDashboard() {
                       <label className="block text-sm">
                         State
                         <input
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                           value={form.state}
                           onChange={(e) => setForm({ ...form, state: e.target.value })}
                         />
@@ -409,7 +532,7 @@ export default function AgentDashboard() {
                     <label className="block text-sm">
                       Availability
                       <select
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                         value={form.availability}
                         onChange={(e) => setForm({ ...form, availability: e.target.value })}
                       >
@@ -423,27 +546,62 @@ export default function AgentDashboard() {
                         <button
                           type="button"
                           className="pill-btn-ghost"
-                          onClick={() =>
-                            agent &&
-                            setForm({
-                              name: agent.name || '',
-                              address: agent.address || '',
-                              zip: agent.zip || '',
-                              state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
-                              availability: agent.availability || 'online',
-                              phone: agent.phone || '',
-                              email: agent.email || user?.email || '',
-                            })
-                          }
+                        onClick={() => {
+                          if (!agent) return
+                          setForm({
+                            name: agent.name || '',
+                            address: agent.address || '',
+                            zip: agent.zip || '',
+                            state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
+                            availability: agent.availability || 'online',
+                            phone: agent.phone || '',
+                            email: agent.email || user?.email || '',
+                          })
+                          setPhotoFile(null)
+                          setPhotoPreview(resolvePhotoUrl(agent.photo))
+                        }}
                         >
                           Cancel
                       </button>
-                      <button type="submit" disabled={saving} className="pill-btn-primary px-8">
-                        {saving ? 'Saving...' : 'Save changes'}
+                      <button type="submit" disabled={saving || photoUploading} className="pill-btn-primary px-8">
+                        {saving || photoUploading ? 'Saving...' : 'Save changes'}
                       </button>
                     </div>
                   </form>
-                </>
+                  <div className="surface p-4 space-y-3 min-h-[420px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-lg font-semibold">What clients see</h3>
+                      <Badge label="Preview" tone="blue" />
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      This is the public profile card customers see when they search for agents.
+                    </p>
+                    <AgentCard agent={previewAgent} />
+                    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
+                      <div className="grid gap-2 text-sm text-slate-600">
+                        <div>
+                          <span className="text-slate-500">Producer #:</span> {previewProducerNumber}
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Products:</span> {previewProducts}
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Email:</span> {previewEmail}
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Phone:</span> {previewPhone}
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Address:</span> {previewAddress}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Bio</div>
+                        <p>{previewBio}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ) : activeTab === 'Messages' ? (
                 <div className="surface p-5 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1,12 +1,40 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Badge from '../ui/Badge'
 
+const getInitials = (name = '', fallback = 'AG') => {
+  const parts = name.trim().split(' ').filter(Boolean)
+  if (!parts.length) return fallback
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+}
+
 export default function AgentCard({ agent, onVoice, onVideo, onSave, onMessage }) {
   const statusTone = agent.availability === 'online' ? 'green' : agent.availability === 'busy' ? 'amber' : 'gray'
+  const [photoError, setPhotoError] = useState(false)
+  const initials = getInitials(agent.name)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [agent.photo])
+
+  const showPhoto = agent.photo && !photoError
   return (
     <div className="glass rounded-2xl p-5 flex gap-4 items-center hover:shadow-lg transition bg-white">
       <div className="h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden flex items-center justify-center shadow-inner border border-slate-200">
-        <img src={agent.photo} alt={agent.name} className="h-full w-full object-cover" />
+        {showPhoto ? (
+          <img
+            src={agent.photo}
+            alt={agent.name}
+            className="h-full w-full object-cover"
+            onError={() => setPhotoError(true)}
+          />
+        ) : (
+          <span className="text-lg font-semibold text-slate-500">{initials}</span>
+        )}
       </div>
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-2">

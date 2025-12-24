@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
@@ -24,6 +24,14 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
   const [remember, setRemember] = useState(false)
   const [roleIntent, setRoleIntent] = useState(initialRole)
   const [form, setForm] = useState(createEmptyForm)
+
+  useEffect(() => {
+    if (!open) return
+    setMode(initialMode)
+    setRemember(false)
+    setRoleIntent(initialRole)
+    setForm(createEmptyForm())
+  }, [open, initialMode, initialRole])
 
   const resetState = () => {
     setMode(initialMode)
@@ -254,8 +262,8 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
             className="font-semibold text-[#006aff]"
             onClick={() => {
               if (mode === 'login') {
-                handleClose()
-                nav('/agent/onboarding', { replace: true })
+                setMode('create')
+                setRoleIntent(initialRole)
                 return
               }
               setMode('login')
