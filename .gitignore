@@ -27,6 +27,7 @@ __pycache__/
 # Logs
 backend-dev.log
 frontend-dev.log
+automation/deployments.log
 
 # OS
 .DS_Store

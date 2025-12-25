@@ -36,6 +36,9 @@ else
   git -C "${APP_DIR}" pull origin "${REPO_BRANCH}"
 fi
 
+GIT_SHA="$(git -C "${APP_DIR}" rev-parse HEAD)"
+DEPLOY_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
 if [[ -z "${JWT_SECRET:-}" ]]; then
   JWT_SECRET="$(openssl rand -hex 32)"
 fi
@@ -144,4 +147,6 @@ EOF
 
 echo "Building and starting containers..."
 sudo docker compose -f "${DEPLOY_DIR}/docker-compose.yml" up -d --build
+LOG_FILE="${BASE_DIR}/deployments.log"
+echo "timestamp=${DEPLOY_TIME} sha=${GIT_SHA} branch=${REPO_BRANCH} domain=${DOMAIN} api_domain=${API_DOMAIN}" >> "${LOG_FILE}"
 echo "Deploy complete."
