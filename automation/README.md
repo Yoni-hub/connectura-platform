@@ -49,3 +49,7 @@ If Squarespace prompts for MFA/OTP, complete it in the browser and press Enter i
 After the run completes:
 - Visit `https://staging.connsura.com`
 - Visit `https://api.staging.connsura.com/`
+
+## Deployment logs
+- Server log: `/opt/connsura/deployments.log`
+- Orchestrator log: `automation/deployments.log`

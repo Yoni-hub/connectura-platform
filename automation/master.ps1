@@ -181,6 +181,17 @@ if (-not $SkipDeploy) {
   Write-Host "Running deploy script..."
   & ssh @sshRunArgs $sshTarget "chmod +x /tmp/connsura_deploy.sh && bash /tmp/connsura_deploy.sh"
   Assert-LastExit "Deploy script failed on $sshTarget."
+
+  try {
+    $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $remoteSha = (& ssh @sshArgs $sshTarget "git -C /opt/connsura/app rev-parse HEAD").Trim()
+    if ([string]::IsNullOrWhiteSpace($remoteSha)) { $remoteSha = "unknown" }
+    $logPath = Join-Path $scriptRoot "deployments.log"
+    $logLine = "timestamp=$timestamp target=$sshTarget sha=$remoteSha branch=$repoBranch domain=$domain api_domain=$apiDomain"
+    Add-Content -Path $logPath -Value $logLine
+  } catch {
+    Write-Host "Warning: failed to append deployment log locally."
+  }
 }
 
 Remove-Item -Force $remoteEnvPath
