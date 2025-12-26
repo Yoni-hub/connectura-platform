@@ -262,6 +262,11 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
             className="font-semibold text-[#006aff]"
             onClick={() => {
               if (mode === 'login') {
+                if (roleIntent === 'AGENT') {
+                  handleClose()
+                  nav('/agent/onboarding')
+                  return
+                }
                 setMode('create')
                 setRoleIntent(initialRole)
                 return
