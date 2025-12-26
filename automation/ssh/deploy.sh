@@ -190,7 +190,9 @@ services:
       - "127.0.0.1:5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \$${POSTGRES_USER} -d \$${POSTGRES_DB}"]
+EOF
+printf '%s\n' '      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]' >> "${DEPLOY_DIR}/docker-compose.yml"
+cat >> "${DEPLOY_DIR}/docker-compose.yml" <<EOF
       interval: 5s
       timeout: 5s
       retries: 12
