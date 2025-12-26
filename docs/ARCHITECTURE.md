@@ -7,7 +7,7 @@ The frontend calls the backend API for auth, agents, customers, messages, and ad
 ## Components
 - connsura-frontend: React + Vite UI, API base comes from VITE_API_URL.
 - connsura-backend: Express API, Prisma ORM, serves /uploads and /forms.
-- Database: SQLite in dev (connsura-backend/dev.db) and staging (file:/data/connsura.db).
+- Database: PostgreSQL in dev and staging (staging runs in Docker, localhost-only).
 - Static assets: forms at /forms, uploads at /uploads.
 
 ## Runtime (staging)
