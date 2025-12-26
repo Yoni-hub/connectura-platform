@@ -44,6 +44,8 @@ If Squarespace prompts for MFA/OTP, complete it in the browser and press Enter i
   - `api.staging.connsura.com`
 - Server provisioning installs Docker + Nginx + Certbot, configures firewall, and sets up HTTPS.
 - Deployment pulls the repo, builds frontend/backend containers, and starts them with Docker Compose.
+- Deployment starts a PostgreSQL container (localhost-only), writes DB creds to `/opt/connsura/env/backend.env`,
+  and creates a read-only user stored in `/opt/connsura/env/db_readonly.env`.
 
 ## Verification
 After the run completes:
@@ -53,3 +55,7 @@ After the run completes:
 ## Deployment logs
 - Server log: `/opt/connsura/deployments.log`
 - Orchestrator log: `automation/deployments.log`
+
+## Database access (staging)
+- SSH tunnel: `ssh -L 5432:localhost:5432 <user>@<host>` then connect to `localhost:5432`.
+- Read-only creds live at `/opt/connsura/env/db_readonly.env` (chmod 600).

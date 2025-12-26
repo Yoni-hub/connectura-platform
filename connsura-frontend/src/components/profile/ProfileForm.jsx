@@ -309,7 +309,7 @@ export default function ProfileForm({ initial = {}, onSave, busy }) {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-500">Drivers, vehicles, coverages, and prior insurance stored in SQLite</div>
+        <div className="text-sm text-slate-500">Drivers, vehicles, coverages, and prior insurance stored in the database</div>
         <button type="submit" disabled={busy} className="rounded-lg bg-primary px-4 py-2 text-white font-semibold disabled:opacity-50">
           {busy ? 'Saving...' : 'Save profile'}
         </button>
