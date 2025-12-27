@@ -2,47 +2,54 @@ import { Link } from 'react-router-dom'
 
 export default function Hero() {
   return (
-    <div className="relative w-full overflow-hidden bg-[#0b2a6f] text-white min-h-[70vh]">
-      <div className="absolute inset-0">
-        <img
-          src="/hero-insurance.png"
-          alt="Family protected by umbrella"
-          className="h-full w-full object-cover"
-          style={{ objectPosition: '50% 40%' }}
-          loading="lazy"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0b2a6f]/90 via-[#0b2a6f]/70 to-[#0b2a6f]/35" />
-      </div>
+    <section className="px-4 pt-8 sm:px-8 lg:px-16">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="p-6">
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+              Connsura - Your Insurance Passport
+            </p>
+            <h1 className="text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">
+              Create Your Insurance Profile - Once
+            </h1>
+            <p className="text-sm text-slate-600">
+              Create your insurance profile once. Share it anywhere. Get insurance help faster.
+            </p>
 
-      <div className="relative z-10 flex flex-col gap-4 px-5 py-12 text-white sm:px-10 lg:px-16 lg:py-16">
-        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-sky-100">Connsura</p>
-        <h1 className="max-w-5xl text-3xl font-bold leading-tight md:text-5xl text-white drop-shadow-lg">
-          Find a trusted insurance agent wherever you live.
-        </h1>
-        <p className="max-w-3xl text-lg text-white/90 drop-shadow">
-          Speak to licensed agents who understand your language, answer quickly, and help you save on coverage. Chat, call, or hop on video in one place.
-        </p>
+            <div className="flex flex-wrap gap-3 pt-1">
+              <Link className="pill-btn-primary px-6 py-3 text-sm sm:text-base" to="/profile/create">
+                Create Your Insurance Profile
+              </Link>
+              <button
+                type="button"
+                className="pill-btn-ghost px-6 py-3 text-sm sm:text-base"
+                onClick={() => {
+                  window.location.href = '/agents'
+                }}
+              >
+                Talk to an Agent
+              </button>
+            </div>
 
-        <div className="flex flex-wrap gap-3 pt-1">
-          <Link className="pill-btn-primary px-12 py-3.5 text-base" to="/agents">
-            Start your search
-          </Link>
-          <button
-            type="button"
-            className="pill-btn-ghost px-12 py-3.5 text-base bg-white text-[#0b3b8c]"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-customer-auth'))}
-          >
-            Create profile
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-100">
-          <div className="grid h-11 w-11 place-items-center rounded-full border border-white/40 bg-white/15 text-base font-semibold">
-            24/7
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <div className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900">
+                24/7
+              </div>
+              <span>Skip repetitive forms. Save time. Get help in your language when you need it.</span>
+            </div>
           </div>
-          <span>Live agent requests, saved profiles, and secure calls from any device.</span>
+        </div>
+
+        <div className="flex items-center justify-center">
+          <img
+            src="/hero-insurance-right.png"
+            alt=""
+            aria-hidden="true"
+            className="h-full w-full max-h-[320px] object-contain sm:max-h-[360px]"
+            loading="lazy"
+          />
         </div>
       </div>
-    </div>
+    </section>
   )
 }
