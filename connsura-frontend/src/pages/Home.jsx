@@ -22,9 +22,13 @@ export default function Home() {
         <SearchBar busy={loading} onSearch={fetchAgents} agents={agents} variant="minimal" />
       </section>
 
-      <section className="px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-overview">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+      <section className="relative overflow-hidden px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-overview">
+        <div
+          className="pointer-events-none absolute inset-0 z-0 bg-3d"
+          aria-hidden="true"
+        />
+        <div className="relative z-10 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/40 bg-white/45 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
             <h2 id="home-overview" className="text-2xl font-semibold">
               Insurance shopping is frustrating.
             </h2>
@@ -49,7 +53,7 @@ export default function Home() {
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <div className="rounded-2xl border border-white/40 bg-white/45 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
             <h2 className="text-2xl font-semibold">Your Insurance Profile, Always Ready</h2>
             <ul className="mt-4 space-y-2 text-sm text-slate-600">
               {[
@@ -135,11 +139,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-center">
+      <section className="relative overflow-hidden px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-1/4 z-0 h-1/2 bg-3d"
+          aria-hidden="true"
+        />
+        <div className="relative z-10 grid gap-6 lg:grid-cols-2 lg:items-center">
           <div className="flex items-center justify-center lg:justify-start">
             <img
-              src="/dont-sell-left.png"
+              src="/hero-insurance-right.png"
               alt=""
               aria-hidden="true"
               className="h-full w-full max-h-[320px] object-contain sm:max-h-[420px]"
@@ -147,7 +155,7 @@ export default function Home() {
             />
           </div>
           <div className="space-y-4 lg:pl-10 xl:pl-16">
-            <div className="space-y-3">
+            <div className="-mt-4 rounded-2xl border border-white/60 bg-white/70 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
               <h2 id="home-trust" className="text-2xl font-semibold">
                 We don't sell insurance.
               </h2>

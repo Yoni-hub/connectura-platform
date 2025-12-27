@@ -2,17 +2,21 @@ import { Link } from 'react-router-dom'
 
 export default function Hero() {
   return (
-    <section className="px-4 pt-8 sm:px-8 lg:px-16">
-      <div className="grid gap-6 lg:grid-cols-2">
+    <section className="relative overflow-hidden px-4 pt-8 sm:px-8 lg:px-16">
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-3d scale-105"
+        aria-hidden="true"
+      />
+      <div className="relative z-10 grid gap-6">
         <div className="p-6">
-          <div className="flex flex-col gap-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+          <div className="flex w-full max-w-xl flex-col gap-4 text-black">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-black/80">
               Connsura - Your Insurance Passport
             </p>
-            <h1 className="text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">
+            <h1 className="text-2xl font-semibold leading-tight text-black sm:text-3xl">
               Create Your Insurance Profile - Once
             </h1>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-black">
               Create your insurance profile once. Share it anywhere. Get insurance help faster.
             </p>
 
@@ -31,23 +35,7 @@ export default function Hero() {
               </button>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-              <div className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900">
-                24/7
-              </div>
-              <span>Skip repetitive forms. Save time. Get help in your language when you need it.</span>
-            </div>
           </div>
-        </div>
-
-        <div className="flex items-center justify-center">
-          <img
-            src="/hero-insurance-right.png"
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full max-h-[320px] object-contain sm:max-h-[360px]"
-            loading="lazy"
-          />
         </div>
       </div>
     </section>
