@@ -16,6 +16,11 @@ export default function Navbar() {
       setAuthStartMode('login')
       setAuthOpen(true)
     }
+    const openCustomerSignup = () => {
+      setAuthIntent('customer')
+      setAuthStartMode('create')
+      setAuthOpen(true)
+    }
     const openAgent = () => {
       setAuthIntent('agent')
       setAuthStartMode('login')
@@ -27,10 +32,12 @@ export default function Navbar() {
       setAuthOpen(true)
     }
     window.addEventListener('open-customer-auth', openCustomer)
+    window.addEventListener('open-customer-auth-signup', openCustomerSignup)
     window.addEventListener('open-agent-auth', openAgent)
     window.addEventListener('open-agent-auth-signup', openAgentSignup)
     return () => {
       window.removeEventListener('open-customer-auth', openCustomer)
+      window.removeEventListener('open-customer-auth-signup', openCustomerSignup)
       window.removeEventListener('open-agent-auth', openAgent)
       window.removeEventListener('open-agent-auth-signup', openAgentSignup)
     }
