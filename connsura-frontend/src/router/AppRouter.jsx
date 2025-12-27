@@ -102,10 +102,7 @@ export default function AppRouter() {
             </AgentApprovedOnly>
           }
         />
-        <Route
-          path="/agent/onboarding"
-          element={<AgentOnboarding />}
-        />
+        <Route path="/agent/onboarding" element={<AgentOnboarding />} />
         <Route
           path="/call/video/:id"
           element={
