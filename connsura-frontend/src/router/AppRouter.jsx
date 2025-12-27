@@ -7,6 +7,7 @@ import ClientDashboard from '../pages/ClientDashboard'
 import AgentDashboard from '../pages/AgentDashboard'
 import AgentOnboarding from '../pages/AgentOnboarding'
 import ClientForms from '../pages/ClientForms'
+import CreateProfile from '../pages/CreateProfile'
 import VideoCall from '../pages/VideoCall'
 import VoiceCall from '../pages/VoiceCall'
 import Contact from '../pages/Contact'
@@ -17,8 +18,6 @@ import Admin from '../pages/Admin'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
-import { useEffect } from 'react'
-import { API_URL } from '../services/api'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -50,17 +49,6 @@ function CustomerOnly({ children }) {
   return children
 }
 
-function FormsRedirect() {
-  useEffect(() => {
-    window.location.href = `${API_URL}/forms/customer-information.html`
-  }, [])
-  return (
-    <div className="page-shell py-12 text-slate-600">
-      Redirecting to the insurance profile form...
-    </div>
-  )
-}
-
 export default function AppRouter() {
   return (
     <BrowserRouter>
@@ -69,7 +57,7 @@ export default function AppRouter() {
         <Route path="/" element={<Home />} />
         <Route path="/agents" element={<AgentResults />} />
         <Route path="/agents/:id" element={<AgentProfile />} />
-        <Route path="/profile/create" element={<FormsRedirect />} />
+        <Route path="/profile/create" element={<CreateProfile />} />
         <Route
           path="/dashboard"
           element={
