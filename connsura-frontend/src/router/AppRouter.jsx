@@ -52,68 +52,72 @@ function CustomerOnly({ children }) {
 export default function AppRouter() {
   return (
     <BrowserRouter>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/agents" element={<AgentResults />} />
-        <Route path="/agents/:id" element={<AgentProfile />} />
-        <Route path="/profile/create" element={<CreateProfile />} />
-        <Route
-          path="/dashboard"
-          element={
-            <Protected>
-              <ClientDashboard />
-            </Protected>
-          }
-        />
-        <Route
-          path="/client/dashboard"
-          element={
-            <CustomerOnly>
-              <ClientDashboard />
-            </CustomerOnly>
-          }
-        />
-        <Route
-          path="/client_forms"
-          element={
-            <CustomerOnly>
-              <ClientForms />
-            </CustomerOnly>
-          }
-        />
-        <Route
-          path="/agent/dashboard"
-          element={
-            <AgentApprovedOnly>
-              <AgentDashboard />
-            </AgentApprovedOnly>
-          }
-        />
-        <Route path="/agent/onboarding" element={<AgentOnboarding />} />
-        <Route
-          path="/call/video/:id"
-          element={
-            <Protected>
-              <VideoCall />
-            </Protected>
-          }
-        />
-        <Route
-          path="/call/voice/:id"
-          element={
-            <Protected>
-              <VoiceCall />
-            </Protected>
-          }
-        />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/careers" element={<Careers />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/legal-notice" element={<LegalNotice />} />
-        <Route path="/admin" element={<Admin />} />
-      </Routes>
-      <Footer />
+      <div className="flex min-h-screen flex-col">
+        <Navbar />
+        <div className="flex-1">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/agents" element={<AgentResults />} />
+            <Route path="/agents/:id" element={<AgentProfile />} />
+            <Route path="/profile/create" element={<CreateProfile />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Protected>
+                  <ClientDashboard />
+                </Protected>
+              }
+            />
+            <Route
+              path="/client/dashboard"
+              element={
+                <CustomerOnly>
+                  <ClientDashboard />
+                </CustomerOnly>
+              }
+            />
+            <Route
+              path="/client_forms"
+              element={
+                <CustomerOnly>
+                  <ClientForms />
+                </CustomerOnly>
+              }
+            />
+            <Route
+              path="/agent/dashboard"
+              element={
+                <AgentApprovedOnly>
+                  <AgentDashboard />
+                </AgentApprovedOnly>
+              }
+            />
+            <Route path="/agent/onboarding" element={<AgentOnboarding />} />
+            <Route
+              path="/call/video/:id"
+              element={
+                <Protected>
+                  <VideoCall />
+                </Protected>
+              }
+            />
+            <Route
+              path="/call/voice/:id"
+              element={
+                <Protected>
+                  <VoiceCall />
+                </Protected>
+              }
+            />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/careers" element={<Careers />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/legal-notice" element={<LegalNotice />} />
+            <Route path="/admin" element={<Admin />} />
+          </Routes>
+        </div>
+        <Footer />
+      </div>
     </BrowserRouter>
   )
 }
