@@ -125,6 +125,7 @@ const educationLevelOptions = [
 ]
 const yesNoOptions = ['No', 'Yes']
 const relationToApplicantOptions = ['Named Insured', 'Spouse', 'Child', 'Parent', 'Dependent', 'Other']
+const businessTypeOptions = ['Sole Proprietor', 'Partnership', 'LLC', 'Corporation', 'Nonprofit', 'Other']
 
 const namedInsuredFields = [
   { id: 'ni-first-name', label: 'First Name' },
@@ -190,14 +191,37 @@ export default function CreateProfile() {
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createVehicle = () => ({ year: '', make: '', model: '', vin: '', primaryUse: '' })
+  const createAddressEntry = () => ({
+    contact: createContact(),
+    residential: { address1: '', city: '', state: '', zip: '' },
+    mailing: { address1: '', city: '', state: '', zip: '' },
+  })
+  const createBusiness = () => ({
+    name: '',
+    type: '',
+    industry: '',
+    years: '',
+    employees: '',
+    phone: '',
+    email: '',
+    address1: '',
+    city: '',
+    state: '',
+    zip: '',
+  })
   const [activeSection, setActiveSection] = useState(null)
   const [householdComplete, setHouseholdComplete] = useState(false)
   const [addressComplete, setAddressComplete] = useState(false)
   const [vehicleComplete, setVehicleComplete] = useState(false)
+  const [businessComplete, setBusinessComplete] = useState(false)
   const [householdEditing, setHouseholdEditing] = useState(false)
   const [addressEditing, setAddressEditing] = useState(false)
   const [vehicleEditing, setVehicleEditing] = useState(false)
+  const [businessEditing, setBusinessEditing] = useState(false)
   const [activeHouseholdIndex, setActiveHouseholdIndex] = useState('primary')
+  const [activeAddressIndex, setActiveAddressIndex] = useState('primary')
+  const [activeVehicleIndex, setActiveVehicleIndex] = useState('primary')
+  const [activeBusinessIndex, setActiveBusinessIndex] = useState('primary')
   const [namedInsured, setNamedInsured] = useState({ relation: '', employment: '', occupation: '' })
   const [additionalHouseholds, setAdditionalHouseholds] = useState([])
   const [newHousehold, setNewHousehold] = useState(createHouseholdMember())
@@ -205,7 +229,17 @@ export default function CreateProfile() {
   const [contacts, setContacts] = useState([createContact()])
   const [residential, setResidential] = useState({ address1: '', city: '', state: '', zip: '' })
   const [mailing, setMailing] = useState({ address1: '', city: '', state: '', zip: '' })
-  const [vehicles, setVehicles] = useState([createVehicle()])
+  const [additionalAddresses, setAdditionalAddresses] = useState([])
+  const [newAddress, setNewAddress] = useState(createAddressEntry())
+  const [showAddAddressModal, setShowAddAddressModal] = useState(false)
+  const [primaryVehicle, setPrimaryVehicle] = useState(createVehicle())
+  const [additionalVehicles, setAdditionalVehicles] = useState([])
+  const [newVehicle, setNewVehicle] = useState(createVehicle())
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false)
+  const [primaryBusiness, setPrimaryBusiness] = useState(createBusiness())
+  const [additionalBusinesses, setAdditionalBusinesses] = useState([])
+  const [newBusiness, setNewBusiness] = useState(createBusiness())
+  const [showAddBusinessModal, setShowAddBusinessModal] = useState(false)
 
   const specialEmploymentOccupations = {
     'Student (full-time)': ['Student (full-time)'],
@@ -277,8 +311,18 @@ export default function CreateProfile() {
     })
   }
 
-  const updateVehicle = (index, updater) => {
-    setVehicles((prev) => {
+  const updateAdditionalAddress = (index, updater) => {
+    setAdditionalAddresses((prev) => {
+      const next = [...prev]
+      const current = next[index] ?? createAddressEntry()
+      const nextEntry = typeof updater === 'function' ? updater(current) : updater
+      next[index] = nextEntry
+      return next
+    })
+  }
+
+  const updateAdditionalVehicle = (index, updater) => {
+    setAdditionalVehicles((prev) => {
       const next = [...prev]
       const current = next[index] ?? createVehicle()
       const nextVehicle = typeof updater === 'function' ? updater(current) : updater
@@ -287,46 +331,82 @@ export default function CreateProfile() {
     })
   }
 
+  const updateAdditionalBusiness = (index, updater) => {
+    setAdditionalBusinesses((prev) => {
+      const next = [...prev]
+      const current = next[index] ?? createBusiness()
+      const nextBusiness = typeof updater === 'function' ? updater(current) : updater
+      next[index] = nextBusiness
+      return next
+    })
+  }
+
   const removeAdditionalHousehold = (index) => {
     setAdditionalHouseholds((prev) => prev.filter((_, idx) => idx !== index))
   }
 
-  const removeVehicle = (index) => {
-    setVehicles((prev) => {
-      const next = prev.filter((_, idx) => idx !== index)
-      if (next.length === 0) {
-        setVehicleComplete(false)
-        setVehicleEditing(true)
-      }
-      return next
-    })
+  const removeAdditionalAddress = (index) => {
+    setAdditionalAddresses((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const removeAdditionalVehicle = (index) => {
+    setAdditionalVehicles((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const removeAdditionalBusiness = (index) => {
+    setAdditionalBusinesses((prev) => prev.filter((_, idx) => idx !== index))
   }
 
   const openSection = (section) => {
     setActiveSection(section)
     setShowAddHouseholdModal(false)
+    setShowAddAddressModal(false)
+    setShowAddVehicleModal(false)
+    setShowAddBusinessModal(false)
     setHouseholdEditing(false)
     setAddressEditing(false)
     setVehicleEditing(false)
+    setBusinessEditing(false)
     if (section === 'household') {
       setActiveHouseholdIndex('primary')
       setHouseholdEditing(!householdComplete)
     }
     if (section === 'address') {
+      setActiveAddressIndex('primary')
       setAddressEditing(!addressComplete)
     }
     if (section === 'vehicle') {
+      setActiveVehicleIndex('primary')
       setVehicleEditing(!vehicleComplete)
+    }
+    if (section === 'business') {
+      setActiveBusinessIndex('primary')
+      setBusinessEditing(!businessComplete)
     }
   }
 
   const handleSameAsResidential = () => {
-    setMailing({
-      address1: residential.address1,
-      city: residential.city,
-      state: residential.state,
-      zip: residential.zip,
-    })
+    if (activeAddressIndex === 'primary') {
+      setMailing({
+        address1: residential.address1,
+        city: residential.city,
+        state: residential.state,
+        zip: residential.zip,
+      })
+      return
+    }
+    if (typeof activeAddressIndex !== 'number') {
+      return
+    }
+    updateAdditionalAddress(activeAddressIndex, (prev) => ({
+      ...prev,
+      mailing: {
+        address1: prev.residential?.address1 ?? '',
+        city: prev.residential?.city ?? '',
+        state: prev.residential?.state ?? '',
+        zip: prev.residential?.zip ?? '',
+      },
+    }))
   }
 
   const namedInsuredLabel = namedInsured.relation ? namedInsured.relation : 'Primary Applicant'
@@ -353,6 +433,38 @@ export default function CreateProfile() {
     activeHousehold.setPerson,
     activeHousehold.idPrefix
   )
+  const primaryContact = contacts[0] || createContact()
+  const primaryAddressLabel = 'Primary Address'
+  const getAdditionalAddressLabel = (index) => `Additional Address ${index + 1}`
+  const activeAdditionalAddressIndex = typeof activeAddressIndex === 'number' ? activeAddressIndex : null
+  const activeAdditionalAddress =
+    activeAdditionalAddressIndex !== null ? additionalAddresses[activeAdditionalAddressIndex] : null
+  const activeAddressEntry = activeAdditionalAddress ?? createAddressEntry()
+  const activeAddressLabel =
+    activeAdditionalAddressIndex === null ? primaryAddressLabel : getAdditionalAddressLabel(activeAdditionalAddressIndex)
+  const activeAddressContact =
+    activeAdditionalAddressIndex === null ? primaryContact : activeAddressEntry.contact
+  const activeAddressResidential =
+    activeAdditionalAddressIndex === null ? residential : activeAddressEntry.residential
+  const activeAddressMailing = activeAdditionalAddressIndex === null ? mailing : activeAddressEntry.mailing
+  const primaryVehicleLabel = 'Primary Vehicle'
+  const getAdditionalVehicleLabel = (index) => `Additional Vehicle ${index + 1}`
+  const activeAdditionalVehicleIndex = typeof activeVehicleIndex === 'number' ? activeVehicleIndex : null
+  const activeAdditionalVehicle =
+    activeAdditionalVehicleIndex !== null ? additionalVehicles[activeAdditionalVehicleIndex] : null
+  const activeVehicle =
+    activeAdditionalVehicleIndex === null ? primaryVehicle : activeAdditionalVehicle ?? createVehicle()
+  const activeVehicleLabel =
+    activeAdditionalVehicleIndex === null ? primaryVehicleLabel : getAdditionalVehicleLabel(activeAdditionalVehicleIndex)
+  const primaryBusinessLabel = 'Primary Business'
+  const getAdditionalBusinessLabel = (index) => `Additional Business ${index + 1}`
+  const activeAdditionalBusinessIndex = typeof activeBusinessIndex === 'number' ? activeBusinessIndex : null
+  const activeAdditionalBusiness =
+    activeAdditionalBusinessIndex !== null ? additionalBusinesses[activeAdditionalBusinessIndex] : null
+  const activeBusiness =
+    activeAdditionalBusinessIndex === null ? primaryBusiness : activeAdditionalBusiness ?? createBusiness()
+  const activeBusinessLabel =
+    activeAdditionalBusinessIndex === null ? primaryBusinessLabel : getAdditionalBusinessLabel(activeAdditionalBusinessIndex)
   const showHouseholdSection = activeSection === 'household'
   const showAddressSection = activeSection === 'address'
   const showVehicleSection = activeSection === 'vehicle'
@@ -361,10 +473,84 @@ export default function CreateProfile() {
     showHouseholdSection && (!householdComplete || householdEditing) && !showAddHouseholdModal
   const showHouseholdSummary =
     showHouseholdSection && householdComplete && !householdEditing && !showAddHouseholdModal
-  const showAddressForm = showAddressSection && (!addressComplete || addressEditing)
-  const showAddressSummary = showAddressSection && addressComplete && !addressEditing
-  const showVehicleForm = showVehicleSection && (!vehicleComplete || vehicleEditing)
-  const showVehicleSummary = showVehicleSection && vehicleComplete && !vehicleEditing
+  const showAddressForm = showAddressSection && (!addressComplete || addressEditing) && !showAddAddressModal
+  const showAddressSummary = showAddressSection && addressComplete && !addressEditing && !showAddAddressModal
+  const showVehicleForm = showVehicleSection && (!vehicleComplete || vehicleEditing) && !showAddVehicleModal
+  const showVehicleSummary = showVehicleSection && vehicleComplete && !vehicleEditing && !showAddVehicleModal
+  const showBusinessForm = showBusinessSection && (!businessComplete || businessEditing) && !showAddBusinessModal
+  const showBusinessSummary = showBusinessSection && businessComplete && !businessEditing && !showAddBusinessModal
+  const setActiveAddressContactField = (field, value) => {
+    if (activeAddressIndex === 'primary') {
+      updateContact(0, (prev) => ({ ...prev, [field]: value }))
+      return
+    }
+    if (typeof activeAddressIndex !== 'number') {
+      return
+    }
+    updateAdditionalAddress(activeAddressIndex, (prev) => ({
+      ...prev,
+      contact: { ...(prev.contact ?? createContact()), [field]: value },
+    }))
+  }
+  const setActiveAddressResidentialField = (field, value) => {
+    if (activeAddressIndex === 'primary') {
+      setResidential((prev) => ({ ...prev, [field]: value }))
+      return
+    }
+    if (typeof activeAddressIndex !== 'number') {
+      return
+    }
+    updateAdditionalAddress(activeAddressIndex, (prev) => ({
+      ...prev,
+      residential: { ...(prev.residential ?? { address1: '', city: '', state: '', zip: '' }), [field]: value },
+    }))
+  }
+  const setActiveAddressMailingField = (field, value) => {
+    if (activeAddressIndex === 'primary') {
+      setMailing((prev) => ({ ...prev, [field]: value }))
+      return
+    }
+    if (typeof activeAddressIndex !== 'number') {
+      return
+    }
+    updateAdditionalAddress(activeAddressIndex, (prev) => ({
+      ...prev,
+      mailing: { ...(prev.mailing ?? { address1: '', city: '', state: '', zip: '' }), [field]: value },
+    }))
+  }
+  const setActiveVehicleField = (field, value) => {
+    if (activeVehicleIndex === 'primary') {
+      setPrimaryVehicle((prev) => ({ ...prev, [field]: value }))
+      return
+    }
+    if (typeof activeVehicleIndex !== 'number') {
+      return
+    }
+    updateAdditionalVehicle(activeVehicleIndex, (prev) => ({ ...prev, [field]: value }))
+  }
+  const setActiveBusinessField = (field, value) => {
+    if (activeBusinessIndex === 'primary') {
+      setPrimaryBusiness((prev) => ({ ...prev, [field]: value }))
+      return
+    }
+    if (typeof activeBusinessIndex !== 'number') {
+      return
+    }
+    updateAdditionalBusiness(activeBusinessIndex, (prev) => ({ ...prev, [field]: value }))
+  }
+  const businessFields = [
+    { id: 'name', label: 'Business Name' },
+    { id: 'type', label: 'Business Type', options: businessTypeOptions },
+    { id: 'industry', label: 'Industry' },
+    { id: 'years', label: 'Years in Business' },
+    { id: 'employees', label: 'Number of Employees' },
+    { id: 'phone', label: 'Business Phone', type: 'tel' },
+    { id: 'email', label: 'Business Email', type: 'email' },
+    { id: 'address1', label: 'Street Address 1' },
+    { id: 'city', label: 'City' },
+    { id: 'state', label: 'State', options: licenseStateOptions },
+    { id: 'zip', label: 'Zip Code' },
+  ]
   const buildFullName = (person) => {
     const nameParts = [person['first-name'], person['middle-initial'], person['last-name']].filter(Boolean)
     const baseName = nameParts.join(' ')
@@ -375,7 +561,6 @@ export default function CreateProfile() {
   }
   const primaryFullName = buildFullName(namedInsured)
   const summaryValue = (value) => (value ? value : '-')
-  const primaryContact = contacts[0] || { phone1: '', phone2: '', email1: '', email2: '' }
 
   return (
     <main className="min-h-full">
@@ -633,6 +818,7 @@ export default function CreateProfile() {
                       className={nextButton}
                       onClick={() => {
                         setActiveSection('address')
+                        setActiveAddressIndex('primary')
                         setAddressEditing(true)
                       }}
                     >
@@ -646,11 +832,186 @@ export default function CreateProfile() {
         )}
         {showAddressSection && (
           <>
+            {showAddAddressModal && (
+              <section className="mt-6 flex justify-center">
+                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-slate-900">Additional Address</div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Contact Information</div>
+                      <div className={`mt-3 ${gridClass}`}>
+                        {contactFields.map((field) => (
+                          <FieldRow
+                            key={`new-address-contact-${field.id}`}
+                            id={`new-address-${field.id}`}
+                            label={field.label}
+                            type={field.type}
+                            value={newAddress.contact?.[field.id] ?? ''}
+                            onChange={(event) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                contact: { ...(prev.contact ?? createContact()), [field.id]: event.target.value },
+                              }))
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Residential Address</div>
+                        <div className={`mt-3 ${gridClass}`}>
+                          <FieldRow
+                            id="new-res-address1"
+                            label="Street Address 1"
+                            value={newAddress.residential?.address1 ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                residential: { ...(prev.residential ?? {}), address1: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-res-city"
+                            label="City"
+                            value={newAddress.residential?.city ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                residential: { ...(prev.residential ?? {}), city: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-res-state"
+                            label="State"
+                            value={newAddress.residential?.state ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                residential: { ...(prev.residential ?? {}), state: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-res-zip"
+                            label="Zip Code"
+                            value={newAddress.residential?.zip ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                residential: { ...(prev.residential ?? {}), zip: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Mailing Address</div>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                mailing: { ...(prev.residential ?? {}) },
+                              }))
+                            }
+                          >
+                            Same as Residential Address
+                          </button>
+                        </div>
+                        <div className={`mt-3 ${gridClass}`}>
+                          <FieldRow
+                            id="new-mail-address1"
+                            label="Street Address 1"
+                            value={newAddress.mailing?.address1 ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                mailing: { ...(prev.mailing ?? {}), address1: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-mail-city"
+                            label="City"
+                            value={newAddress.mailing?.city ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                mailing: { ...(prev.mailing ?? {}), city: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-mail-state"
+                            label="State"
+                            value={newAddress.mailing?.state ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                mailing: { ...(prev.mailing ?? {}), state: e.target.value },
+                              }))
+                            }
+                          />
+                          <FieldRow
+                            id="new-mail-zip"
+                            label="Zip Code"
+                            value={newAddress.mailing?.zip ?? ''}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({
+                                ...prev,
+                                mailing: { ...(prev.mailing ?? {}), zip: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          setShowAddAddressModal(false)
+                          setNewAddress(createAddressEntry())
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={nextButton}
+                        onClick={() => {
+                          setAdditionalAddresses((prev) => [...prev, newAddress])
+                          setShowAddAddressModal(false)
+                          setNewAddress(createAddressEntry())
+                          setAddressComplete(true)
+                          setActiveAddressIndex('primary')
+                          setAddressEditing(false)
+                        }}
+                      >
+                        Save &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            )}
             {showAddressForm && (
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Address Information</div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{activeAddressLabel}</div>
+                    </div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900">Contact Information</div>
                       <div className={`mt-3 ${gridClass}`}>
@@ -660,10 +1021,8 @@ export default function CreateProfile() {
                             id={`contact-0-${field.id}`}
                             label={field.label}
                             type={field.type}
-                            value={contacts[0]?.[field.id] ?? ''}
-                            onChange={(event) =>
-                              updateContact(0, (prev) => ({ ...prev, [field.id]: event.target.value }))
-                            }
+                            value={activeAddressContact?.[field.id] ?? ''}
+                            onChange={(event) => setActiveAddressContactField(field.id, event.target.value)}
                           />
                         ))}
                       </div>
@@ -676,26 +1035,26 @@ export default function CreateProfile() {
                           <FieldRow
                             id="res-address1"
                             label="Street Address 1"
-                            value={residential.address1}
-                            onChange={(e) => setResidential((prev) => ({ ...prev, address1: e.target.value }))}
+                            value={activeAddressResidential?.address1 ?? ''}
+                            onChange={(e) => setActiveAddressResidentialField('address1', e.target.value)}
                           />
                           <FieldRow
                             id="res-city"
                             label="City"
-                            value={residential.city}
-                            onChange={(e) => setResidential((prev) => ({ ...prev, city: e.target.value }))}
+                            value={activeAddressResidential?.city ?? ''}
+                            onChange={(e) => setActiveAddressResidentialField('city', e.target.value)}
                           />
                           <FieldRow
                             id="res-state"
                             label="State"
-                            value={residential.state}
-                            onChange={(e) => setResidential((prev) => ({ ...prev, state: e.target.value }))}
+                            value={activeAddressResidential?.state ?? ''}
+                            onChange={(e) => setActiveAddressResidentialField('state', e.target.value)}
                           />
                           <FieldRow
                             id="res-zip"
                             label="Zip Code"
-                            value={residential.zip}
-                            onChange={(e) => setResidential((prev) => ({ ...prev, zip: e.target.value }))}
+                            value={activeAddressResidential?.zip ?? ''}
+                            onChange={(e) => setActiveAddressResidentialField('zip', e.target.value)}
                           />
                         </div>
                       </div>
@@ -711,26 +1070,26 @@ export default function CreateProfile() {
                           <FieldRow
                             id="mail-address1"
                             label="Street Address 1"
-                            value={mailing.address1}
-                            onChange={(e) => setMailing((prev) => ({ ...prev, address1: e.target.value }))}
+                            value={activeAddressMailing?.address1 ?? ''}
+                            onChange={(e) => setActiveAddressMailingField('address1', e.target.value)}
                           />
                           <FieldRow
                             id="mail-city"
                             label="City"
-                            value={mailing.city}
-                            onChange={(e) => setMailing((prev) => ({ ...prev, city: e.target.value }))}
+                            value={activeAddressMailing?.city ?? ''}
+                            onChange={(e) => setActiveAddressMailingField('city', e.target.value)}
                           />
                           <FieldRow
                             id="mail-state"
                             label="State"
-                            value={mailing.state}
-                            onChange={(e) => setMailing((prev) => ({ ...prev, state: e.target.value }))}
+                            value={activeAddressMailing?.state ?? ''}
+                            onChange={(e) => setActiveAddressMailingField('state', e.target.value)}
                           />
                           <FieldRow
                             id="mail-zip"
                             label="Zip Code"
-                            value={mailing.zip}
-                            onChange={(e) => setMailing((prev) => ({ ...prev, zip: e.target.value }))}
+                            value={activeAddressMailing?.zip ?? ''}
+                            onChange={(e) => setActiveAddressMailingField('zip', e.target.value)}
                           />
                         </div>
                       </div>
@@ -767,49 +1126,101 @@ export default function CreateProfile() {
             )}
 
             {showAddressSummary && (
-              <section className="mt-6 flex justify-center">
-                <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-slate-900">Address Summary</div>
-                    <div className="flex gap-2">
-                      <button type="button" className={miniButton} onClick={() => setAddressEditing(true)}>
-                        Edit
-                      </button>
+              <section className="mt-6">
+                <div className="space-y-4">
+                  <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-slate-900">{primaryAddressLabel}</div>
                       <button
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          setContacts([createContact()])
-                          setResidential({ address1: '', city: '', state: '', zip: '' })
-                          setMailing({ address1: '', city: '', state: '', zip: '' })
-                          setAddressComplete(false)
+                          setActiveAddressIndex('primary')
                           setAddressEditing(true)
                         }}
                       >
-                        Remove
+                        Edit
                       </button>
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                      <div>
+                        <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
+                        {summaryValue(primaryContact.phone1)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
+                        {summaryValue(primaryContact.email1)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                        {summaryValue(residential.address1)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                    <div>
-                      <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
-                      {summaryValue(primaryContact.phone1)}
+
+                  {additionalAddresses.map((address, index) => (
+                    <div
+                      key={`address-summary-${index}`}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {getAdditionalAddressLabel(index)}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => {
+                              setActiveAddressIndex(index)
+                              setAddressEditing(true)
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => removeAdditionalAddress(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                        <div>
+                          <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
+                          {summaryValue(address.contact?.phone1)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
+                          {summaryValue(address.contact?.email1)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                          {summaryValue(address.residential?.address1)}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
-                      {summaryValue(primaryContact.email1)}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
-                      {summaryValue(residential.address1)}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap justify-end gap-3">
+                  ))}
+
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <button
+                      type="button"
+                      className={miniButton}
+                      onClick={() => {
+                        setNewAddress(createAddressEntry())
+                        setShowAddAddressModal(true)
+                      }}
+                    >
+                      Add more address
+                    </button>
                     <button
                       type="button"
                       className={nextButton}
                       onClick={() => {
                         setActiveSection('vehicle')
+                        setActiveVehicleIndex('primary')
                         setVehicleEditing(!vehicleComplete)
                       }}
                     >
@@ -824,76 +1235,115 @@ export default function CreateProfile() {
 
         {showVehicleSection && (
           <>
+            {showAddVehicleModal && (
+              <section className="mt-6 flex justify-center">
+                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-slate-900">Additional Vehicle</div>
+                    <div className={`mt-3 ${gridClass}`}>
+                      <FieldRow
+                        id="new-vehicle-year"
+                        label="Year"
+                        type="number"
+                        value={newVehicle.year}
+                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, year: event.target.value }))}
+                      />
+                      <FieldRow
+                        id="new-vehicle-make"
+                        label="Make"
+                        value={newVehicle.make}
+                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, make: event.target.value }))}
+                      />
+                      <FieldRow
+                        id="new-vehicle-model"
+                        label="Model"
+                        value={newVehicle.model}
+                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, model: event.target.value }))}
+                      />
+                      <FieldRow
+                        id="new-vehicle-vin"
+                        label="VIN"
+                        value={newVehicle.vin}
+                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, vin: event.target.value }))}
+                      />
+                      <FieldRow
+                        id="new-vehicle-primary-use"
+                        label="Primary Use"
+                        value={newVehicle.primaryUse}
+                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, primaryUse: event.target.value }))}
+                      />
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          setShowAddVehicleModal(false)
+                          setNewVehicle(createVehicle())
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={nextButton}
+                        onClick={() => {
+                          setAdditionalVehicles((prev) => [...prev, newVehicle])
+                          setShowAddVehicleModal(false)
+                          setNewVehicle(createVehicle())
+                          setVehicleComplete(true)
+                          setActiveVehicleIndex('primary')
+                          setVehicleEditing(false)
+                        }}
+                      >
+                        Save &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            )}
             {showVehicleForm && (
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Vehicle Information</div>
-                    {vehicles.length === 0 && (
-                      <div className="text-sm text-slate-600">No vehicles added yet.</div>
-                    )}
-                    {vehicles.map((vehicle, index) => (
-                      <div key={`vehicle-${index}`} className="rounded border border-slate-200 bg-slate-50 p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-semibold text-slate-900">Vehicle {index + 1}</div>
-                          {vehicles.length > 1 && (
-                            <button type="button" className={miniButton} onClick={() => removeVehicle(index)}>
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                        <div className={`mt-3 ${gridClass}`}>
-                          <FieldRow
-                            id={`vehicle-${index}-year`}
-                            label="Year"
-                            type="number"
-                            value={vehicle.year}
-                            onChange={(event) =>
-                              updateVehicle(index, (prev) => ({ ...prev, year: event.target.value }))
-                            }
-                          />
-                          <FieldRow
-                            id={`vehicle-${index}-make`}
-                            label="Make"
-                            value={vehicle.make}
-                            onChange={(event) =>
-                              updateVehicle(index, (prev) => ({ ...prev, make: event.target.value }))
-                            }
-                          />
-                          <FieldRow
-                            id={`vehicle-${index}-model`}
-                            label="Model"
-                            value={vehicle.model}
-                            onChange={(event) =>
-                              updateVehicle(index, (prev) => ({ ...prev, model: event.target.value }))
-                            }
-                          />
-                          <FieldRow
-                            id={`vehicle-${index}-vin`}
-                            label="VIN"
-                            value={vehicle.vin}
-                            onChange={(event) =>
-                              updateVehicle(index, (prev) => ({ ...prev, vin: event.target.value }))
-                            }
-                          />
-                          <FieldRow
-                            id={`vehicle-${index}-primary-use`}
-                            label="Primary Use"
-                            value={vehicle.primaryUse}
-                            onChange={(event) =>
-                              updateVehicle(index, (prev) => ({ ...prev, primaryUse: event.target.value }))
-                            }
-                          />
-                        </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{activeVehicleLabel}</div>
+                      <div className={`mt-3 ${gridClass}`}>
+                        <FieldRow
+                          id="vehicle-year"
+                          label="Year"
+                          type="number"
+                          value={activeVehicle.year}
+                          onChange={(event) => setActiveVehicleField('year', event.target.value)}
+                        />
+                        <FieldRow
+                          id="vehicle-make"
+                          label="Make"
+                          value={activeVehicle.make}
+                          onChange={(event) => setActiveVehicleField('make', event.target.value)}
+                        />
+                        <FieldRow
+                          id="vehicle-model"
+                          label="Model"
+                          value={activeVehicle.model}
+                          onChange={(event) => setActiveVehicleField('model', event.target.value)}
+                        />
+                        <FieldRow
+                          id="vehicle-vin"
+                          label="VIN"
+                          value={activeVehicle.vin}
+                          onChange={(event) => setActiveVehicleField('vin', event.target.value)}
+                        />
+                        <FieldRow
+                          id="vehicle-primary-use"
+                          label="Primary Use"
+                          value={activeVehicle.primaryUse}
+                          onChange={(event) => setActiveVehicleField('primaryUse', event.target.value)}
+                        />
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      className={miniButton}
-                      onClick={() => setVehicles((prev) => [...prev, createVehicle()])}
-                    >
-                      Add vehicle
-                    </button>
+                    </div>
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
@@ -925,61 +1375,111 @@ export default function CreateProfile() {
             )}
 
             {showVehicleSummary && (
-              <section className="mt-6 flex justify-center">
-                <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-slate-900">Vehicle Summary</div>
-                    <button type="button" className={miniButton} onClick={() => setVehicleEditing(true)}>
-                      Edit
-                    </button>
-                  </div>
-                  {vehicles.length === 0 && (
-                    <div className="mt-3 text-sm text-slate-600">No vehicles added yet.</div>
-                  )}
-                  {vehicles.length > 0 && (
-                    <div className="mt-4 space-y-4">
-                      {vehicles.map((vehicle, index) => (
-                        <div key={`vehicle-summary-${index}`} className="rounded border border-slate-200 bg-white p-3">
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                              Vehicle {index + 1}
-                            </div>
-                            <button type="button" className={miniButton} onClick={() => removeVehicle(index)}>
-                              Remove
-                            </button>
-                          </div>
-                          <div className="mt-3 grid gap-x-6 gap-y-2 text-sm text-slate-700 sm:grid-cols-2">
-                            <div>
-                              <span className="font-semibold text-slate-900">Year:</span> {summaryValue(vehicle.year)}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-slate-900">Make:</span> {summaryValue(vehicle.make)}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-slate-900">Model:</span> {summaryValue(vehicle.model)}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-slate-900">VIN:</span> {summaryValue(vehicle.vin)}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-slate-900">Primary Use:</span>{' '}
-                              {summaryValue(vehicle.primaryUse)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+              <section className="mt-6">
+                <div className="space-y-4">
+                  <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-slate-900">{primaryVehicleLabel}</div>
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          setActiveVehicleIndex('primary')
+                          setVehicleEditing(true)
+                        }}
+                      >
+                        Edit
+                      </button>
                     </div>
-                  )}
-                  <div className="mt-4 flex flex-wrap justify-end gap-3">
+                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                      <div>
+                        <span className="font-semibold text-slate-900">Year:</span> {summaryValue(primaryVehicle.year)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Make:</span> {summaryValue(primaryVehicle.make)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Model:</span> {summaryValue(primaryVehicle.model)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">VIN:</span> {summaryValue(primaryVehicle.vin)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Primary Use:</span>{' '}
+                        {summaryValue(primaryVehicle.primaryUse)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {additionalVehicles.map((vehicle, index) => (
+                    <div
+                      key={`vehicle-summary-${index}`}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-slate-900">{getAdditionalVehicleLabel(index)}</div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => {
+                              setActiveVehicleIndex(index)
+                              setVehicleEditing(true)
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => removeAdditionalVehicle(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                        <div>
+                          <span className="font-semibold text-slate-900">Year:</span> {summaryValue(vehicle.year)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Make:</span> {summaryValue(vehicle.make)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Model:</span> {summaryValue(vehicle.model)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">VIN:</span> {summaryValue(vehicle.vin)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Primary Use:</span>{' '}
+                          {summaryValue(vehicle.primaryUse)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-wrap justify-end gap-3">
                     <button
                       type="button"
                       className={miniButton}
                       onClick={() => {
-                        setVehicles((prev) => [...prev, createVehicle()])
-                        setVehicleEditing(true)
+                        setNewVehicle(createVehicle())
+                        setShowAddVehicleModal(true)
                       }}
                     >
-                      Add vehicle
+                      Add more vehicle
+                    </button>
+                    <button
+                      type="button"
+                      className={nextButton}
+                      onClick={() => {
+                        setActiveSection('business')
+                        setActiveBusinessIndex('primary')
+                        setBusinessEditing(!businessComplete)
+                      }}
+                    >
+                      Continue
                     </button>
                   </div>
                 </div>
@@ -989,12 +1489,212 @@ export default function CreateProfile() {
         )}
 
         {showBusinessSection && (
-          <section className="mt-6 flex justify-center">
-            <div className="w-fit rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-              <div className="text-sm font-semibold text-slate-900">Business Information</div>
-              <div className="mt-2 text-slate-600">This section will follow the same flow when ready.</div>
-            </div>
-          </section>
+          <>
+            {showAddBusinessModal && (
+              <section className="mt-6 flex justify-center">
+                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-slate-900">Additional Business</div>
+                    <div className={gridClass}>
+                      {businessFields.map((field) => (
+                        <FieldRow
+                          key={`new-business-${field.id}`}
+                          id={`new-business-${field.id}`}
+                          label={field.label}
+                          type={field.type}
+                          options={field.options}
+                          value={newBusiness[field.id] ?? ''}
+                          onChange={(event) =>
+                            setNewBusiness((prev) => ({ ...prev, [field.id]: event.target.value }))
+                          }
+                        />
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          setShowAddBusinessModal(false)
+                          setNewBusiness(createBusiness())
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={nextButton}
+                        onClick={() => {
+                          setAdditionalBusinesses((prev) => [...prev, newBusiness])
+                          setShowAddBusinessModal(false)
+                          setNewBusiness(createBusiness())
+                          setBusinessComplete(true)
+                          setActiveBusinessIndex('primary')
+                          setBusinessEditing(false)
+                        }}
+                      >
+                        Save &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            )}
+
+            {showBusinessForm && (
+              <section className="mt-6 flex justify-center">
+                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-slate-900">Business Information</div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{activeBusinessLabel}</div>
+                      <div className={`mt-3 ${gridClass}`}>
+                        {businessFields.map((field) => (
+                          <FieldRow
+                            key={`business-${field.id}`}
+                            id={`business-${field.id}`}
+                            label={field.label}
+                            type={field.type}
+                            options={field.options}
+                            value={activeBusiness[field.id] ?? ''}
+                            onChange={(event) => setActiveBusinessField(field.id, event.target.value)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          if (businessComplete) {
+                            setBusinessEditing(false)
+                          } else {
+                            setActiveSection(null)
+                          }
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={nextButton}
+                        onClick={() => {
+                          setBusinessComplete(true)
+                          setBusinessEditing(false)
+                        }}
+                      >
+                        Save &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            )}
+
+            {showBusinessSummary && (
+              <section className="mt-6">
+                <div className="space-y-4">
+                  <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-slate-900">{primaryBusinessLabel}</div>
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          setActiveBusinessIndex('primary')
+                          setBusinessEditing(true)
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                      <div>
+                        <span className="font-semibold text-slate-900">Business Name:</span>{' '}
+                        {summaryValue(primaryBusiness.name)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Type:</span>{' '}
+                        {summaryValue(primaryBusiness.type)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Phone:</span>{' '}
+                        {summaryValue(primaryBusiness.phone)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                        {summaryValue(primaryBusiness.address1)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {additionalBusinesses.map((business, index) => (
+                    <div
+                      key={`business-summary-${index}`}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {getAdditionalBusinessLabel(index)}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => {
+                              setActiveBusinessIndex(index)
+                              setBusinessEditing(true)
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className={miniButton}
+                            onClick={() => removeAdditionalBusiness(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                        <div>
+                          <span className="font-semibold text-slate-900">Business Name:</span>{' '}
+                          {summaryValue(business.name)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Type:</span>{' '}
+                          {summaryValue(business.type)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Phone:</span>{' '}
+                          {summaryValue(business.phone)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                          {summaryValue(business.address1)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <button
+                      type="button"
+                      className={miniButton}
+                      onClick={() => {
+                        setNewBusiness(createBusiness())
+                        setShowAddBusinessModal(true)
+                      }}
+                    >
+                      Add more business
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
     </main>
