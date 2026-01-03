@@ -51,12 +51,14 @@
   }
 
   .bg-3d {
-    background-image:
-      radial-gradient(1200px 700px at 12% -10%, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 68%),
-      radial-gradient(1100px 700px at 88% 110%, rgba(8, 16, 30, 0.55), rgba(8, 16, 30, 0) 62%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(10, 18, 34, 0.22)),
-      radial-gradient(1600px 900px at 50% 50%, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.18) 70%),
-      url('/background.png');
+    background-image: url('/background.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .bg-profile-lines {
+    background-image: url('/bg-profile-lines.svg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

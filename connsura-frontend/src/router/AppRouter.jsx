@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Home from '../pages/Home'
+import HomeTest from '../pages/HomeTest'
 import AgentResults from '../pages/AgentResults'
 import AgentProfile from '../pages/AgentProfile'
 import Dashboard from '../pages/Dashboard'
@@ -57,6 +58,7 @@ export default function AppRouter() {
         <div className="flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/home-test" element={<HomeTest />} />
             <Route path="/agents" element={<AgentResults />} />
             <Route path="/agents/:id" element={<AgentProfile />} />
             <Route path="/profile/create" element={<CreateProfile />} />

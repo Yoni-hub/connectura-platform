@@ -28,11 +28,11 @@ export default function Home() {
           aria-hidden="true"
         />
         <div className="relative z-10 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/40 bg-white/45 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
-            <h2 id="home-overview" className="text-2xl font-semibold">
+          <div className="rounded-2xl border border-slate-200 bg-white/10 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+            <h2 id="home-overview" className="text-2xl font-semibold text-black">
               Insurance shopping is frustrating.
             </h2>
-            <ul className="mt-4 space-y-2 text-sm text-slate-600">
+            <ul className="mt-4 space-y-2 text-sm text-black">
               {[
                 'Same questions again and again.',
                 'Confusing insurance language.',
@@ -40,7 +40,7 @@ export default function Home() {
                 'One change means starting over.',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="mt-0.5 text-[#006aff]">
+                  <span className="mt-0.5 text-black">
                     <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
                       <path
                         d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
@@ -53,16 +53,16 @@ export default function Home() {
               ))}
             </ul>
           </div>
-          <div className="rounded-2xl border border-white/40 bg-white/45 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
-            <h2 className="text-2xl font-semibold">Your Insurance Profile, Always Ready</h2>
-            <ul className="mt-4 space-y-2 text-sm text-slate-600">
+          <div className="rounded-2xl border border-slate-200 bg-white/10 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+            <h2 className="text-2xl font-semibold text-black">Your Insurance Profile, Always Ready</h2>
+            <ul className="mt-4 space-y-2 text-sm text-black">
               {[
                 'Build once, reuse anytime.',
                 'Update as life changes.',
                 'Share instantly with agents.',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="mt-0.5 text-[#006aff]">
+                  <span className="mt-0.5 text-black">
                     <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
                       <path
                         d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
