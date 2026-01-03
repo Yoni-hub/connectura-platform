@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { allOccupations, occupationMap } from '../data/occupationMap'
+import { API_URL } from '../services/api'
 
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
@@ -10,6 +11,7 @@ const linkButton = 'text-sm font-semibold text-[#006aff] hover:underline disable
 const backButton = 'pill-btn-ghost px-5 py-2 text-sm'
 const nextButton = 'pill-btn-primary px-5 py-2 text-sm'
 const miniButton = 'pill-btn-ghost px-3 py-1.5 text-xs'
+const tabButton = 'pill-btn-ghost px-2 py-1 text-sm'
 const defaultSelectPlaceholder = '- Please Select -'
 
 const genderOptions = ['Male', 'Female']
@@ -135,15 +137,15 @@ const namedInsuredFields = [
   { id: 'ni-dob', label: 'Date of Birth', type: 'date' },
   { id: 'ni-gender', label: 'Gender', options: genderOptions },
   { id: 'ni-marital-status', label: 'Marital Status', options: maritalStatusOptions },
+  { id: 'ni-education-level', label: 'Education Level', options: educationLevelOptions },
+  { id: 'ni-employment', label: 'Employment', options: employmentOptions },
+  { id: 'ni-occupation', label: 'Occupation' },
   { id: 'ni-driver-status', label: 'Driver Status', options: driverStatusOptions },
   { id: 'ni-license-type', label: "Driver's License Type", options: driversLicenseTypeOptions },
   { id: 'ni-license-status', label: 'License Status', options: licenseStatusOptions },
   { id: 'ni-years-licensed', label: 'Years Licensed', options: yearsLicensedOptions },
   { id: 'ni-license-state', label: 'License State', options: licenseStateOptions },
   { id: 'ni-license-number', label: 'License Number' },
-  { id: 'ni-employment', label: 'Employment', options: employmentOptions },
-  { id: 'ni-occupation', label: 'Occupation' },
-  { id: 'ni-education-level', label: 'Education Level', options: educationLevelOptions },
   { id: 'ni-accident-prevention', label: 'Accident Prevention Course', options: yesNoOptions },
   { id: 'ni-sr22', label: 'SR-22 Required?', options: yesNoOptions },
   { id: 'ni-fr44', label: 'FR-44 Required?', options: yesNoOptions },
@@ -187,6 +189,78 @@ function FieldRow({ id, label, type = 'text', value, onChange, placeholder, opti
   )
 }
 
+function QuestionAutocomplete({ value, onChange, placeholder }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const query = (value || '').trim()
+    if (query.length < 2) {
+      setSuggestions([])
+      setOpen(false)
+      return undefined
+    }
+    const controller = new AbortController()
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8`,
+          { signal: controller.signal }
+        )
+        if (!res.ok) return
+        const data = await res.json()
+        const results = Array.isArray(data.results) ? data.results : []
+        setSuggestions(results)
+        setOpen(results.length > 0)
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setSuggestions([])
+          setOpen(false)
+        }
+      }
+    }, 200)
+    return () => {
+      clearTimeout(handle)
+      controller.abort()
+    }
+  }, [value])
+
+  const handleSelect = (text) => {
+    onChange(text)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        className={`${inputClass} w-full`}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => {
+          if (suggestions.length) setOpen(true)
+        }}
+        onBlur={() => setOpen(false)}
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.id ?? suggestion.text}
+              type="button"
+              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 whitespace-normal break-words"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleSelect(suggestion.text)}
+            >
+              {suggestion.text}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CreateProfile() {
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
@@ -209,15 +283,18 @@ export default function CreateProfile() {
     state: '',
     zip: '',
   })
+  const createAdditionalQuestion = () => ({ question: '', input: '' })
   const [activeSection, setActiveSection] = useState(null)
   const [householdComplete, setHouseholdComplete] = useState(false)
   const [addressComplete, setAddressComplete] = useState(false)
   const [vehicleComplete, setVehicleComplete] = useState(false)
   const [businessComplete, setBusinessComplete] = useState(false)
+  const [additionalComplete, setAdditionalComplete] = useState(false)
   const [householdEditing, setHouseholdEditing] = useState(false)
   const [addressEditing, setAddressEditing] = useState(false)
   const [vehicleEditing, setVehicleEditing] = useState(false)
   const [businessEditing, setBusinessEditing] = useState(false)
+  const [additionalEditing, setAdditionalEditing] = useState(false)
   const [activeHouseholdIndex, setActiveHouseholdIndex] = useState('primary')
   const [activeAddressIndex, setActiveAddressIndex] = useState('primary')
   const [activeVehicleIndex, setActiveVehicleIndex] = useState('primary')
@@ -240,6 +317,10 @@ export default function CreateProfile() {
   const [additionalBusinesses, setAdditionalBusinesses] = useState([])
   const [newBusiness, setNewBusiness] = useState(createBusiness())
   const [showAddBusinessModal, setShowAddBusinessModal] = useState(false)
+  const [additionalForms, setAdditionalForms] = useState([])
+  const [activeAdditionalFormIndex, setActiveAdditionalFormIndex] = useState(null)
+  const [additionalFormName, setAdditionalFormName] = useState('')
+  const [additionalQuestions, setAdditionalQuestions] = useState([])
 
   const specialEmploymentOccupations = {
     'Student (full-time)': ['Student (full-time)'],
@@ -357,6 +438,58 @@ export default function CreateProfile() {
     setAdditionalBusinesses((prev) => prev.filter((_, idx) => idx !== index))
   }
 
+  const removeAdditionalForm = (index) => {
+    setAdditionalForms((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const addAdditionalQuestion = () => {
+    setAdditionalQuestions((prev) => [...prev, createAdditionalQuestion()])
+  }
+
+  const removeAdditionalQuestion = () => {
+    setAdditionalQuestions((prev) => (prev.length ? prev.slice(0, -1) : prev))
+  }
+
+  const updateAdditionalQuestion = (index, field, value) => {
+    setAdditionalQuestions((prev) => {
+      const next = [...prev]
+      const current = next[index] ?? createAdditionalQuestion()
+      next[index] = { ...current, [field]: value }
+      return next
+    })
+  }
+
+  const saveCustomerQuestions = async (questions) => {
+    const cleaned = questions
+      .map((question) => (question || '').toString().trim())
+      .filter(Boolean)
+    if (!cleaned.length) return
+    try {
+      await fetch(`${API_URL}/questions/customer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questions: cleaned }),
+      })
+    } catch (error) {
+      console.warn('Failed to save customer questions', error)
+    }
+  }
+
+  const editAdditionalForm = (index) => {
+    const form = additionalForms[index] ?? { name: '', questions: [] }
+    setActiveAdditionalFormIndex(index)
+    setAdditionalFormName(form.name ?? '')
+    setAdditionalQuestions(form.questions ?? [])
+    setAdditionalEditing(true)
+  }
+
+  const startNewAdditionalForm = () => {
+    setActiveAdditionalFormIndex(null)
+    setAdditionalFormName('')
+    setAdditionalQuestions([])
+    setAdditionalEditing(true)
+  }
+
   const openSection = (section) => {
     setActiveSection(section)
     setShowAddHouseholdModal(false)
@@ -382,6 +515,9 @@ export default function CreateProfile() {
     if (section === 'business') {
       setActiveBusinessIndex('primary')
       setBusinessEditing(!businessComplete)
+    }
+    if (section === 'additional') {
+      setAdditionalEditing(!additionalComplete)
     }
   }
 
@@ -479,6 +615,9 @@ export default function CreateProfile() {
   const showVehicleSummary = showVehicleSection && vehicleComplete && !vehicleEditing && !showAddVehicleModal
   const showBusinessForm = showBusinessSection && (!businessComplete || businessEditing) && !showAddBusinessModal
   const showBusinessSummary = showBusinessSection && businessComplete && !businessEditing && !showAddBusinessModal
+  const showAdditionalSection = activeSection === 'additional'
+  const showAdditionalForm = showAdditionalSection && (!additionalComplete || additionalEditing)
+  const showAdditionalSummary = showAdditionalSection && additionalComplete && !additionalEditing
   const setActiveAddressContactField = (field, value) => {
     if (activeAddressIndex === 'primary') {
       updateContact(0, (prev) => ({ ...prev, [field]: value }))
@@ -568,58 +707,37 @@ export default function CreateProfile() {
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-800">
           Create your insurance passport
         </div>
-        <nav className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-3">
-            <div className="rounded border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Household Information
-              </div>
-              <button
-                type="button"
-                className={`${miniButton} mt-2 w-full`}
-                onClick={() => openSection('household')}
-              >
-                Add household information
-              </button>
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="rounded border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Address Information
-              </div>
-              <button
-                type="button"
-                className={`${miniButton} mt-2 w-full`}
-                onClick={() => openSection('address')}
-              >
-                Add address information
-              </button>
-            </div>
-          </div>
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Vehicle Information
-            </div>
-            <button type="button" className={`${miniButton} mt-2 w-full`} onClick={() => openSection('vehicle')}>
-              Add vehicle information
-            </button>
-          </div>
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Business Information
-            </div>
-            <button type="button" className={`${miniButton} mt-2 w-full`} onClick={() => openSection('business')}>
-              Add business information
-            </button>
-          </div>
+        <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <button
+            type="button"
+            className={`${tabButton} w-full`}
+            onClick={() => openSection('household')}
+          >
+            Household information
+          </button>
+          <button
+            type="button"
+            className={`${tabButton} w-full`}
+            onClick={() => openSection('address')}
+          >
+            Address information
+          </button>
+          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('vehicle')}>
+            Vehicle information
+          </button>
+          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('business')}>
+            Business information
+          </button>
+          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
+            Additional information
+          </button>
         </nav>
 
         {showHouseholdSection && (
           <>
             {showAddHouseholdModal && (
               <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <form className="w-full max-w-none rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Household Member</div>
                     <div className={gridClass}>
@@ -1689,6 +1807,153 @@ export default function CreateProfile() {
                       }}
                     >
                       Add more business
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
+        {showAdditionalSection && (
+          <>
+            {showAdditionalForm && (
+              <section className="mt-6 flex justify-center">
+                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-slate-900">Additional Information</div>
+                    <div className={gridClass}>
+                      <FieldRow
+                        id="additional-form-name"
+                        label="Give your form a name"
+                        value={additionalFormName}
+                        onChange={(event) => setAdditionalFormName(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      {additionalQuestions.map((question, index) => (
+                        <div
+                          key={`additional-question-${index}`}
+                          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+                        >
+                          <QuestionAutocomplete
+                            value={question.question}
+                            placeholder="Question"
+                            onChange={(value) => updateAdditionalQuestion(index, 'question', value)}
+                          />
+                          <input
+                            className={`${inputClass} w-full`}
+                            placeholder="Input field"
+                            value={question.input}
+                            onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
+                          />
+                        </div>
+                      ))}
+                      <div className="flex flex-wrap gap-3">
+                        <button type="button" className={miniButton} onClick={addAdditionalQuestion}>
+                          Add question
+                        </button>
+                        <button
+                          type="button"
+                          className={miniButton}
+                          onClick={removeAdditionalQuestion}
+                          disabled={!additionalQuestions.length}
+                        >
+                          Remove question
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <button
+                        type="button"
+                        className={miniButton}
+                        onClick={() => {
+                          if (additionalComplete) {
+                            setAdditionalEditing(false)
+                          } else {
+                            setActiveSection(null)
+                          }
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={nextButton}
+                        onClick={async () => {
+                          await saveCustomerQuestions(additionalQuestions.map((question) => question.question))
+                          const nextForm = { name: additionalFormName, questions: additionalQuestions }
+                          if (typeof activeAdditionalFormIndex === 'number') {
+                            setAdditionalForms((prev) => {
+                              const next = [...prev]
+                              next[activeAdditionalFormIndex] = nextForm
+                              return next
+                            })
+                          } else {
+                            setAdditionalForms((prev) => [...prev, nextForm])
+                          }
+                          setActiveAdditionalFormIndex(null)
+                          setAdditionalComplete(true)
+                          setAdditionalEditing(false)
+                        }}
+                      >
+                        Save &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+            )}
+
+            {showAdditionalSummary && (
+              <section className="mt-6">
+                <div className="space-y-4">
+                  {additionalForms.length > 0 ? (
+                    additionalForms.map((form, index) => (
+                      <div
+                        key={`additional-form-${index}`}
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {form.name || `Additional Form ${index + 1}`}
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" className={miniButton} onClick={() => editAdditionalForm(index)}>
+                              Edit
+                            </button>
+                            <button type="button" className={miniButton} onClick={() => removeAdditionalForm(index)}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-3 space-y-3 text-sm text-slate-700">
+                          {(form.questions ?? []).length > 0 ? (
+                            <div className="flex flex-nowrap gap-6 overflow-x-auto pb-1">
+                              {(form.questions ?? []).slice(0, 3).map((question, questionIndex) => (
+                                <div
+                                  key={`additional-summary-${index}-${questionIndex}`}
+                                  className="flex items-center gap-3 text-sm text-slate-700 whitespace-nowrap"
+                                >
+                                  <span className="font-semibold text-slate-900">
+                                    {summaryValue(question.question)}:
+                                  </span>
+                                  <span>{summaryValue(question.input)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-slate-500">No additional questions added.</div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500">No additional forms added.</div>
+                  )}
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <button type="button" className={miniButton} onClick={startNewAdditionalForm}>
+                      Add more forms
                     </button>
                   </div>
                 </div>

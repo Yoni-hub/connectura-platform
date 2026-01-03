@@ -126,3 +126,19 @@ model AuditLog {
   diff       String?
   createdAt  DateTime  @default(now())
 }
+
+enum QuestionSource {
+  SYSTEM
+  CUSTOMER
+}
+
+model QuestionBank {
+  id         Int            @id @default(autoincrement())
+  text       String
+  normalized String         @unique
+  source     QuestionSource @default(SYSTEM)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([source])
+}

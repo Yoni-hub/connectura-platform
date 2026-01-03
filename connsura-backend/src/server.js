@@ -12,7 +12,9 @@ const quoteRoutes = require('./routes/quotes')
 const contactRoutes = require('./routes/contact')
 const adminRoutes = require('./routes/admin')
 const messageRoutes = require('./routes/messages')
+const questionRoutes = require('./routes/questions')
 const prisma = require('./prisma')
+const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -40,6 +42,7 @@ app.use('/', quoteRoutes)
 app.use('/contact', contactRoutes)
 app.use('/admin', adminRoutes)
 app.use('/messages', messageRoutes)
+app.use('/questions', questionRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' })
@@ -70,8 +73,17 @@ async function ensureAdminSeed() {
   console.log(`Seeded admin user at ${email} (please change default password).`)
 }
 
-ensureAdminSeed()
-  .catch((err) => console.error('Admin seed error', err))
+async function ensureQuestionBank() {
+  const count = await prisma.questionBank.count({ where: { source: 'SYSTEM' } })
+  if (count) return
+  const records = buildQuestionRecords(questionBank, 'SYSTEM')
+  if (!records.length) return
+  await prisma.questionBank.createMany({ data: records, skipDuplicates: true })
+  console.log(`Seeded ${records.length} system questions.`)
+}
+
+Promise.all([ensureAdminSeed(), ensureQuestionBank()])
+  .catch((err) => console.error('Startup seed error', err))
   .finally(() => {
     app.listen(PORT, HOST, () => {
       console.log(`Connsura API running on http://${HOST}:${PORT}`)
