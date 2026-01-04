@@ -10,7 +10,7 @@ const links = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-[#dfe7f3] bg-white">
+    <footer className="hidden border-t border-[#dfe7f3] bg-white md:block">
       <div className="page-shell py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-4 text-sm text-slate-700">
           {links.map((link) => (

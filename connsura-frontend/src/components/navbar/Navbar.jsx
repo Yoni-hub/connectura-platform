@@ -56,15 +56,17 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-transparent bg-white/95 backdrop-blur shadow-none">
+      <header className="sticky top-0 z-40 relative border-b border-transparent bg-white/95 backdrop-blur shadow-none">
         <div className="page-shell flex items-center justify-between py-3">
           <Link to="/" className="flex items-center gap-3 font-semibold text-[#0b3b8c]">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e7f0ff] text-lg font-bold text-[#006aff] shadow-[0_8px_20px_rgba(0,42,92,0.1)]">
-              C
-            </span>
+            <img
+              src="/your-logo.png"
+              alt="Connsura"
+              className="h-10 w-10 rounded-xl object-cover scale-[1.1] shadow-[0_8px_20px_rgba(0,42,92,0.12)]"
+            />
             <div className="leading-tight">
               <div className="text-base font-bold">Connsura</div>
-              <div className="text-xs text-slate-500">Insurance matchmaking</div>
+              <div className="text-xs text-slate-500">Insurance Passport</div>
             </div>
           </Link>
 
@@ -113,7 +115,7 @@ export default function Navbar() {
         </div>
 
         {menuOpen && (
-          <div className="md:hidden border-t border-[#dfe7f3] bg-white/95 backdrop-blur shadow-[0_16px_34px_rgba(0,42,92,0.08)]">
+          <div className="md:hidden absolute left-0 right-0 top-full border-t border-[#dfe7f3] bg-white/95 backdrop-blur shadow-[0_16px_34px_rgba(0,42,92,0.08)]">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
               <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                 Find agents
