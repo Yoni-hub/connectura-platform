@@ -50,14 +50,6 @@
     @apply surface;
   }
 
-  .bg-3d {
-    background-image: url('/background.png');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-  }
-
-
   .pill-btn {
     @apply rounded-md px-5 py-2.5 text-sm font-semibold transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed;
   }

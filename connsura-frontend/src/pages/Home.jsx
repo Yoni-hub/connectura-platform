@@ -11,73 +11,6 @@ export default function Home() {
     <main className="space-y-0 bg-white">
       <Hero />
 
-      <section className="space-y-4 px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="search-agents">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div id="search-agents">
-            <h2 className="text-2xl font-semibold">Search agents</h2>
-            <p className="text-sm text-slate-600">Filter by state, language, or name to start a conversation.</p>
-          </div>
-          <Badge label="Live filters" tone="blue" />
-        </div>
-        <SearchBar busy={loading} onSearch={fetchAgents} agents={agents} variant="minimal" />
-      </section>
-
-      <section className="relative overflow-hidden px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-overview">
-        <div
-          className="pointer-events-none absolute inset-0 z-0 bg-3d"
-          aria-hidden="true"
-        />
-        <div className="relative z-10 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white/10 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-            <h2 id="home-overview" className="text-2xl font-semibold text-black">
-              Insurance shopping is frustrating.
-            </h2>
-            <ul className="mt-4 space-y-2 text-sm text-black">
-              {[
-                'Same questions again and again.',
-                'Confusing insurance language.',
-                'Every agent needs the same info.',
-                'One change means starting over.',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <span className="mt-0.5 text-black">
-                    <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
-                      <path
-                        d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white/10 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-            <h2 className="text-2xl font-semibold text-black">Your Insurance Profile, Always Ready</h2>
-            <ul className="mt-4 space-y-2 text-sm text-black">
-              {[
-                'Build once, reuse anytime.',
-                'Update as life changes.',
-                'Share instantly with agents.',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <span className="mt-0.5 text-black">
-                    <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
-                      <path
-                        d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
       <section className="px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-how-it-works">
         <div className="space-y-6">
           <div className="flex items-center gap-4">
@@ -139,35 +72,83 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-1/4 z-0 h-1/2 bg-3d"
-          aria-hidden="true"
-        />
-        <div className="relative z-10 grid gap-6 lg:grid-cols-2 lg:items-center">
-          <div className="flex items-center justify-center lg:justify-start">
-            <img
-              src="/hero-insurance-right.png"
-              alt=""
-              aria-hidden="true"
-              className="h-full w-full max-h-[320px] object-contain sm:max-h-[420px]"
-              loading="lazy"
-            />
+      <section className="relative overflow-hidden bg-[#0b3b8c] px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-overview">
+        <div className="relative z-10 grid gap-8 text-center lg:grid-cols-[1fr_auto_1fr] lg:items-start">
+          <div className="space-y-4 text-white">
+            <h2 id="home-overview" className="text-2xl font-semibold text-white">
+              Insurance shopping is frustrating.
+            </h2>
+            <ul className="mx-auto inline-flex flex-col items-start gap-2 text-sm text-white/90 text-left">
+              {[
+                'Same questions again and again.',
+                'Confusing insurance language.',
+                'Every agent needs the same info.',
+                'One change means starting over.',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-0.5 text-white">
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="space-y-4 lg:pl-10 xl:pl-16">
-            <div className="-mt-4 rounded-2xl border border-white/60 bg-white/70 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm">
-              <h2 id="home-trust" className="text-2xl font-semibold">
+          <div className="hidden h-full w-px bg-white/30 lg:block" aria-hidden="true" />
+          <div className="space-y-4 text-white">
+            <h2 className="text-2xl font-semibold text-white">Your Insurance Profile, Always Ready</h2>
+            <ul className="mx-auto inline-flex flex-col items-start gap-2 text-sm text-white/90 text-left">
+              {[
+                'Build once, reuse anytime.',
+                'Update as life changes.',
+                'Share instantly with agents.',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-0.5 text-white">
+                    <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M7.5 13.5 3.5 9.6l1.4-1.4 2.6 2.6 7.1-7.1 1.4 1.4-8.5 8.4Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4 px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="search-agents">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div id="search-agents">
+            <h2 className="text-2xl font-semibold">Search agents</h2>
+            <p className="text-sm text-slate-600">Filter by state, language, or name to start a conversation.</p>
+          </div>
+          <Badge label="Live filters" tone="blue" />
+        </div>
+        <SearchBar busy={loading} onSearch={fetchAgents} agents={agents} variant="minimal" />
+      </section>
+
+      <section className="relative overflow-hidden bg-[#0b3b8c] px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">
+        <div className="relative z-10 flex justify-center">
+          <div className="max-w-2xl space-y-4 text-center text-white">
+            <div className="space-y-2">
+              <h2 id="home-trust" className="text-2xl font-semibold text-white">
                 We don't sell insurance.
               </h2>
-              <p className="text-sm text-slate-600">We help you create and share your insurance profile.</p>
-              <p className="text-sm text-slate-600">Quotes and policies are handled by independent agents.</p>
+              <p className="text-sm text-white/90">We help you create and share your insurance profile.</p>
+              <p className="text-sm text-white/90">Quotes and policies are handled by independent agents.</p>
             </div>
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Link className="pill-btn-primary px-6 py-3" to="/profile/create">
                 Create Your Insurance Profile
-              </Link>
-              <Link className="pill-btn-ghost px-6 py-3" to="/agents">
-                Find an Agent Who Speaks Your Language
               </Link>
             </div>
           </div>

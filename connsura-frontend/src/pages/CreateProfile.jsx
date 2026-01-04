@@ -616,6 +616,7 @@ export default function CreateProfile() {
   const showBusinessForm = showBusinessSection && (!businessComplete || businessEditing) && !showAddBusinessModal
   const showBusinessSummary = showBusinessSection && businessComplete && !businessEditing && !showAddBusinessModal
   const showAdditionalSection = activeSection === 'additional'
+  const showSummarySection = activeSection === 'summary'
   const showAdditionalForm = showAdditionalSection && (!additionalComplete || additionalEditing)
   const showAdditionalSummary = showAdditionalSection && additionalComplete && !additionalEditing
   const setActiveAddressContactField = (field, value) => {
@@ -707,7 +708,7 @@ export default function CreateProfile() {
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-800">
           Create your insurance passport
         </div>
-        <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           <button
             type="button"
             className={`${tabButton} w-full`}
@@ -722,14 +723,11 @@ export default function CreateProfile() {
           >
             Address information
           </button>
-          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('vehicle')}>
-            Vehicle information
-          </button>
-          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('business')}>
-            Business information
-          </button>
           <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
             Additional information
+          </button>
+          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('summary')}>
+            Summary
           </button>
         </nav>
 
@@ -1337,9 +1335,7 @@ export default function CreateProfile() {
                       type="button"
                       className={nextButton}
                       onClick={() => {
-                        setActiveSection('vehicle')
-                        setActiveVehicleIndex('primary')
-                        setVehicleEditing(!vehicleComplete)
+                        openSection('additional')
                       }}
                     >
                       Continue
@@ -1955,11 +1951,110 @@ export default function CreateProfile() {
                     <button type="button" className={miniButton} onClick={startNewAdditionalForm}>
                       Add more forms
                     </button>
+                    <button type="button" className={nextButton} onClick={() => openSection('summary')}>
+                      Continue
+                    </button>
                   </div>
                 </div>
               </section>
             )}
           </>
+        )}
+
+        {showSummarySection && (
+          <section className="mt-6">
+            <div className="space-y-4">
+              <div className="text-sm font-semibold text-slate-900">Summary</div>
+
+              <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">Household information</div>
+                  <button type="button" className={miniButton} onClick={() => openSection('household')}>
+                    Edit
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                  <div>
+                    <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(primaryFullName)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(namedInsured.dob)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(namedInsured.gender)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">License Number:</span>{' '}
+                    {summaryValue(namedInsured['license-number'])}
+                  </div>
+                </div>
+                {additionalHouseholds.length ? (
+                  <div className="mt-3 text-sm text-slate-700">
+                    <span className="font-semibold text-slate-900">Additional members:</span>{' '}
+                    {additionalHouseholds
+                      .map((person) => buildFullName(person))
+                      .filter(Boolean)
+                      .join(', ') || '-'}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">No additional household members.</div>
+                )}
+              </div>
+
+              <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">Address information</div>
+                  <button type="button" className={miniButton} onClick={() => openSection('address')}>
+                    Edit
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                  <div>
+                    <span className="font-semibold text-slate-900">Phone #1:</span> {summaryValue(primaryContact.phone1)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
+                    {summaryValue(primaryContact.email1)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                    {summaryValue(residential.address1)}
+                  </div>
+                </div>
+                {additionalAddresses.length ? (
+                  <div className="mt-3 text-sm text-slate-700">
+                    <span className="font-semibold text-slate-900">Additional addresses:</span>{' '}
+                    {additionalAddresses.length}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">No additional addresses.</div>
+                )}
+              </div>
+
+              <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">Additional information</div>
+                  <button type="button" className={miniButton} onClick={() => openSection('additional')}>
+                    Edit
+                  </button>
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  {additionalForms.length ? (
+                    additionalForms.map((form, index) => (
+                      <div key={`summary-form-${index}`} className="flex flex-wrap gap-2">
+                        <span className="font-semibold text-slate-900">
+                          {form.name || `Form ${index + 1}`}:
+                        </span>
+                        <span>{(form.questions ?? []).length} question(s)</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500">No additional forms added.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
         )}
       </div>
     </main>

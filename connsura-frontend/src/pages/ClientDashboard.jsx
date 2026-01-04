@@ -8,6 +8,7 @@ import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import AgentCard from '../components/agents/AgentCard'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
+import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
@@ -418,16 +419,16 @@ export default function ClientDashboard() {
   const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
 
   return (
-    <main className="page-shell py-8">
+    <main className="page-shell py-8 pb-28 lg:pb-8">
       <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
-        <aside className="surface p-4 lg:p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Connsura</div>
-          <div className="space-y-1">
+        <aside className="surface fixed bottom-0 left-0 right-0 z-30 rounded-none border-t border-slate-200 border-x-0 border-b-0 bg-white/95 backdrop-blur px-3 py-2 lg:static lg:rounded-2xl lg:border lg:border-transparent lg:bg-white/80 lg:backdrop-blur-0 lg:p-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 hidden lg:block">Connsura</div>
+          <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
             {navItems.map((item) => (
               <button
                 key={item}
                 onClick={() => setActiveTab(item)}
-                className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
+                className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left ${
                   activeTab === item ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
@@ -678,35 +679,7 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {!loading && activeTab === 'Forms' && (
-            <div className="surface p-5 space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold">Forms</h2>
-                  <p className="text-slate-600">
-                    Complete your insurance profile once and securely share it with licensed agents.
-                  </p>
-                </div>
-                <button type="button" className="pill-btn-primary px-5" onClick={() => nav('/client_forms')}>
-                  Open forms workspace
-                </button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-1">
-                  <div className="text-sm font-semibold text-slate-700">Start or continue</div>
-                  <div className="text-sm text-slate-600">
-                    Choose any line—auto, home, business—and complete the steps at your pace.
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-1">
-                  <div className="text-sm font-semibold text-slate-700">Share with agents</div>
-                  <div className="text-sm text-slate-600">
-                    Keep your details in one place and share them only with matched, licensed agents.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {!loading && activeTab === 'Forms' && <CreateProfile />}
 
           {!loading && activeTab === 'Agents' && (
             <div className="surface p-5">
@@ -980,3 +953,4 @@ export default function ClientDashboard() {
     </main>
   )
 }
+
