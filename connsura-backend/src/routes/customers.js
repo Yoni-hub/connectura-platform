@@ -152,6 +152,9 @@ router.put('/:id/profile', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' })
   }
   const { sharedWithAgent, preferredAgentId } = req.body
+  if (req.user.role === 'CUSTOMER' && sharedWithAgent === true && !req.user.emailVerified) {
+    return res.status(403).json({ error: 'Email not verified' })
+  }
   const updated = await prisma.customer.update({
     where: { id: customerId },
     data: {

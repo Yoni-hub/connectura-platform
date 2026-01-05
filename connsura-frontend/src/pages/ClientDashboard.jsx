@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { useAgents } from '../context/AgentContext'
@@ -11,6 +11,14 @@ import MessageAgentModal from '../components/modals/MessageAgentModal'
 import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
+
+const resolveTabFromSearch = (search = '') => {
+  const params = new URLSearchParams(search)
+  const value = params.get('tab')
+  if (!value) return 'Overview'
+  const match = navItems.find((item) => item.toLowerCase() === value.toLowerCase())
+  return match || 'Overview'
+}
 
 const parseFullName = (fullName = '') => {
   const parts = fullName.trim().split(' ').filter(Boolean)
@@ -51,10 +59,11 @@ const resolvePhotoUrl = (value = '') => {
 }
 
 export default function ClientDashboard() {
-  const { user, lastPassword, setLastPassword, logout } = useAuth()
+  const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
   const { getAgent } = useAgents()
   const nav = useNavigate()
-  const [activeTab, setActiveTab] = useState('Overview')
+  const location = useLocation()
+  const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [client, setClient] = useState(null)
@@ -76,6 +85,10 @@ export default function ClientDashboard() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationSent, setVerificationSent] = useState(false)
+  const [verificationSending, setVerificationSending] = useState(false)
+  const [verificationVerifying, setVerificationVerifying] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
@@ -89,6 +102,11 @@ export default function ClientDashboard() {
     preferredLangs: '',
     notes: '',
   })
+
+  useEffect(() => {
+    const nextTab = resolveTabFromSearch(location.search)
+    setActiveTab(nextTab)
+  }, [location.search])
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -263,15 +281,10 @@ export default function ClientDashboard() {
     setPhotoPreview(URL.createObjectURL(file))
   }
 
-  const initials = useMemo(() => {
-    if (form.firstName || form.lastName) {
-      return `${form.firstName?.[0] || ''}${form.lastName?.[0] || ''}`.toUpperCase() || 'CL'
-    }
-    if (user?.email) return user.email[0]?.toUpperCase() ?? 'CL'
-    return 'CL'
-  }, [form.firstName, form.lastName, user?.email])
-
-  const displayName = form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : user?.email || 'client'
+  const isEmailVerified = user?.emailVerified === true
+  const needsEmailVerification = Boolean(user) && !isEmailVerified
+  const displayName = client?.name || user?.name || user?.email || 'client'
+  const initials = useMemo(() => getInitials(displayName, 'CL'), [displayName])
   const profileDetails = client?.profileData || {}
   const rawAddress = profileDetails.address
   const addressLine =
@@ -303,6 +316,53 @@ export default function ClientDashboard() {
       : parseLangs(formatLangs(profileDetails.preferredLangs || ''))
   const previewLangs = preferredLangsList.length ? preferredLangsList.join(', ') : '-'
   const previewNotes = form.notes || profileDetails.notes || profileDetails.claimsHistory || '-'
+
+  const requestEmailVerification = async () => {
+    if (!user?.email) {
+      toast.error('Email not available for verification')
+      return
+    }
+    setVerificationSending(true)
+    try {
+      const res = await api.post('/auth/email-otp/request')
+      if (res.data?.verified) {
+        setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+        toast.success('Email already verified')
+        return
+      }
+      const delivery = res.data?.delivery
+      setVerificationSent(true)
+      toast.success(delivery === 'log' ? 'Verification code generated. Check the server logs.' : 'Verification code sent.')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not send verification code')
+    } finally {
+      setVerificationSending(false)
+    }
+  }
+
+  const confirmEmailVerification = async () => {
+    const code = verificationCode.trim()
+    if (!code) {
+      toast.error('Enter the verification code.')
+      return
+    }
+    setVerificationVerifying(true)
+    try {
+      const res = await api.post('/auth/email-otp/confirm', { code })
+      if (res.data?.user) {
+        setUser(res.data.user)
+      } else {
+        setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+      }
+      setVerificationSent(false)
+      setVerificationCode('')
+      toast.success('Email verified')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Verification failed')
+    } finally {
+      setVerificationVerifying(false)
+    }
+  }
 
   const resetProfileForm = () => {
     if (client) {
@@ -443,10 +503,58 @@ export default function ClientDashboard() {
             <div>
               <h1 className="text-2xl font-semibold">Connsura Client Dashboard</h1>
               <p className="text-slate-500">
-                Welcome back{displayName ? `, ${displayName}` : ''}. Track your policies and appointments.
+                Welcome back{displayName ? `, ${displayName}` : ''}. Manage your profile.
+                {needsEmailVerification && (
+                  <span className="ml-3 text-amber-600">
+                    Email not verified. Verify your email to share your profile.
+                    <button
+                      type="button"
+                      className="ml-2 font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline"
+                      onClick={requestEmailVerification}
+                      disabled={verificationSending}
+                    >
+                      {verificationSent ? 'Resend code' : 'Verify email'}
+                    </button>
+                  </span>
+                )}
               </p>
+              {needsEmailVerification && verificationSent && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                  <span>Enter verification code:</span>
+                  <input
+                    className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value)}
+                    inputMode="numeric"
+                  />
+                  <button
+                    type="button"
+                    className="pill-btn-primary px-4 py-1.5 text-sm"
+                    onClick={confirmEmailVerification}
+                    disabled={verificationVerifying}
+                  >
+                    {verificationVerifying ? 'Verifying...' : 'Confirm'}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className={`pill-btn-primary px-4 ${
+                  isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
+                }`}
+                onClick={() => {
+                  if (!isEmailVerified) {
+                    toast.error('Verify your email to share your profile')
+                    return
+                  }
+                  nav('/agents')
+                }}
+                disabled={!isEmailVerified}
+              >
+                Share
+              </button>
               <button
                 type="button"
                 className="pill-btn-ghost px-4"
@@ -457,13 +565,6 @@ export default function ClientDashboard() {
               >
                 Log out
               </button>
-              <div className="grid h-12 w-12 place-items-center rounded-full bg-[#006aff]/12 text-[#0b3b8c] font-bold overflow-hidden">
-                {previewPhoto ? (
-                  <img src={previewPhoto} alt={previewName} className="h-full w-full object-cover" />
-                ) : (
-                  initials
-                )}
-              </div>
             </div>
           </div>
 

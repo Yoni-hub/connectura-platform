@@ -2,14 +2,30 @@ import Hero from '../components/hero/Hero'
 import SearchBar from '../components/search/SearchBar'
 import Badge from '../components/ui/Badge'
 import { useAgents } from '../context/AgentContext'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Home() {
   const { agents, loading, fetchAgents } = useAgents()
+  const { user } = useAuth()
+  const nav = useNavigate()
+
+  const handleCreateProfile = () => {
+    if (user?.role === 'CUSTOMER') {
+      nav('/client/dashboard?tab=forms')
+      return
+    }
+    if (user?.role === 'AGENT') {
+      nav('/agent/dashboard')
+      return
+    }
+    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
+    window.dispatchEvent(new Event('open-customer-auth-signup'))
+  }
 
   return (
     <main className="space-y-0 bg-white">
-      <Hero />
+      <Hero onCreateProfile={handleCreateProfile} />
 
       <section className="px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-how-it-works">
         <div className="space-y-6">
@@ -147,9 +163,9 @@ export default function Home() {
               <p className="text-sm text-white/90">Quotes and policies are handled by independent agents.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <Link className="pill-btn-primary px-6 py-3" to="/profile/create">
+              <button type="button" className="pill-btn-primary px-6 py-3" onClick={handleCreateProfile}>
                 Create Your Insurance Profile
-              </Link>
+              </button>
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
   name: user.customer?.name || user.agent?.name || '',
   role: user.role,
+  emailVerified: Boolean(user.emailVerified),
   agentId: user.agent?.id,
   customerId: user.customer?.id,
   agentStatus: user.agent?.status,
@@ -122,6 +123,48 @@ router.post('/email-otp/verify', (req, res) => {
     return res.status(400).json({ error: result.error || 'Invalid code' })
   }
   return res.json({ verified: true })
+})
+
+router.post('/email-otp/request', authGuard, async (req, res) => {
+  const email = String(req.user?.email || '').trim().toLowerCase()
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' })
+  }
+  if (req.user.emailVerified) {
+    return res.json({ verified: true, user: sanitizeUser(req.user) })
+  }
+  try {
+    const result = await sendEmailOtp(email)
+    return res.json({ sent: true, delivery: result.delivery })
+  } catch (err) {
+    console.error('email otp request error', err)
+    return res.status(500).json({ error: 'Failed to send verification code' })
+  }
+})
+
+router.post('/email-otp/confirm', authGuard, async (req, res) => {
+  if (req.user.emailVerified) {
+    return res.json({ verified: true, user: sanitizeUser(req.user) })
+  }
+  const code = String(req.body?.code || '').trim()
+  if (!code) {
+    return res.status(400).json({ error: 'Verification code is required' })
+  }
+  const result = verifyEmailOtp(req.user.email, code)
+  if (!result.valid) {
+    return res.status(400).json({ error: result.error || 'Invalid code' })
+  }
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { emailVerified: true },
+      include: { agent: true, customer: true },
+    })
+    return res.json({ verified: true, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('email otp confirm error', err)
+    return res.status(500).json({ error: 'Failed to verify email' })
+  }
 })
 
 router.post('/login', async (req, res) => {

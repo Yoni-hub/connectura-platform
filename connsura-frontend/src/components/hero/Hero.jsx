@@ -1,6 +1,4 @@
-import { Link } from 'react-router-dom'
-
-export default function Hero() {
+export default function Hero({ onCreateProfile }) {
   return (
     <section className="relative overflow-hidden bg-[#0b3b8c] px-4 pt-8 sm:px-8 lg:px-16">
       <div className="relative z-10 grid gap-6">
@@ -18,9 +16,13 @@ export default function Hero() {
             </p>
 
             <div className="flex flex-wrap justify-center gap-3 pt-1">
-              <Link className="pill-btn-primary px-6 py-3 text-sm sm:text-base" to="/profile/create">
+              <button
+                type="button"
+                className="pill-btn-primary px-6 py-3 text-sm sm:text-base"
+                onClick={onCreateProfile}
+              >
                 Create Your Insurance Profile
-              </Link>
+              </button>
               <button
                 type="button"
                 className="pill-btn-ghost px-6 py-3 text-sm sm:text-base"

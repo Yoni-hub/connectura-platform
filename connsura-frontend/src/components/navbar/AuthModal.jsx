@@ -15,6 +15,16 @@ const createEmptyForm = () => ({
   address: '',
 })
 
+const POST_AUTH_REDIRECT_KEY = 'connsura_post_auth_redirect'
+
+const consumePostAuthRedirect = () => {
+  const redirect = sessionStorage.getItem(POST_AUTH_REDIRECT_KEY)
+  if (redirect) {
+    sessionStorage.removeItem(POST_AUTH_REDIRECT_KEY)
+  }
+  return redirect || ''
+}
+
 export default function AuthModal({ open, onClose, intent = 'agent', startMode = 'login' }) {
   const { login, register, loading } = useAuth()
   const nav = useNavigate()
@@ -53,6 +63,7 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
       const user = await login(form.email, form.password)
       if (user) {
         handleClose()
+        const redirectTarget = consumePostAuthRedirect()
         if (user.role === 'AGENT') {
           const pendingFlag = localStorage.getItem('connsura_agent_onboarding_pending') === 'true'
           const pendingStatus = user.agentStatus && user.agentStatus !== 'approved'
@@ -63,7 +74,7 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
             nav('/agent/dashboard', { replace: true })
           }
         } else {
-          nav('/client/dashboard', { replace: true })
+          nav(redirectTarget || '/client/dashboard', { replace: true })
         }
       }
       return
@@ -103,10 +114,11 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
     const user = await register(payload)
     if (user) {
       handleClose()
+      const redirectTarget = consumePostAuthRedirect()
       if (user.role === 'AGENT') {
         nav('/agent/onboarding', { replace: true })
       } else {
-        nav('/client/dashboard', { replace: true })
+        nav(redirectTarget || '/client/dashboard', { replace: true })
       }
     }
   }

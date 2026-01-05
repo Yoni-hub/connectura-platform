@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { allOccupations, occupationMap } from '../data/occupationMap'
+import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
 
 const labelClass = 'text-sm text-slate-900'
@@ -128,6 +129,7 @@ const educationLevelOptions = [
 const yesNoOptions = ['No', 'Yes']
 const relationToApplicantOptions = ['Named Insured', 'Spouse', 'Child', 'Parent', 'Dependent', 'Other']
 const businessTypeOptions = ['Sole Proprietor', 'Partnership', 'LLC', 'Corporation', 'Nonprofit', 'Other']
+const defaultApplicantRelation = 'Named Insured'
 
 const namedInsuredFields = [
   { id: 'ni-first-name', label: 'First Name' },
@@ -261,7 +263,22 @@ function QuestionAutocomplete({ value, onChange, placeholder }) {
   )
 }
 
+const parseSignupName = (fullName = '') => {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) {
+    return { firstName: '', middleInitial: '', lastName: '' }
+  }
+  if (parts.length === 1) {
+    return { firstName: parts[0], middleInitial: '', lastName: '' }
+  }
+  const firstName = parts[0]
+  const lastName = parts[parts.length - 1]
+  const middleInitial = parts.length > 2 ? parts[1][0] : ''
+  return { firstName, middleInitial, lastName }
+}
+
 export default function CreateProfile() {
+  const { user } = useAuth()
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createVehicle = () => ({ year: '', make: '', model: '', vin: '', primaryUse: '' })
@@ -299,7 +316,11 @@ export default function CreateProfile() {
   const [activeAddressIndex, setActiveAddressIndex] = useState('primary')
   const [activeVehicleIndex, setActiveVehicleIndex] = useState('primary')
   const [activeBusinessIndex, setActiveBusinessIndex] = useState('primary')
-  const [namedInsured, setNamedInsured] = useState({ relation: '', employment: '', occupation: '' })
+  const [namedInsured, setNamedInsured] = useState({
+    relation: defaultApplicantRelation,
+    employment: '',
+    occupation: '',
+  })
   const [additionalHouseholds, setAdditionalHouseholds] = useState([])
   const [newHousehold, setNewHousehold] = useState(createHouseholdMember())
   const [showAddHouseholdModal, setShowAddHouseholdModal] = useState(false)
@@ -321,6 +342,44 @@ export default function CreateProfile() {
   const [activeAdditionalFormIndex, setActiveAdditionalFormIndex] = useState(null)
   const [additionalFormName, setAdditionalFormName] = useState('')
   const [additionalQuestions, setAdditionalQuestions] = useState([])
+  const prefillKeyRef = useRef('')
+
+  useEffect(() => {
+    const identity = user?.email || user?.name
+    if (!identity || prefillKeyRef.current === identity) return
+    prefillKeyRef.current = identity
+    const { firstName, middleInitial, lastName } = parseSignupName(user?.name || '')
+    setNamedInsured((prev) => {
+      let changed = false
+      const next = { ...prev }
+      if (!next.relation) {
+        next.relation = defaultApplicantRelation
+        changed = true
+      }
+      if (firstName && !next['first-name']) {
+        next['first-name'] = firstName
+        changed = true
+      }
+      if (middleInitial && !next['middle-initial']) {
+        next['middle-initial'] = middleInitial
+        changed = true
+      }
+      if (lastName && !next['last-name']) {
+        next['last-name'] = lastName
+        changed = true
+      }
+      return changed ? next : prev
+    })
+    if (user?.email) {
+      setContacts((prev) => {
+        const primary = prev[0] ?? createContact()
+        if (primary.email1) return prev
+        const next = [...prev]
+        next[0] = { ...primary, email1: user.email }
+        return next
+      })
+    }
+  }, [user?.email, user?.name])
 
   const specialEmploymentOccupations = {
     'Student (full-time)': ['Student (full-time)'],

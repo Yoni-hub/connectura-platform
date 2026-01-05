@@ -39,6 +39,14 @@ export default function AgentProfile() {
 
   const handleShare = () => {
     if (!user) return toast.error('Login to share profile')
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can share profiles')
+      return
+    }
+    if (!user.emailVerified) {
+      toast.error('Verify your email to share your profile')
+      return
+    }
     shareWithAgent(agent.id)
   }
 

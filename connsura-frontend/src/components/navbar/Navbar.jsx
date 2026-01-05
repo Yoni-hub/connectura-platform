@@ -10,6 +10,13 @@ export default function Navbar() {
   const [authStartMode, setAuthStartMode] = useState('login')
   const { user } = useAuth()
 
+  const handleCreateProfileClick = () => {
+    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
+    setAuthIntent('customer')
+    setAuthStartMode('create')
+    setAuthOpen(true)
+  }
+
   useEffect(() => {
     const openCustomer = () => {
       setAuthIntent('customer')
@@ -89,8 +96,8 @@ export default function Navbar() {
                 {user?.name || user?.email || 'Client'}
               </Link>
             ) : (
-              <button type="button" onClick={() => triggerAuth('customer')} className="text-slate-700 hover:text-[#0b3b8c]">
-                Build your insurance profile
+              <button type="button" onClick={handleCreateProfileClick} className="text-slate-700 hover:text-[#0b3b8c]">
+                Create your insurance profile
               </button>
             )}
             {user?.role === 'AGENT' ? (
@@ -133,11 +140,11 @@ export default function Navbar() {
                   type="button"
                   className="text-left text-slate-700 hover:text-[#0b3b8c]"
                   onClick={() => {
-                    triggerAuth('customer')
+                    handleCreateProfileClick()
                     setMenuOpen(false)
                   }}
                 >
-                  Build your insurance profile
+                  Create your insurance profile
                 </button>
               )}
               {user?.role === 'AGENT' ? (
