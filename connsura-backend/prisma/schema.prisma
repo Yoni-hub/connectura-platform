@@ -47,6 +47,7 @@ model Agent {
   updatedAt    DateTime   @updatedAt
   customers    Customer[] @relation("AgentCustomers")
   messages     Message[]  @relation("AgentMessages")
+  shares       ProfileShare[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -68,8 +69,32 @@ model Customer {
   vehicles         Vehicle[]
   profileData      String    @default("{}")
   messages         Message[] @relation("CustomerMessages")
+  shares           ProfileShare[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfileShare {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  codeHash  String
+  sections  String   @default("{}")
+  snapshot  String   @default("{}")
+  editable  Boolean  @default(false)
+  status    String   @default("active")
+  pendingEdits  String   @default("{}")
+  pendingStatus String  @default("none")
+  pendingAt DateTime?
+  recipientName String?
+  recipientNameNormalized String?
+  lastAccessedAt DateTime?
+  customerId Int
+  agentId   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  agent    Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
 }
 
 model Message {

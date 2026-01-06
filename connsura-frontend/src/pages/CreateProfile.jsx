@@ -263,6 +263,17 @@ function QuestionAutocomplete({ value, onChange, placeholder }) {
   )
 }
 
+const hasNonEmptyValue = (value) => {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (Array.isArray(value)) return value.some(hasNonEmptyValue)
+  if (typeof value === 'object') return Object.values(value).some(hasNonEmptyValue)
+  return true
+}
+
+const hasNamedInsuredData = (person) =>
+  Object.entries(person || {}).some(([key, value]) => key !== 'relation' && hasNonEmptyValue(value))
+
 const parseSignupName = (fullName = '') => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean)
   if (!parts.length) {
@@ -277,7 +288,7 @@ const parseSignupName = (fullName = '') => {
   return { firstName, middleInitial, lastName }
 }
 
-export default function CreateProfile() {
+export default function CreateProfile({ onShareSnapshotChange, onFormDataChange, initialData, allowedSections }) {
   const { user } = useAuth()
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
@@ -342,9 +353,53 @@ export default function CreateProfile() {
   const [activeAdditionalFormIndex, setActiveAdditionalFormIndex] = useState(null)
   const [additionalFormName, setAdditionalFormName] = useState('')
   const [additionalQuestions, setAdditionalQuestions] = useState([])
+  const [hydrated, setHydrated] = useState(false)
   const prefillKeyRef = useRef('')
+  const initialDataRef = useRef(false)
+  const hasHouseholdData =
+    hasNamedInsuredData(namedInsured) || additionalHouseholds.some((person) => hasNonEmptyValue(person))
+  const hasAddressData = hasNonEmptyValue({
+    contacts,
+    residential,
+    mailing,
+    additionalAddresses,
+  })
+  const hasVehicleData = hasNonEmptyValue({ primaryVehicle, additionalVehicles })
+  const hasBusinessData = hasNonEmptyValue({ primaryBusiness, additionalBusinesses })
+  const hasAdditionalData = additionalForms.length > 0
 
   useEffect(() => {
+    if (!initialData || initialDataRef.current) return
+    const household = initialData.household || {}
+    const address = initialData.address || {}
+    const vehicle = initialData.vehicle || {}
+    const business = initialData.business || {}
+    const additional = initialData.additional || {}
+    setNamedInsured((prev) => ({
+      ...prev,
+      ...(household.namedInsured || {}),
+      relation: household.namedInsured?.relation || prev.relation || defaultApplicantRelation,
+    }))
+    setAdditionalHouseholds(Array.isArray(household.additionalHouseholds) ? household.additionalHouseholds : [])
+    setContacts(Array.isArray(address.contacts) && address.contacts.length ? address.contacts : [createContact()])
+    setResidential(address.residential || { address1: '', city: '', state: '', zip: '' })
+    setMailing(address.mailing || { address1: '', city: '', state: '', zip: '' })
+    setAdditionalAddresses(Array.isArray(address.additionalAddresses) ? address.additionalAddresses : [])
+    setPrimaryVehicle(vehicle.primaryVehicle || createVehicle())
+    setAdditionalVehicles(Array.isArray(vehicle.additionalVehicles) ? vehicle.additionalVehicles : [])
+    setPrimaryBusiness(business.primaryBusiness || createBusiness())
+    setAdditionalBusinesses(Array.isArray(business.additionalBusinesses) ? business.additionalBusinesses : [])
+    setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
+    initialDataRef.current = true
+    setHydrated(true)
+  }, [initialData])
+
+  useEffect(() => {
+    if (!initialData) setHydrated(true)
+  }, [initialData])
+
+  useEffect(() => {
+    if (initialDataRef.current) return
     const identity = user?.email || user?.name
     if (!identity || prefillKeyRef.current === identity) return
     prefillKeyRef.current = identity
@@ -380,6 +435,25 @@ export default function CreateProfile() {
       })
     }
   }, [user?.email, user?.name])
+
+  useEffect(() => {
+    if (hasHouseholdData && !householdComplete) setHouseholdComplete(true)
+    if (hasAddressData && !addressComplete) setAddressComplete(true)
+    if (hasVehicleData && !vehicleComplete) setVehicleComplete(true)
+    if (hasBusinessData && !businessComplete) setBusinessComplete(true)
+    if (hasAdditionalData && !additionalComplete) setAdditionalComplete(true)
+  }, [
+    hasHouseholdData,
+    hasAddressData,
+    hasVehicleData,
+    hasBusinessData,
+    hasAdditionalData,
+    householdComplete,
+    addressComplete,
+    vehicleComplete,
+    businessComplete,
+    additionalComplete,
+  ])
 
   const specialEmploymentOccupations = {
     'Student (full-time)': ['Student (full-time)'],
@@ -549,7 +623,14 @@ export default function CreateProfile() {
     setAdditionalEditing(true)
   }
 
+  const isSectionAllowed = (section) => {
+    if (!allowedSections) return true
+    if (allowedSections[section] === undefined) return true
+    return Boolean(allowedSections[section])
+  }
+
   const openSection = (section) => {
+    if (!isSectionAllowed(section)) return
     setActiveSection(section)
     setShowAddHouseholdModal(false)
     setShowAddAddressModal(false)
@@ -561,22 +642,22 @@ export default function CreateProfile() {
     setBusinessEditing(false)
     if (section === 'household') {
       setActiveHouseholdIndex('primary')
-      setHouseholdEditing(!householdComplete)
+      setHouseholdEditing(!hasHouseholdData)
     }
     if (section === 'address') {
       setActiveAddressIndex('primary')
-      setAddressEditing(!addressComplete)
+      setAddressEditing(!hasAddressData)
     }
     if (section === 'vehicle') {
       setActiveVehicleIndex('primary')
-      setVehicleEditing(!vehicleComplete)
+      setVehicleEditing(!hasVehicleData)
     }
     if (section === 'business') {
       setActiveBusinessIndex('primary')
-      setBusinessEditing(!businessComplete)
+      setBusinessEditing(!hasBusinessData)
     }
     if (section === 'additional') {
-      setAdditionalEditing(!additionalComplete)
+      setAdditionalEditing(!hasAdditionalData)
     }
   }
 
@@ -660,24 +741,24 @@ export default function CreateProfile() {
     activeAdditionalBusinessIndex === null ? primaryBusiness : activeAdditionalBusiness ?? createBusiness()
   const activeBusinessLabel =
     activeAdditionalBusinessIndex === null ? primaryBusinessLabel : getAdditionalBusinessLabel(activeAdditionalBusinessIndex)
-  const showHouseholdSection = activeSection === 'household'
-  const showAddressSection = activeSection === 'address'
-  const showVehicleSection = activeSection === 'vehicle'
-  const showBusinessSection = activeSection === 'business'
+  const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
+  const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
+  const showVehicleSection = activeSection === 'vehicle' && isSectionAllowed('vehicle')
+  const showBusinessSection = activeSection === 'business' && isSectionAllowed('business')
   const showHouseholdForm =
-    showHouseholdSection && (!householdComplete || householdEditing) && !showAddHouseholdModal
+    showHouseholdSection && (!hasHouseholdData || householdEditing) && !showAddHouseholdModal
   const showHouseholdSummary =
-    showHouseholdSection && householdComplete && !householdEditing && !showAddHouseholdModal
-  const showAddressForm = showAddressSection && (!addressComplete || addressEditing) && !showAddAddressModal
-  const showAddressSummary = showAddressSection && addressComplete && !addressEditing && !showAddAddressModal
-  const showVehicleForm = showVehicleSection && (!vehicleComplete || vehicleEditing) && !showAddVehicleModal
-  const showVehicleSummary = showVehicleSection && vehicleComplete && !vehicleEditing && !showAddVehicleModal
-  const showBusinessForm = showBusinessSection && (!businessComplete || businessEditing) && !showAddBusinessModal
-  const showBusinessSummary = showBusinessSection && businessComplete && !businessEditing && !showAddBusinessModal
-  const showAdditionalSection = activeSection === 'additional'
-  const showSummarySection = activeSection === 'summary'
-  const showAdditionalForm = showAdditionalSection && (!additionalComplete || additionalEditing)
-  const showAdditionalSummary = showAdditionalSection && additionalComplete && !additionalEditing
+    showHouseholdSection && hasHouseholdData && !householdEditing && !showAddHouseholdModal
+  const showAddressForm = showAddressSection && (!hasAddressData || addressEditing) && !showAddAddressModal
+  const showAddressSummary = showAddressSection && hasAddressData && !addressEditing && !showAddAddressModal
+  const showVehicleForm = showVehicleSection && (!hasVehicleData || vehicleEditing) && !showAddVehicleModal
+  const showVehicleSummary = showVehicleSection && hasVehicleData && !vehicleEditing && !showAddVehicleModal
+  const showBusinessForm = showBusinessSection && (!hasBusinessData || businessEditing) && !showAddBusinessModal
+  const showBusinessSummary = showBusinessSection && hasBusinessData && !businessEditing && !showAddBusinessModal
+  const showAdditionalSection = activeSection === 'additional' && isSectionAllowed('additional')
+  const showSummarySection = activeSection === 'summary' && isSectionAllowed('summary')
+  const showAdditionalForm = showAdditionalSection && (!hasAdditionalData || additionalEditing)
+  const showAdditionalSummary = showAdditionalSection && hasAdditionalData && !additionalEditing
   const setActiveAddressContactField = (field, value) => {
     if (activeAddressIndex === 'primary') {
       updateContact(0, (prev) => ({ ...prev, [field]: value }))
@@ -758,8 +839,158 @@ export default function CreateProfile() {
     }
     return baseName ? `${baseName}, ${person.suffix}` : person.suffix
   }
+  const buildHouseholdDetails = (person) => {
+    const details = []
+    if (hasNonEmptyValue(person?.relation)) {
+      details.push({ label: 'Relation to Applicant', value: person.relation })
+    }
+    namedInsuredFields.forEach((field) => {
+      const fieldKey = field.id.replace(/^ni-/, '')
+      const value = person?.[fieldKey]
+      if (hasNonEmptyValue(value)) {
+        details.push({ label: field.label, value })
+      }
+    })
+    return details
+  }
+  const buildAddressDetails = (contact, residentialEntry, mailingEntry) => {
+    const details = []
+    contactFields.forEach((field) => {
+      const value = contact?.[field.id]
+      if (hasNonEmptyValue(value)) {
+        details.push({ label: field.label, value })
+      }
+    })
+    const residentialFields = [
+      { key: 'address1', label: 'Residential Address 1' },
+      { key: 'city', label: 'Residential City' },
+      { key: 'state', label: 'Residential State' },
+      { key: 'zip', label: 'Residential Zip' },
+    ]
+    residentialFields.forEach((field) => {
+      const value = residentialEntry?.[field.key]
+      if (hasNonEmptyValue(value)) {
+        details.push({ label: field.label, value })
+      }
+    })
+    const mailingFields = [
+      { key: 'address1', label: 'Mailing Address 1' },
+      { key: 'city', label: 'Mailing City' },
+      { key: 'state', label: 'Mailing State' },
+      { key: 'zip', label: 'Mailing Zip' },
+    ]
+    mailingFields.forEach((field) => {
+      const value = mailingEntry?.[field.key]
+      if (hasNonEmptyValue(value)) {
+        details.push({ label: field.label, value })
+      }
+    })
+    return details
+  }
   const primaryFullName = buildFullName(namedInsured)
   const summaryValue = (value) => (value ? value : '-')
+
+  useEffect(() => {
+    if (!hydrated) return
+    const formsPayload = {
+      household: {
+        namedInsured,
+        additionalHouseholds,
+      },
+      address: {
+        contacts,
+        residential,
+        mailing,
+        additionalAddresses,
+      },
+      vehicle: {
+        primaryVehicle,
+        additionalVehicles,
+      },
+      business: {
+        primaryBusiness,
+        additionalBusinesses,
+      },
+      additional: {
+        additionalForms,
+      },
+    }
+    if (typeof onFormDataChange === 'function') {
+      onFormDataChange(formsPayload)
+    }
+    if (typeof onShareSnapshotChange !== 'function') return
+    const buildSharePerson = (person, label) => ({
+      label,
+      fullName: buildFullName(person || {}),
+      dob: person?.dob || '',
+      gender: person?.gender || '',
+      licenseNumber: person?.['license-number'] || '',
+      details: buildHouseholdDetails(person || {}),
+    })
+    const primarySnapshot = buildSharePerson(
+      namedInsured,
+      namedInsured.relation ? namedInsured.relation : 'Primary Applicant'
+    )
+    const additionalHouseholdSnapshots = additionalHouseholds
+      .filter((person) => hasNonEmptyValue(person))
+      .map((person) => buildSharePerson(person, person?.relation || 'Additional Household Member'))
+    const primaryContactSnapshot = contacts[0] || createContact()
+    const primaryAddressSnapshot = {
+      label: primaryAddressLabel,
+      phone1: primaryContactSnapshot?.phone1 || '',
+      email1: primaryContactSnapshot?.email1 || '',
+      street1: residential?.address1 || '',
+      details: buildAddressDetails(primaryContactSnapshot, residential, mailing),
+    }
+    const additionalAddressSnapshots = additionalAddresses
+      .filter((entry) => hasNonEmptyValue(entry))
+      .map((entry, index) => ({
+        label: `Additional Address ${index + 1}`,
+        phone1: entry?.contact?.phone1 || '',
+        email1: entry?.contact?.email1 || '',
+        street1: entry?.residential?.address1 || '',
+        details: buildAddressDetails(entry?.contact, entry?.residential, entry?.mailing),
+      }))
+    const snapshot = {
+      household: {
+        primary: primarySnapshot,
+        additional: additionalHouseholdSnapshots,
+      },
+      address: {
+        primary: primaryAddressSnapshot,
+        additional: additionalAddressSnapshots,
+      },
+      additionalForms: additionalForms
+        .map((form) => ({
+          name: form?.name || '',
+          questions: (form?.questions || [])
+            .filter((question) => hasNonEmptyValue(question?.input))
+            .map((question) => ({
+              question: question?.question || '',
+              input: question?.input || '',
+            })),
+        }))
+        .filter((form) => form.questions.length > 0),
+      forms: formsPayload,
+    }
+    onShareSnapshotChange(snapshot)
+  }, [
+    onShareSnapshotChange,
+    onFormDataChange,
+    hydrated,
+    namedInsured,
+    additionalHouseholds,
+    primaryAddressLabel,
+    contacts,
+    residential,
+    mailing,
+    additionalAddresses,
+    primaryVehicle,
+    additionalVehicles,
+    primaryBusiness,
+    additionalBusinesses,
+    additionalForms,
+  ])
 
   return (
     <main className="min-h-full">
@@ -768,26 +999,34 @@ export default function CreateProfile() {
           Create your insurance passport
         </div>
         <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          <button
-            type="button"
-            className={`${tabButton} w-full`}
-            onClick={() => openSection('household')}
-          >
-            Household information
-          </button>
-          <button
-            type="button"
-            className={`${tabButton} w-full`}
-            onClick={() => openSection('address')}
-          >
-            Address information
-          </button>
-          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
-            Additional information
-          </button>
-          <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('summary')}>
-            Summary
-          </button>
+          {isSectionAllowed('household') && (
+            <button
+              type="button"
+              className={`${tabButton} w-full`}
+              onClick={() => openSection('household')}
+            >
+              Household information
+            </button>
+          )}
+          {isSectionAllowed('address') && (
+            <button
+              type="button"
+              className={`${tabButton} w-full`}
+              onClick={() => openSection('address')}
+            >
+              Address information
+            </button>
+          )}
+          {isSectionAllowed('additional') && (
+            <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
+              Additional information
+            </button>
+          )}
+          {isSectionAllowed('summary') && (
+            <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('summary')}>
+              Summary
+            </button>
+          )}
         </nav>
 
         {showHouseholdSection && (

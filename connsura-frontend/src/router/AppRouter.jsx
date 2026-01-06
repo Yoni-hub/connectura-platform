@@ -15,25 +15,29 @@ import Careers from '../pages/Careers'
 import PrivacyPolicy from '../pages/PrivacyPolicy'
 import LegalNotice from '../pages/LegalNotice'
 import Admin from '../pages/Admin'
+import ShareProfile from '../pages/ShareProfile'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
 
 function Protected({ children }) {
-  const { user } = useAuth()
+  const { user, authReady } = useAuth()
+  if (!authReady) return null
   if (!user) return <Navigate to="/" replace />
   return children
 }
 
 function AgentOnly({ children }) {
-  const { user } = useAuth()
+  const { user, authReady } = useAuth()
+  if (!authReady) return null
   if (!user) return <Navigate to="/" replace />
   if (user.role !== 'AGENT') return <Navigate to="/dashboard" replace />
   return children
 }
 
 function AgentApprovedOnly({ children }) {
-  const { user } = useAuth()
+  const { user, authReady } = useAuth()
+  if (!authReady) return null
   if (!user) return <Navigate to="/" replace />
   if (user.role !== 'AGENT') return <Navigate to="/dashboard" replace />
   const pending = user.agentStatus && user.agentStatus !== 'approved'
@@ -43,7 +47,8 @@ function AgentApprovedOnly({ children }) {
 }
 
 function CustomerOnly({ children }) {
-  const { user } = useAuth()
+  const { user, authReady } = useAuth()
+  if (!authReady) return null
   if (!user) return <Navigate to="/" replace />
   if (user.role !== 'CUSTOMER') return <Navigate to="/agent/dashboard" replace />
   return children
@@ -113,6 +118,7 @@ export default function AppRouter() {
             <Route path="/careers" element={<Careers />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/legal-notice" element={<LegalNotice />} />
+            <Route path="/share/:token" element={<ShareProfile />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </div>

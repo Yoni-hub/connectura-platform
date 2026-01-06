@@ -166,4 +166,27 @@ router.put('/:id/profile', authGuard, async (req, res) => {
   res.json({ profile: formatCustomerProfile(updated) })
 })
 
+router.patch('/:id/profile-data', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { drivers: true, vehicles: true },
+  })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (req.user.role === 'CUSTOMER' && req.user.id !== customer.userId) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  const updates = req.body?.profileData || {}
+  const currentProfileData = parseJson(customer.profileData, {})
+  const updatedProfileData = { ...currentProfileData, ...updates }
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      profileData: JSON.stringify(updatedProfileData),
+    },
+    include: { drivers: true, vehicles: true },
+  })
+  res.json({ profile: formatCustomerProfile(updated) })
+})
+
 module.exports = router

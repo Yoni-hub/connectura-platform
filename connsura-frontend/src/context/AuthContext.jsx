@@ -8,10 +8,15 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('connsura_token'))
   const [loading, setLoading] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
   const [lastPassword, setLastPassword] = useState('')
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      setAuthChecking(false)
+      return
+    }
+    setAuthChecking(true)
     api
       .get('/auth/me')
       .then((res) => {
@@ -32,6 +37,9 @@ export function AuthProvider({ children }) {
         setUser(null)
         setToken(null)
         localStorage.removeItem('connsura_token')
+      })
+      .finally(() => {
+        setAuthChecking(false)
       })
   }, [token])
 
@@ -96,7 +104,19 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, lastPassword, setLastPassword, setUser }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      authReady: !authChecking,
+      login,
+      register,
+      logout,
+      lastPassword,
+      setLastPassword,
+      setUser,
+    }}
+    >
       {children}
     </AuthContext.Provider>
   )

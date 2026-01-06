@@ -186,3 +186,21 @@
   max-width: 100%;
 }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-share-area,
+  .print-share-area * {
+    visibility: visible;
+  }
+  .print-share-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+    background: #fff;
+  }
+}

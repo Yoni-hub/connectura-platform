@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +8,8 @@ import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import AgentCard from '../components/agents/AgentCard'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
+import ShareProfileModal from '../components/modals/ShareProfileModal'
+import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
@@ -71,6 +73,16 @@ export default function ClientDashboard() {
   const [savedAgentLoading, setSavedAgentLoading] = useState(false)
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageAgent, setMessageAgent] = useState(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareSnapshot, setShareSnapshot] = useState(null)
+  const [formsDraft, setFormsDraft] = useState(null)
+  const [formsSaving, setFormsSaving] = useState(false)
+  const [pendingShares, setPendingShares] = useState([])
+  const [activeShares, setActiveShares] = useState([])
+  const [revokingShare, setRevokingShare] = useState('')
+  const [reviewShare, setReviewShare] = useState(null)
+  const formsSaveRef = useRef(null)
+  const autoReviewRef = useRef('')
   const [threads, setThreads] = useState([])
   const [threadsLoading, setThreadsLoading] = useState(false)
   const [activeThread, setActiveThread] = useState(null)
@@ -108,42 +120,43 @@ export default function ClientDashboard() {
     setActiveTab(nextTab)
   }, [location.search])
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.customerId) {
-        setLoading(false)
-        return
-      }
-      setLoading(true)
-      try {
-        const res = await api.get(`/customers/${user.customerId}/profile`)
-        const profile = res.data.profile
-        setClient(profile)
-        const nameParts = parseFullName(profile?.name || '')
-        const details = profile?.profileData || {}
-        setPhotoPreview(resolvePhotoUrl(details.photo))
-        setPhotoFile(null)
-        setForm({
-          firstName: details.firstName || nameParts.firstName,
-          middleName: details.middleName || nameParts.middleName,
-          lastName: details.lastName || nameParts.lastName,
-          email: details.email || user?.email || '',
-          phone: details.phone || '',
-          address: details.address || '',
-          zip: details.zip || '',
-          state: details.state || '',
-          availability: details.availability || 'online',
-          preferredLangs: formatLangs(details.preferredLangs || profile?.preferredLangs || []),
-          notes: details.notes || '',
-        })
-      } catch {
-        setClient(null)
-        setPhotoPreview('')
-        setPhotoFile(null)
-      } finally {
-        setLoading(false)
-      }
+  const fetchProfile = async () => {
+    if (!user?.customerId) {
+      setLoading(false)
+      return
     }
+    setLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/profile`)
+      const profile = res.data.profile
+      setClient(profile)
+      const nameParts = parseFullName(profile?.name || '')
+      const details = profile?.profileData || {}
+      setPhotoPreview(resolvePhotoUrl(details.photo))
+      setPhotoFile(null)
+      setForm({
+        firstName: details.firstName || nameParts.firstName,
+        middleName: details.middleName || nameParts.middleName,
+        lastName: details.lastName || nameParts.lastName,
+        email: details.email || user?.email || '',
+        phone: details.phone || '',
+        address: details.address || '',
+        zip: details.zip || '',
+        state: details.state || '',
+        availability: details.availability || 'online',
+        preferredLangs: formatLangs(details.preferredLangs || profile?.preferredLangs || []),
+        notes: details.notes || '',
+      })
+    } catch {
+      setClient(null)
+      setPhotoPreview('')
+      setPhotoFile(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchProfile()
   }, [user?.customerId, user?.email])
 
@@ -177,6 +190,30 @@ export default function ClientDashboard() {
       toast.error(err.response?.data?.error || 'Could not load messages')
     } finally {
       setThreadsLoading(false)
+    }
+  }
+
+  const loadPendingShares = async () => {
+    if (!user?.customerId) return
+    try {
+      const res = await api.get('/shares/pending')
+      setPendingShares(res.data.shares || [])
+    } catch (err) {
+      if (err.response?.status !== 404) {
+        console.warn('Failed to load pending share edits', err)
+      }
+    }
+  }
+
+  const loadActiveShares = async () => {
+    if (!user?.customerId) return
+    try {
+      const res = await api.get('/shares/active')
+      setActiveShares(res.data.shares || [])
+    } catch (err) {
+      if (err.response?.status !== 404) {
+        console.warn('Failed to load active shares', err)
+      }
     }
   }
 
@@ -222,6 +259,32 @@ export default function ClientDashboard() {
   }, [activeTab, user?.customerId])
 
   useEffect(() => {
+    loadPendingShares()
+  }, [user?.customerId])
+
+  useEffect(() => {
+    loadActiveShares()
+  }, [user?.customerId])
+
+  useEffect(() => {
+    if (!user?.customerId) return
+    const interval = setInterval(() => {
+      loadPendingShares()
+      loadActiveShares()
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [user?.customerId])
+
+  useEffect(() => {
+    if (reviewShare || pendingShares.length === 0) return
+    const nextShare = pendingShares[0]
+    const key = `${nextShare?.token || ''}-${nextShare?.pendingAt || ''}`
+    if (autoReviewRef.current === key) return
+    autoReviewRef.current = key
+    setReviewShare(nextShare)
+  }, [pendingShares, reviewShare])
+
+  useEffect(() => {
     if (activeTab !== 'Messages') return
     if (!threads.length) {
       setActiveThread(null)
@@ -244,6 +307,32 @@ export default function ClientDashboard() {
   useEffect(() => {
     setReplyBody('')
   }, [activeThread?.agent?.id])
+
+  useEffect(() => {
+    if (!user?.customerId || !formsDraft) return
+    if (formsSaveRef.current) {
+      clearTimeout(formsSaveRef.current)
+    }
+    const payload = formsDraft
+    formsSaveRef.current = setTimeout(async () => {
+      setFormsSaving(true)
+      try {
+        const res = await api.patch(`/customers/${user.customerId}/profile-data`, {
+          profileData: { forms: payload },
+        })
+        setClient((prev) =>
+          prev ? { ...prev, profileData: res.data.profile?.profileData || prev.profileData } : prev
+        )
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Unable to save profile changes')
+      } finally {
+        setFormsSaving(false)
+      }
+    }, 800)
+    return () => {
+      if (formsSaveRef.current) clearTimeout(formsSaveRef.current)
+    }
+  }, [formsDraft, user?.customerId])
 
   useEffect(() => {
     return () => {
@@ -364,6 +453,48 @@ export default function ClientDashboard() {
     }
   }
 
+  const handleApproveEdits = async (token) => {
+    if (!token) return
+    try {
+      await api.post(`/shares/${token}/approve`)
+      toast.success('Changes approved')
+      setReviewShare(null)
+      await fetchProfile()
+      await loadPendingShares()
+      await loadActiveShares()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to approve changes')
+    }
+  }
+
+  const handleDeclineEdits = async (token) => {
+    if (!token) return
+    try {
+      await api.post(`/shares/${token}/decline`)
+      toast.success('Sharing stopped')
+      setReviewShare(null)
+      await loadPendingShares()
+      await loadActiveShares()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to decline changes')
+    }
+  }
+
+  const handleStopSharing = async (token) => {
+    if (!token) return
+    setRevokingShare(token)
+    try {
+      await api.post(`/shares/${token}/revoke`)
+      toast.success('Sharing stopped')
+      await loadActiveShares()
+      await loadPendingShares()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to stop sharing')
+    } finally {
+      setRevokingShare('')
+    }
+  }
+
   const resetProfileForm = () => {
     if (client) {
       const nameParts = parseFullName(client?.name || '')
@@ -477,6 +608,7 @@ export default function ClientDashboard() {
   }
 
   const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
+  const resolveShareRecipient = (share) => share?.agent?.name || share?.recipientName || 'Shared link'
 
   return (
     <main className="page-shell py-8 pb-28 lg:pb-8">
@@ -518,6 +650,29 @@ export default function ClientDashboard() {
                   </span>
                 )}
               </p>
+              {activeShares.length > 0 && (
+                <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  <div className="font-semibold">Sharing in progress</div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeShares.map((share) => (
+                      <div
+                        key={share.token}
+                        className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white/80 px-3 py-1.5"
+                      >
+                        <span>{resolveShareRecipient(share)}</span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:no-underline"
+                          onClick={() => handleStopSharing(share.token)}
+                          disabled={revokingShare === share.token}
+                        >
+                          {revokingShare === share.token ? 'Stopping...' : 'Stop sharing'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {needsEmailVerification && verificationSent && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                   <span>Enter verification code:</span>
@@ -549,7 +704,7 @@ export default function ClientDashboard() {
                     toast.error('Verify your email to share your profile')
                     return
                   }
-                  nav('/agents')
+                  setShareOpen(true)
                 }}
                 disabled={!isEmailVerified}
               >
@@ -780,7 +935,13 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {!loading && activeTab === 'Forms' && <CreateProfile />}
+          {!loading && activeTab === 'Forms' && (
+            <CreateProfile
+              onShareSnapshotChange={setShareSnapshot}
+              onFormDataChange={setFormsDraft}
+              initialData={client?.profileData?.forms || null}
+            />
+          )}
 
           {!loading && activeTab === 'Agents' && (
             <div className="surface p-5">
@@ -1051,6 +1212,20 @@ export default function ClientDashboard() {
         </section>
       </div>
       <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
+      <ShareProfileModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        snapshot={shareSnapshot}
+        defaultAgentId={client?.preferredAgentId}
+      />
+      <ReviewShareEditsModal
+        open={Boolean(reviewShare)}
+        share={reviewShare}
+        currentForms={client?.profileData?.forms || {}}
+        onClose={() => setReviewShare(null)}
+        onApprove={() => handleApproveEdits(reviewShare?.token)}
+        onDecline={() => handleDeclineEdits(reviewShare?.token)}
+      />
     </main>
   )
 }
