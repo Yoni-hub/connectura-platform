@@ -16,6 +16,11 @@ model User {
   password  String
   role      String    @default("CUSTOMER")
   emailVerified Boolean @default(false)
+  totpEnabled Boolean @default(false)
+  totpSecret String?
+  totpRecoveryId String? @unique
+  totpBackupCodes String @default("[]")
+  totpBackupCodesUpdatedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   agent     Agent?

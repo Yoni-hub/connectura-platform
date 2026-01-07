@@ -248,7 +248,16 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4" />
               Remember me
             </label>
-            <button type="button" className="font-semibold text-[#006aff]">Forgot password</button>
+            <button
+              type="button"
+              className="font-semibold text-[#006aff]"
+              onClick={() => {
+                handleClose()
+                nav('/recover')
+              }}
+            >
+              Forgot password
+            </button>
           </div>
         )}
 

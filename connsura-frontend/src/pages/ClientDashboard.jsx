@@ -10,6 +10,7 @@ import AgentCard from '../components/agents/AgentCard'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
+import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
@@ -376,6 +377,7 @@ export default function ClientDashboard() {
   }
 
   const isEmailVerified = user?.emailVerified === true
+  const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
   const displayName = client?.name || user?.name || user?.email || 'client'
   const initials = useMemo(() => getInitials(displayName, 'CL'), [displayName])
@@ -736,6 +738,23 @@ export default function ClientDashboard() {
               <p className="text-slate-600">
                 Stay on top of your insurance profile, saved agents, and upcoming appointments.
               </p>
+              {needsAuthenticator && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="text-sm font-semibold text-amber-900">
+                    Add Google Authenticator for account recovery
+                  </div>
+                  <p className="mt-1 text-sm text-amber-700">
+                    Set it up in Settings to recover access if you forget your password or email.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={() => setActiveTab('Settings')}
+                  >
+                    Set up now
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1211,6 +1230,9 @@ export default function ClientDashboard() {
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="pt-2">
+                <AuthenticatorPanel />
               </div>
             </div>
           )}

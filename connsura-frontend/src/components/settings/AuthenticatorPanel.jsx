@@ -1,0 +1,292 @@
+import { useState } from 'react'
+import toast from 'react-hot-toast'
+import { api } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+
+export default function AuthenticatorPanel() {
+  const { user, setUser } = useAuth()
+  const [setupData, setSetupData] = useState(null)
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [confirmCode, setConfirmCode] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [regenCode, setRegenCode] = useState('')
+  const [regenBackupCode, setRegenBackupCode] = useState('')
+  const [regenLoading, setRegenLoading] = useState(false)
+  const [regenCodes, setRegenCodes] = useState([])
+  const [disablePassword, setDisablePassword] = useState('')
+  const [disableCode, setDisableCode] = useState('')
+  const [disableBackupCode, setDisableBackupCode] = useState('')
+  const [disableLoading, setDisableLoading] = useState(false)
+
+  const enabled = Boolean(user?.totpEnabled)
+  const recoveryId = user?.recoveryId || setupData?.recoveryId || ''
+
+  const startSetup = async () => {
+    setSetupLoading(true)
+    setRegenCodes([])
+    try {
+      const res = await api.post('/auth/totp/setup')
+      setSetupData(res.data)
+      if (res.data?.user) setUser(res.data.user)
+      toast.success('Authenticator setup started')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to start setup')
+    } finally {
+      setSetupLoading(false)
+    }
+  }
+
+  const confirmSetup = async () => {
+    const code = confirmCode.trim()
+    if (!code) {
+      toast.error('Enter the authenticator code')
+      return
+    }
+    setConfirming(true)
+    try {
+      const res = await api.post('/auth/totp/confirm', { code })
+      if (res.data?.user) setUser(res.data.user)
+      toast.success('Authenticator enabled')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to enable authenticator')
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const regenerateBackupCodes = async () => {
+    const code = regenCode.trim()
+    const backupCode = regenBackupCode.trim()
+    if (!code && !backupCode) {
+      toast.error('Enter a code to generate backup codes')
+      return
+    }
+    setRegenLoading(true)
+    try {
+      const res = await api.post('/auth/totp/backup-codes', { code, backupCode })
+      setRegenCodes(res.data?.backupCodes || [])
+      setRegenCode('')
+      setRegenBackupCode('')
+      if (res.data?.user) setUser(res.data.user)
+      toast.success('Backup codes generated')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to generate backup codes')
+    } finally {
+      setRegenLoading(false)
+    }
+  }
+
+  const disableAuthenticator = async () => {
+    const password = disablePassword
+    const code = disableCode.trim()
+    const backupCode = disableBackupCode.trim()
+    if (!password) {
+      toast.error('Enter your password')
+      return
+    }
+    if (!code && !backupCode) {
+      toast.error('Enter an authenticator or backup code')
+      return
+    }
+    setDisableLoading(true)
+    try {
+      const res = await api.post('/auth/totp/disable', { password, code, backupCode })
+      if (res.data?.user) setUser(res.data.user)
+      setSetupData(null)
+      setConfirmCode('')
+      setRegenCodes([])
+      setDisablePassword('')
+      setDisableCode('')
+      setDisableBackupCode('')
+      toast.success('Authenticator disabled')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to disable authenticator')
+    } finally {
+      setDisableLoading(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-sm text-slate-500">Authenticator app</div>
+          <div className="font-semibold text-slate-900">Google Authenticator recovery</div>
+        </div>
+        <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+          {enabled ? 'Enabled' : 'Optional'}
+        </div>
+      </div>
+
+      <p className="text-sm text-slate-600">
+        Add Google Authenticator to recover your account even if you lose access to email.
+      </p>
+      <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="font-semibold text-slate-700">Setup guide</div>
+        <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>When: set this up right after your first login.</li>
+          <li>How: click "Set up authenticator" below. You will get a QR code, a recovery ID, and backup codes. Scan the QR in Google Authenticator, enter the 6-digit code to confirm, and save your recovery ID and backup codes for future use.</li>
+          <li>Use it: click "Forgot password" on the sign-in screen. On the recovery page, enter your email or recovery ID, then enter either the authenticator code or a backup code, plus your new password.</li>
+        </ul>
+      </div>
+
+      {!enabled && !setupData && (
+        <button type="button" className="pill-btn-primary px-5" onClick={startSetup} disabled={setupLoading}>
+          {setupLoading ? 'Starting...' : 'Set up authenticator'}
+        </button>
+      )}
+
+      {setupData && (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-3">
+          <div className="grid gap-4 sm:grid-cols-[160px,1fr] items-start">
+            <div className="rounded-lg bg-white p-2 border border-slate-200 w-full">
+              {setupData.qrDataUrl ? (
+                <img src={setupData.qrDataUrl} alt="Authenticator QR" className="w-full" />
+              ) : (
+                <div className="text-xs text-slate-500">QR code unavailable</div>
+              )}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <div className="text-slate-500">Manual setup key</div>
+                <div className="font-mono text-slate-900 break-all">{setupData.secret}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Recovery ID</div>
+                <div className="font-mono text-slate-900">{setupData.recoveryId}</div>
+              </div>
+            </div>
+          </div>
+
+          {Array.isArray(setupData.backupCodes) && setupData.backupCodes.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-slate-700">Backup codes (save these now)</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {setupData.backupCodes.map((code) => (
+                  <div key={code} className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700">
+                    {code}
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-slate-500">
+                Backup codes are shown only once. Store them in a safe place.
+              </div>
+            </div>
+          )}
+
+          {!enabled && (
+            <div className="space-y-2">
+              <label className="block text-sm">
+                Enter the 6-digit code from your app to confirm
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={confirmCode}
+                  onChange={(e) => setConfirmCode(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={confirmSetup}
+                disabled={confirming}
+              >
+                {confirming ? 'Verifying...' : 'Enable authenticator'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {enabled && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+            <div className="text-slate-500">Recovery ID</div>
+            <div className="font-mono text-slate-900">{recoveryId || 'Not available'}</div>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
+            <div className="text-sm font-semibold">Generate new backup codes</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block text-sm">
+                Authenticator code
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={regenCode}
+                  onChange={(e) => setRegenCode(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                Backup code
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={regenBackupCode}
+                  onChange={(e) => setRegenBackupCode(e.target.value)}
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="pill-btn-ghost px-4"
+              onClick={regenerateBackupCodes}
+              disabled={regenLoading}
+            >
+              {regenLoading ? 'Generating...' : 'Generate backup codes'}
+            </button>
+
+            {regenCodes.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm text-slate-600">New backup codes (save them now)</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {regenCodes.map((code) => (
+                    <div key={code} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
+            <div className="text-sm font-semibold">Disable authenticator</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block text-sm">
+                Password
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                Authenticator code
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={disableCode}
+                  onChange={(e) => setDisableCode(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                Backup code
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={disableBackupCode}
+                  onChange={(e) => setDisableBackupCode(e.target.value)}
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="pill-btn-ghost px-4"
+              onClick={disableAuthenticator}
+              disabled={disableLoading}
+            >
+              {disableLoading ? 'Disabling...' : 'Disable authenticator'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

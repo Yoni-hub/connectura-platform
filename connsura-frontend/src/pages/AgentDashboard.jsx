@@ -6,6 +6,7 @@ import { API_URL, api } from '../services/api'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
+import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 
 const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Appointments', 'Settings']
 
@@ -303,6 +304,7 @@ export default function AgentDashboard() {
     .filter(Boolean)
     .join(', ') || '—'
   const previewBio = agent?.bio || 'Licensed agent on Connsura.'
+  const needsAuthenticator = Boolean(user) && !user.totpEnabled
 
   return (
     <main className="page-shell py-8">
@@ -360,7 +362,31 @@ export default function AgentDashboard() {
 
           {agent && (
             <>
-              {activeTab === 'Settings' ? (
+              {activeTab === 'Overview' ? (
+              <div className="surface p-5">
+                <h2 className="text-xl font-semibold mb-2">Overview</h2>
+                <p className="text-slate-600">
+                  Track your leads, profile status, and upcoming appointments.
+                </p>
+                {needsAuthenticator && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="text-sm font-semibold text-amber-900">
+                      Add Google Authenticator for account recovery
+                    </div>
+                    <p className="mt-1 text-sm text-amber-700">
+                      Set it up in Settings to recover access if you forget your password or email.
+                    </p>
+                    <button
+                      type="button"
+                      className="pill-btn-primary mt-3 px-4"
+                      onClick={() => setActiveTab('Settings')}
+                    >
+                      Set up now
+                    </button>
+                  </div>
+                )}
+              </div>
+              ) : activeTab === 'Settings' ? (
               <div className="surface p-4 space-y-2 max-w-md w-full">
                 <h2 className="text-xl font-semibold">Settings</h2>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -436,6 +462,9 @@ export default function AgentDashboard() {
                     </div>
                   </form>
                 )}
+                <div className="pt-2">
+                  <AuthenticatorPanel />
+                </div>
               </div>
                 ) : activeTab === 'Profile' ? (
                 <div className="grid gap-6 lg:grid-cols-[420px,1fr]">

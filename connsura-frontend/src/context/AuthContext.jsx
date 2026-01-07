@@ -43,25 +43,35 @@ export function AuthProvider({ children }) {
       })
   }, [token])
 
+  const applyAuth = (nextToken, nextUser, password) => {
+    setToken(nextToken)
+    setUser(nextUser)
+    if (nextToken) {
+      localStorage.setItem('connsura_token', nextToken)
+    } else {
+      localStorage.removeItem('connsura_token')
+    }
+    if (password) {
+      setLastPassword(password)
+    }
+    if (nextUser?.role === 'AGENT') {
+      const pending = nextUser.agentStatus && nextUser.agentStatus !== 'approved'
+      const suspended = nextUser.agentSuspended
+      if (pending || suspended) {
+        localStorage.setItem('connsura_agent_onboarding_pending', 'true')
+        localStorage.setItem('connsura_agent_onboarding_submitted', 'true')
+      } else {
+        localStorage.removeItem('connsura_agent_onboarding_pending')
+        localStorage.removeItem('connsura_agent_onboarding_submitted')
+      }
+    }
+  }
+
   const login = async (email, password) => {
     setLoading(true)
     try {
       const res = await api.post('/auth/login', { email, password })
-      setToken(res.data.token)
-      setUser(res.data.user)
-      localStorage.setItem('connsura_token', res.data.token)
-      setLastPassword(password)
-      if (res.data.user.role === 'AGENT') {
-        const pending = res.data.user.agentStatus && res.data.user.agentStatus !== 'approved'
-        const suspended = res.data.user.agentSuspended
-        if (pending || suspended) {
-          localStorage.setItem('connsura_agent_onboarding_pending', 'true')
-          localStorage.setItem('connsura_agent_onboarding_submitted', 'true')
-        } else {
-          localStorage.removeItem('connsura_agent_onboarding_pending')
-          localStorage.removeItem('connsura_agent_onboarding_submitted')
-        }
-      }
+      applyAuth(res.data.token, res.data.user, password)
       toast.success('Logged in')
       return res.data.user
     } catch (err) {
@@ -76,10 +86,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const res = await api.post('/auth/register', payload)
-      setToken(res.data.token)
-      setUser(res.data.user)
-      localStorage.setItem('connsura_token', res.data.token)
-      setLastPassword(payload.password)
+      applyAuth(res.data.token, res.data.user, payload.password)
       if (res.data.user.role === 'AGENT') {
         localStorage.setItem('connsura_agent_onboarding_pending', 'true')
         localStorage.removeItem('connsura_agent_onboarding_submitted')
@@ -111,6 +118,7 @@ export function AuthProvider({ children }) {
       authReady: !authChecking,
       login,
       register,
+      completeAuth: applyAuth,
       logout,
       lastPassword,
       setLastPassword,
