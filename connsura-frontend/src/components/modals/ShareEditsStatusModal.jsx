@@ -4,7 +4,6 @@ const statusCopy = {
   pending: {
     title: 'Awaiting client approval',
     message: 'Changes were sent to the client. You will see an update once they accept or decline.',
-    helper: 'Keep the tab open if you want instant updates.',
   },
   accepted: {
     title: 'Changes accepted',
@@ -22,12 +21,23 @@ export default function ShareEditsStatusModal({ open, status, onClose }) {
   if (!open) return null
   const normalized = status && statusCopy[status] ? status : 'pending'
   const copy = statusCopy[normalized]
+  const isPending = normalized === 'pending'
+  const isAccepted = normalized === 'accepted'
 
   return (
-    <Modal title={copy.title} open={open} onClose={onClose}>
-      <div className="space-y-2 text-sm text-slate-600">
+    <Modal title={copy.title} open={open} onClose={isPending ? undefined : onClose} showClose={!isPending}>
+      <div className="space-y-3 text-sm text-slate-600">
+        {isAccepted && (
+          <div className="flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#006aff]/10 text-[#006aff]">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        )}
         <p>{copy.message}</p>
-        <p className="text-xs text-slate-400">{copy.helper}</p>
+        {copy.helper ? <p className="text-xs text-slate-400">{copy.helper}</p> : null}
       </div>
     </Modal>
   )

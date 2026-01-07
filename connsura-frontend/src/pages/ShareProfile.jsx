@@ -15,7 +15,6 @@ export default function ShareProfile() {
   const [error, setError] = useState('')
   const [editData, setEditData] = useState(null)
   const [savingEdits, setSavingEdits] = useState(false)
-  const [submitMessage, setSubmitMessage] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
   const [viewerName, setViewerName] = useState('')
   const [endingSession, setEndingSession] = useState(false)
@@ -23,6 +22,7 @@ export default function ShareProfile() {
   const [approvalStatus, setApprovalStatus] = useState('')
   const pendingStatusRef = useRef('')
   const lastActivityRef = useRef(Date.now())
+  const isAwaitingApproval = approvalModalOpen && approvalStatus === 'pending'
 
   const accessCode = code.trim()
   const recipientName = viewerName.replace(/\s+/g, ' ').trim()
@@ -109,7 +109,6 @@ export default function ShareProfile() {
       return
     }
     setSavingEdits(true)
-    setSubmitMessage('')
     try {
       const res = await api.post(`/shares/${token}/edits`, {
         code: accessCode,
@@ -124,11 +123,9 @@ export default function ShareProfile() {
         setShare(nextShare)
         syncPendingStatus(nextShare)
       }
-      setSubmitMessage('Changes sent to the client for approval.')
     } catch (err) {
       if (err.response?.status === 410) {
         setSessionExpired(true)
-        setSubmitMessage('')
       } else {
         toast.error(err.response?.data?.error || 'Unable to submit edits')
       }
@@ -139,7 +136,7 @@ export default function ShareProfile() {
 
   useEffect(() => {
     if (!token || !accessCode || !share || sessionExpired) return
-    const intervalMs = isEditable ? 15000 : 60000
+    const intervalMs = 5000
     const interval = setInterval(async () => {
       try {
         const recentlyActive = Date.now() - lastActivityRef.current < 60000
@@ -204,6 +201,13 @@ export default function ShareProfile() {
     setApprovalStatus('')
     setApprovalModalOpen(false)
   }, [sessionExpired])
+
+  useEffect(() => {
+    if (!isAwaitingApproval || typeof document === 'undefined') return
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur()
+    }
+  }, [isAwaitingApproval])
 
   const handleEndSession = async () => {
     if (!token || !accessCode) {
@@ -279,26 +283,27 @@ export default function ShareProfile() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   You can edit the shared sections. Changes will be sent to the client for approval.
                 </div>
-                <CreateProfile
-                  initialData={share.snapshot?.forms || {}}
-                  onFormDataChange={(data) => {
-                    setEditData(data)
-                    markActivity()
-                  }}
-                  allowedSections={allowedSections}
-                />
+                <div
+                  className={isAwaitingApproval ? 'pointer-events-none select-none opacity-60' : ''}
+                  aria-disabled={isAwaitingApproval}
+                >
+                  <CreateProfile
+                    initialData={share.snapshot?.forms || {}}
+                    onFormDataChange={(data) => {
+                      setEditData(data)
+                      markActivity()
+                    }}
+                    allowedSections={allowedSections}
+                  />
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  {submitMessage ? (
-                    <div className="text-sm text-emerald-600">{submitMessage}</div>
-                  ) : (
-                    <div className="text-sm text-slate-500">Submit changes when you are done editing.</div>
-                  )}
+                  <div className="text-sm text-slate-500">Submit changes when you are done editing.</div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       className="pill-btn-ghost px-5"
                       onClick={handleEndSession}
-                      disabled={endingSession}
+                      disabled={endingSession || isAwaitingApproval}
                     >
                       {endingSession ? 'Ending...' : 'End session'}
                     </button>
@@ -306,7 +311,7 @@ export default function ShareProfile() {
                       type="button"
                       className="pill-btn-primary px-6"
                       onClick={handleSubmitEdits}
-                      disabled={savingEdits}
+                      disabled={savingEdits || isAwaitingApproval}
                     >
                       {savingEdits ? 'Saving...' : 'Save changes'}
                     </button>

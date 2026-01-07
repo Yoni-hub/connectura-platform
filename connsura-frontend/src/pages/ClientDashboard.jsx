@@ -268,11 +268,16 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (!user?.customerId) return
-    const interval = setInterval(() => {
+    const pendingInterval = setInterval(() => {
       loadPendingShares()
+    }, 2000)
+    const activeInterval = setInterval(() => {
       loadActiveShares()
     }, 20000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(pendingInterval)
+      clearInterval(activeInterval)
+    }
   }, [user?.customerId])
 
   useEffect(() => {

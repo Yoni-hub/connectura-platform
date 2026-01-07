@@ -188,19 +188,52 @@
 }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .print-share-area,
-  .print-share-area * {
-    visibility: visible;
-  }
-  .print-share-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 24px;
+  body.print-share-open {
     background: #fff;
+    margin: 0;
+  }
+
+  body.print-share-open #root {
+    display: none !important;
+  }
+  body.print-share-open .modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    background: transparent !important;
+    display: block !important;
+  }
+  body.print-share-open .modal-panel {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  body.print-share-open .print-hidden {
+    display: none !important;
+  }
+  body.print-share-open .print-share-shell {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  body.print-share-open .print-share-area {
+    position: static !important;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  body.print-share-open .print-share-area,
+  body.print-share-open .print-share-area * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transform: none !important;
   }
 }

@@ -142,6 +142,13 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
   }, [open])
 
   useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const shouldEnablePrint = open && activeMethod === 'pdf' && accessMode !== 'edit'
+    document.body.classList.toggle('print-share-open', shouldEnablePrint)
+    return () => document.body.classList.remove('print-share-open')
+  }, [open, activeMethod, accessMode])
+
+  useEffect(() => {
     if (!open) return
     const nextSections = {
       household: householdAvailable,
@@ -331,7 +338,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
       panelClassName="max-w-4xl"
     >
       {step === 'sections' ? (
-        <div className="space-y-4">
+        <div className="print-hidden space-y-4">
           <div className="text-sm text-slate-600">
             Choose which sections you want to share. You can share all sections or pick specific ones.
           </div>
@@ -449,7 +456,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+          <div className="print-hidden flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
             <div>Choose how you want to share your profile.</div>
             <button
               type="button"
@@ -465,7 +472,9 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
             </button>
           </div>
 
-          <div className={`grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+          <div
+            className={`print-hidden grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
+          >
             <button
               type="button"
               className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
@@ -504,7 +513,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
           </div>
 
           {activeMethod === 'link' && (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm text-slate-600">
                 Create a public link with a 4-digit access code.
               </div>
@@ -535,7 +544,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
           )}
 
           {activeMethod === 'agent' && (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm text-slate-600">
                 Send a secure link and code to an agent. They will only see the sections you selected.
               </div>
@@ -570,12 +579,12 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
           )}
 
           {activeMethod === 'pdf' && accessMode !== 'edit' && (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm text-slate-600">Preview your PDF before printing.</div>
+            <div className="print-share-shell space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="print-hidden text-sm text-slate-600">Preview your PDF before printing.</div>
               <div className="print-share-area rounded-2xl border border-slate-200 bg-white p-4">
                 <ShareSummary snapshot={snapshot} sections={sectionsPayload} />
               </div>
-              <div className="flex justify-end">
+              <div className="print-hidden flex justify-end">
                 <button type="button" className="pill-btn-primary px-5" onClick={() => window.print()}>
                   Print to PDF
                 </button>
