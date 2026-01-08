@@ -157,8 +157,6 @@ export default function Admin() {
           coverages: joinList(detail.coverages),
           priorInsurance: joinList(detail.priorInsurance),
           profileData: JSON.stringify(detail.profileData || {}, null, 2),
-          sharedWithAgent: Boolean(detail.sharedWithAgent),
-          preferredAgentId: detail.preferredAgentId ?? '',
           isDisabled: Boolean(detail.isDisabled),
         },
       })
@@ -246,15 +244,7 @@ export default function Admin() {
       coverages: splitList(tab.form.coverages),
       priorInsurance: splitList(tab.form.priorInsurance),
       profileData: profileDataParsed,
-      sharedWithAgent: Boolean(tab.form.sharedWithAgent),
-      preferredAgentId:
-        tab.form.preferredAgentId === '' || tab.form.preferredAgentId === null
-          ? null
-          : Number(tab.form.preferredAgentId),
       isDisabled: Boolean(tab.form.isDisabled),
-    }
-    if (payload.preferredAgentId !== null && Number.isNaN(payload.preferredAgentId)) {
-      payload.preferredAgentId = null
     }
     patchTab(tab.key, { saving: true })
     try {
@@ -273,8 +263,6 @@ export default function Admin() {
           coverages: joinList(updated.coverages),
           priorInsurance: joinList(updated.priorInsurance),
           profileData: JSON.stringify(updated.profileData || {}, null, 2),
-          sharedWithAgent: Boolean(updated.sharedWithAgent),
-          preferredAgentId: updated.preferredAgentId ?? '',
           isDisabled: Boolean(updated.isDisabled),
         },
       })
@@ -467,7 +455,6 @@ export default function Admin() {
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Email</th>
-              <th className="px-3 py-2">Preferred agent</th>
               <th className="px-3 py-2">Disabled</th>
               <th className="px-3 py-2">Actions</th>
             </tr>
@@ -485,7 +472,6 @@ export default function Admin() {
                   </button>
                 </td>
                 <td className="px-3 py-2">{c.email || '--'}</td>
-                <td className="px-3 py-2">{c.preferredAgentId || '--'}</td>
                 <td className="px-3 py-2">{c.isDisabled ? 'Yes' : 'No'}</td>
                 <td className="px-3 py-2 space-x-2">
                   <button className="pill-btn-ghost px-2 py-1 text-xs" onClick={() => doClientAction(c.id, 'disable')}>
@@ -493,9 +479,6 @@ export default function Admin() {
                   </button>
                   <button className="pill-btn-ghost px-2 py-1 text-xs" onClick={() => doClientAction(c.id, 'enable')}>
                     Enable
-                  </button>
-                  <button className="pill-btn-ghost px-2 py-1 text-xs" onClick={() => doClientAction(c.id, 'unshare')}>
-                    Unshare
                   </button>
                   <button className="pill-btn-ghost px-2 py-1 text-xs text-red-600" onClick={() => doClientDelete(c.id)}>
                     Delete
@@ -777,25 +760,7 @@ export default function Admin() {
                   type="text"
                 />
               </label>
-              <label className="block text-[13px] font-semibold text-slate-700">
-                Preferred agent ID
-                <input
-                  className={input}
-                  value={tab.form.preferredAgentId}
-                  onChange={(e) => patchTabForm(tab.key, { preferredAgentId: e.target.value })}
-                  type="number"
-                  min="1"
-                />
-              </label>
               <div className="flex items-center gap-3 text-[13px] font-semibold text-slate-700">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!tab.form.sharedWithAgent}
-                    onChange={(e) => patchTabForm(tab.key, { sharedWithAgent: e.target.checked })}
-                  />
-                  Shared with agent
-                </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"

@@ -4,14 +4,12 @@ import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
 import { useAgents } from '../context/AgentContext'
 import Skeleton from '../components/ui/Skeleton'
-import { useProfile } from '../context/ProfileContext'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
 
 export default function AgentResults() {
   const { agents, loading, fetchAgents } = useAgents()
-  const { shareWithAgent } = useProfile()
   const { user } = useAuth()
   const nav = useNavigate()
   const [params] = useSearchParams()
@@ -22,15 +20,6 @@ export default function AgentResults() {
     const query = Object.fromEntries(params.entries())
     if (Object.keys(query).length) fetchAgents(query)
   }, [params])
-
-  const handleSave = (agent) => {
-    if (!user) {
-      toast.error('Login to save agent')
-      return
-    }
-    shareWithAgent(agent.id)
-    nav('/dashboard')
-  }
 
   const handleMessage = (agent) => {
     if (!user) {
@@ -69,7 +58,6 @@ export default function AgentResults() {
               agent={agent}
               onVoice={() => nav(`/call/voice/${agent.id}`)}
               onVideo={() => nav(`/call/video/${agent.id}`)}
-              onSave={handleSave}
               onMessage={handleMessage}
             />
           ))}

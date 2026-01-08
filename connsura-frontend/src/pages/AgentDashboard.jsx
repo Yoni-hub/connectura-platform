@@ -347,9 +347,6 @@ export default function AgentDashboard() {
               >
                 Log out
               </button>
-              <div className="grid h-12 w-12 place-items-center rounded-full bg-[#006aff]/12 text-[#0b3b8c] font-bold">
-                {initials}
-              </div>
             </div>
           </div>
 

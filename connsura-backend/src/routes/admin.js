@@ -40,8 +40,6 @@ const formatCustomer = (customer) => ({
   preferredLangs: parseJson(customer.preferredLangs, []),
   coverages: parseJson(customer.coverages, []),
   priorInsurance: parseJson(customer.priorInsurance, []),
-  sharedWithAgent: customer.sharedWithAgent,
-  preferredAgentId: customer.preferredAgentId,
   profileData: parseJson(customer.profileData, {}),
   isDisabled: customer.isDisabled,
 })
@@ -220,8 +218,6 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
   if (payload.coverages !== undefined) data.coverages = JSON.stringify(payload.coverages)
   if (payload.priorInsurance !== undefined) data.priorInsurance = JSON.stringify(payload.priorInsurance)
   if (payload.profileData !== undefined) data.profileData = JSON.stringify(payload.profileData)
-  if (payload.sharedWithAgent !== undefined) data.sharedWithAgent = payload.sharedWithAgent
-  if (payload.preferredAgentId !== undefined) data.preferredAgentId = payload.preferredAgentId
   if (payload.isDisabled !== undefined) data.isDisabled = payload.isDisabled
 
   const customer = await prisma.customer.update({
@@ -255,17 +251,6 @@ router.post('/clients/:id/enable', adminGuard, async (req, res) => {
     include: { user: true },
   })
   await logAudit(req.admin.id, 'Client', id, 'enable')
-  res.json({ client: formatCustomer(customer) })
-})
-
-router.post('/clients/:id/unshare', adminGuard, async (req, res) => {
-  const id = Number(req.params.id)
-  const customer = await prisma.customer.update({
-    where: { id },
-    data: { sharedWithAgent: false, preferredAgentId: null },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Client', id, 'unshare_profile')
   res.json({ client: formatCustomer(customer) })
 })
 

@@ -2,18 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { useAgents } from '../context/AgentContext'
 import { API_URL, api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
-import AgentCard from '../components/agents/AgentCard'
-import MessageAgentModal from '../components/modals/MessageAgentModal'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'Profile', 'Forms', 'Messages', 'Appointments', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -63,17 +60,12 @@ const resolvePhotoUrl = (value = '') => {
 
 export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
-  const { getAgent } = useAgents()
   const nav = useNavigate()
   const location = useLocation()
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [client, setClient] = useState(null)
-  const [savedAgent, setSavedAgent] = useState(null)
-  const [savedAgentLoading, setSavedAgentLoading] = useState(false)
-  const [messageOpen, setMessageOpen] = useState(false)
-  const [messageAgent, setMessageAgent] = useState(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareSnapshot, setShareSnapshot] = useState(null)
   const [formsDraft, setFormsDraft] = useState(null)
@@ -160,26 +152,6 @@ export default function ClientDashboard() {
   useEffect(() => {
     fetchProfile()
   }, [user?.customerId, user?.email])
-
-  useEffect(() => {
-    const preferredId = client?.preferredAgentId
-    if (!preferredId) {
-      setSavedAgent(null)
-      return
-    }
-    let active = true
-    setSavedAgentLoading(true)
-    getAgent(preferredId)
-      .then((agent) => {
-        if (active) setSavedAgent(agent)
-      })
-      .finally(() => {
-        if (active) setSavedAgentLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [client?.preferredAgentId, getAgent])
 
   const loadThreads = async () => {
     if (!user?.customerId) return
@@ -347,19 +319,6 @@ export default function ClientDashboard() {
       }
     }
   }, [photoPreview])
-
-  const handleMessage = (agent) => {
-    if (!user) {
-      toast.error('Login to send a message')
-      return
-    }
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can message agents')
-      return
-    }
-    setMessageAgent(agent)
-    setMessageOpen(true)
-  }
 
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0]
@@ -735,9 +694,7 @@ export default function ClientDashboard() {
           {!loading && activeTab === 'Overview' && (
             <div className="surface p-5">
               <h2 className="text-xl font-semibold mb-2">Overview</h2>
-              <p className="text-slate-600">
-                Stay on top of your insurance profile, saved agents, and upcoming appointments.
-              </p>
+              <p className="text-slate-600">Stay on top of your insurance profile and upcoming appointments.</p>
               {needsAuthenticator && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-sm font-semibold text-amber-900">
@@ -965,27 +922,6 @@ export default function ClientDashboard() {
               onFormDataChange={setFormsDraft}
               initialData={client?.profileData?.forms || null}
             />
-          )}
-
-          {!loading && activeTab === 'Agents' && (
-            <div className="surface p-5">
-              <h2 className="text-xl font-semibold mb-2">Agents</h2>
-              <p className="text-slate-600">Saved and matched agents will show up here.</p>
-              <div className="mt-4">
-                {savedAgentLoading && <Skeleton className="h-24" />}
-                {!savedAgentLoading && savedAgent && (
-                  <AgentCard
-                    agent={savedAgent}
-                    onVoice={() => nav(`/call/voice/${savedAgent.id}`)}
-                    onVideo={() => nav(`/call/video/${savedAgent.id}`)}
-                    onMessage={handleMessage}
-                  />
-                )}
-                {!savedAgentLoading && !savedAgent && (
-                  <div className="text-sm text-slate-500">No saved agents yet.</div>
-                )}
-              </div>
-            </div>
           )}
 
           {!loading && activeTab === 'Messages' && (
@@ -1238,12 +1174,10 @@ export default function ClientDashboard() {
           )}
         </section>
       </div>
-      <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
       <ShareProfileModal
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         snapshot={shareSnapshot}
-        defaultAgentId={client?.preferredAgentId}
       />
       <ReviewShareEditsModal
         open={Boolean(reviewShare)}

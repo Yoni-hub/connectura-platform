@@ -84,7 +84,6 @@ const customersData = [
     vehicles: [
       { year: 2021, make: 'Toyota', model: 'RAV4', vin: 'JT3BG29V4M1234567', primaryUse: 'Commute' },
     ],
-    preferredAgentEmail: 'sarah@connsura.test',
   },
   {
     name: 'Alexis Morgan',
@@ -101,7 +100,6 @@ const customersData = [
       { year: 2019, make: 'Honda', model: 'Civic', vin: '2HGES16545H123456', primaryUse: 'Commute' },
       { year: 2023, make: 'Subaru', model: 'Outback', vin: '4S4BTANC5N3123456', primaryUse: 'Family' },
     ],
-    preferredAgentEmail: 'miguel@connsura.test',
   },
 ]
 
@@ -145,10 +143,6 @@ async function seedAgents(hashedPassword) {
 
 async function seedCustomers(hashedPassword) {
   for (const customer of customersData) {
-    const preferredAgent = await prisma.user.findUnique({
-      where: { email: customer.preferredAgentEmail },
-      include: { agent: true },
-    })
     await prisma.user.create({
       data: {
         email: customer.email,
@@ -161,8 +155,6 @@ async function seedCustomers(hashedPassword) {
             priorInsurance: JSON.stringify(customer.priorInsurance),
             coverages: JSON.stringify(customer.coverages),
             profileData: JSON.stringify(customer.profileData || {}),
-            sharedWithAgent: true,
-            preferredAgentId: preferredAgent?.agent?.id,
             drivers: {
               create: customer.drivers.map((driver) => ({
                 name: driver.name,

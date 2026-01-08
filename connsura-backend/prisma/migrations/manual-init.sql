@@ -37,12 +37,9 @@ CREATE TABLE "Customer" (
     "preferredLangs" TEXT NOT NULL,
     "priorInsurance" TEXT NOT NULL,
     "coverages" TEXT NOT NULL,
-    "sharedWithAgent" BOOLEAN NOT NULL DEFAULT false,
-    "preferredAgentId" INTEGER,
     "profileData" TEXT NOT NULL DEFAULT '{}',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Customer_preferredAgentId_fkey" FOREIGN KEY ("preferredAgentId") REFERENCES "Agent" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Customer_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

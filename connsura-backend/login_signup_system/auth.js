@@ -134,7 +134,6 @@ router.post('/register', async (req, res) => {
                   preferredLangs: JSON.stringify(languages),
                   priorInsurance: JSON.stringify([]),
                   coverages: JSON.stringify([]),
-                  sharedWithAgent: false,
                 },
               }
             : undefined,

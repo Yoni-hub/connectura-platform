@@ -22,10 +22,9 @@ Agent controls
 Client controls
 - GET `/admin/clients` → list clients
 - GET `/admin/clients/:id` → client detail
-- PUT `/admin/clients/:id` → update profile fields / sharing / disable flag
+- PUT `/admin/clients/:id` → update profile fields / disable flag
 - POST `/admin/clients/:id/disable` → disable client account
 - POST `/admin/clients/:id/enable` → re-enable client account
-- POST `/admin/clients/:id/unshare` → revoke agent sharing and preferred agent
 - DELETE `/admin/clients/:id` → delete client (removes linked user)
 
 Audit

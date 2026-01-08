@@ -42,27 +42,13 @@ export function ProfileProvider({ children }) {
     }
   }
 
-  const shareWithAgent = async (agentId) => {
-    if (!user?.customerId) return
-    try {
-      const res = await api.put(`/customers/${user.customerId}/profile`, {
-        sharedWithAgent: true,
-        preferredAgentId: agentId,
-      })
-      const profilePayload = res.data.profile
-      setProfile(profilePayload ? { ...profilePayload, profileData: profilePayload.profileData || {} } : null)
-      toast.success('Profile shared with agent')
-    } catch {
-      toast.error('Unable to share profile')
-    }
-  }
 
   useEffect(() => {
     loadProfile()
   }, [user?.customerId])
 
   return (
-    <ProfileContext.Provider value={{ profile, loading, saveProfile, shareWithAgent, loadProfile }}>
+    <ProfileContext.Provider value={{ profile, loading, saveProfile, loadProfile }}>
       {children}
     </ProfileContext.Provider>
   )

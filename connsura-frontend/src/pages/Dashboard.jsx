@@ -1,31 +1,20 @@
-import { useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useProfile } from '../context/ProfileContext'
-import { useAgents } from '../context/AgentContext'
 import Skeleton from '../components/ui/Skeleton'
-import Badge from '../components/ui/Badge'
 import { API_URL } from '../services/api'
 
 export default function Dashboard() {
   const { profile, loading, loadProfile } = useProfile()
-  const { agents } = useAgents()
-  const nav = useNavigate()
-
   useEffect(() => {
     loadProfile()
   }, [])
-
-  const preferredAgent = useMemo(
-    () => agents.find((a) => a.id === profile?.preferredAgentId),
-    [agents, profile?.preferredAgentId]
-  )
 
   return (
     <main className="page-shell py-8 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Customer dashboard</h1>
-          <p className="text-slate-500">Profile, saved agent, call actions, and post-sale summary</p>
+          <p className="text-slate-500">Profile, call actions, and post-sale summary</p>
         </div>
         <button
           onClick={() => window.open(`${API_URL}/forms/customer-information.html`, '_blank')}
@@ -38,12 +27,10 @@ export default function Dashboard() {
       {loading && <Skeleton className="h-24" />}
 
       {profile && (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="surface p-5 lg:col-span-2 space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold">Profile</h2>
-              {profile.sharedWithAgent ? <Badge label="Shared" tone="green" /> : <Badge label="Not shared" tone="gray" />}
-            </div>
+        <div className="surface p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Profile</h2>
+          </div>
             <div className="text-sm text-slate-600">Preferred languages: {profile.preferredLangs.join(', ') || '—'}</div>
             <div className="text-sm text-slate-600">Coverages: {profile.coverages.join(', ') || '—'}</div>
             <div className="text-sm text-slate-600">
@@ -119,33 +106,6 @@ export default function Dashboard() {
                 <div className="text-sm text-slate-600">{profile.profileData.notes}</div>
               </div>
             )}
-          </div>
-
-          <div className="surface p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">Preferred agent</h2>
-              <Badge label={preferredAgent ? 'Saved' : 'None'} tone={preferredAgent ? 'green' : 'gray'} />
-            </div>
-            {preferredAgent ? (
-              <>
-                <div className="font-semibold">{preferredAgent.name}</div>
-                <div className="text-sm text-slate-500">{preferredAgent.languages.join(', ')}</div>
-                <div className="flex gap-2">
-                  <button onClick={() => nav(`/call/voice/${preferredAgent.id}`)} className="pill-btn-primary text-sm">
-                    Voice call
-                  </button>
-                  <button
-                    onClick={() => nav(`/call/video/${preferredAgent.id}`)}
-                    className="pill-btn bg-slate-900 text-white text-sm hover:bg-slate-800"
-                  >
-                    Video call
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-slate-500">Share your profile with an agent to save them here.</div>
-            )}
-          </div>
         </div>
       )}
 

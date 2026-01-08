@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
+import Modal from '../ui/Modal'
 
 export default function AuthenticatorPanel() {
   const { user, setUser } = useAuth()
@@ -9,21 +10,17 @@ export default function AuthenticatorPanel() {
   const [setupLoading, setSetupLoading] = useState(false)
   const [confirmCode, setConfirmCode] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const [regenCode, setRegenCode] = useState('')
-  const [regenBackupCode, setRegenBackupCode] = useState('')
-  const [regenLoading, setRegenLoading] = useState(false)
-  const [regenCodes, setRegenCodes] = useState([])
   const [disablePassword, setDisablePassword] = useState('')
   const [disableCode, setDisableCode] = useState('')
   const [disableBackupCode, setDisableBackupCode] = useState('')
   const [disableLoading, setDisableLoading] = useState(false)
+  const [disableOpen, setDisableOpen] = useState(false)
 
   const enabled = Boolean(user?.totpEnabled)
   const recoveryId = user?.recoveryId || setupData?.recoveryId || ''
 
   const startSetup = async () => {
     setSetupLoading(true)
-    setRegenCodes([])
     try {
       const res = await api.post('/auth/totp/setup')
       setSetupData(res.data)
@@ -46,33 +43,13 @@ export default function AuthenticatorPanel() {
     try {
       const res = await api.post('/auth/totp/confirm', { code })
       if (res.data?.user) setUser(res.data.user)
+      setSetupData(null)
+      setConfirmCode('')
       toast.success('Authenticator enabled')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to enable authenticator')
     } finally {
       setConfirming(false)
-    }
-  }
-
-  const regenerateBackupCodes = async () => {
-    const code = regenCode.trim()
-    const backupCode = regenBackupCode.trim()
-    if (!code && !backupCode) {
-      toast.error('Enter a code to generate backup codes')
-      return
-    }
-    setRegenLoading(true)
-    try {
-      const res = await api.post('/auth/totp/backup-codes', { code, backupCode })
-      setRegenCodes(res.data?.backupCodes || [])
-      setRegenCode('')
-      setRegenBackupCode('')
-      if (res.data?.user) setUser(res.data.user)
-      toast.success('Backup codes generated')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to generate backup codes')
-    } finally {
-      setRegenLoading(false)
     }
   }
 
@@ -94,10 +71,10 @@ export default function AuthenticatorPanel() {
       if (res.data?.user) setUser(res.data.user)
       setSetupData(null)
       setConfirmCode('')
-      setRegenCodes([])
       setDisablePassword('')
       setDisableCode('')
       setDisableBackupCode('')
+      setDisableOpen(false)
       toast.success('Authenticator disabled')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to disable authenticator')
@@ -199,57 +176,22 @@ export default function AuthenticatorPanel() {
 
       {enabled && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
-            <div className="text-slate-500">Recovery ID</div>
-            <div className="font-mono text-slate-900">{recoveryId || 'Not available'}</div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div className="font-semibold">Authenticator is set up</div>
+            <div className="text-emerald-800">You can use your recovery ID and codes if you forget your password.</div>
           </div>
-
-          <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
-            <div className="text-sm font-semibold">Generate new backup codes</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="block text-sm">
-                Authenticator code
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                  value={regenCode}
-                  onChange={(e) => setRegenCode(e.target.value)}
-                />
-              </label>
-              <label className="block text-sm">
-                Backup code
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                  value={regenBackupCode}
-                  onChange={(e) => setRegenBackupCode(e.target.value)}
-                />
-              </label>
+          <button
+            type="button"
+            className="pill-btn-primary px-4"
+            onClick={() => setDisableOpen(true)}
+          >
+            Disable authenticator
+          </button>
+          <Modal title="Disable authenticator" open={disableOpen} onClose={() => setDisableOpen(false)}>
+            <div className="space-y-3 text-sm text-slate-600">
+              <p>Confirm your password, then enter either an authenticator code or a backup code.</p>
             </div>
-            <button
-              type="button"
-              className="pill-btn-ghost px-4"
-              onClick={regenerateBackupCodes}
-              disabled={regenLoading}
-            >
-              {regenLoading ? 'Generating...' : 'Generate backup codes'}
-            </button>
-
-            {regenCodes.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-sm text-slate-600">New backup codes (save them now)</div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {regenCodes.map((code) => (
-                    <div key={code} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700">
-                      {code}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
-            <div className="text-sm font-semibold">Disable authenticator</div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="mt-4 space-y-3">
               <label className="block text-sm">
                 Password
                 <input
@@ -267,7 +209,7 @@ export default function AuthenticatorPanel() {
                   onChange={(e) => setDisableCode(e.target.value)}
                 />
               </label>
-              <label className="block text-sm sm:col-span-2">
+              <label className="block text-sm">
                 Backup code
                 <input
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
@@ -275,16 +217,26 @@ export default function AuthenticatorPanel() {
                   onChange={(e) => setDisableBackupCode(e.target.value)}
                 />
               </label>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  className="pill-btn-ghost"
+                  onClick={() => setDisableOpen(false)}
+                  disabled={disableLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-primary px-4"
+                  onClick={disableAuthenticator}
+                  disabled={disableLoading}
+                >
+                  {disableLoading ? 'Disabling...' : 'Disable authenticator'}
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              className="pill-btn-ghost px-4"
-              onClick={disableAuthenticator}
-              disabled={disableLoading}
-            >
-              {disableLoading ? 'Disabling...' : 'Disable authenticator'}
-            </button>
-          </div>
+          </Modal>
         </div>
       )}
     </div>

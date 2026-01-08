@@ -12,7 +12,7 @@ const getInitials = (name = '', fallback = 'AG') => {
     .toUpperCase()
 }
 
-export default function AgentCard({ agent, onVoice, onVideo, onSave, onMessage }) {
+export default function AgentCard({ agent, onVoice, onVideo, onMessage }) {
   const statusTone = agent.availability === 'online' ? 'green' : agent.availability === 'busy' ? 'amber' : 'gray'
   const [photoError, setPhotoError] = useState(false)
   const initials = getInitials(agent.name)
@@ -59,11 +59,6 @@ export default function AgentCard({ agent, onVoice, onVideo, onSave, onMessage }
           {onMessage && (
             <button onClick={() => onMessage(agent)} className="pill-btn-ghost">
               Message
-            </button>
-          )}
-          {onSave && (
-            <button onClick={() => onSave(agent)} className="pill-btn-ghost">
-              Save preferred
             </button>
           )}
         </div>

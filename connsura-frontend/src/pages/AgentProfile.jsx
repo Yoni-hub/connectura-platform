@@ -4,7 +4,6 @@ import { useAgents } from '../context/AgentContext'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import { api } from '../services/api'
-import { useProfile } from '../context/ProfileContext'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
@@ -16,7 +15,6 @@ export default function AgentProfile() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [messageOpen, setMessageOpen] = useState(false)
-  const { shareWithAgent } = useProfile()
   const { user } = useAuth()
   const nav = useNavigate()
 
@@ -36,19 +34,6 @@ export default function AgentProfile() {
       .then((res) => setSummary(res.data.summary))
       .catch(() => {})
   }, [id])
-
-  const handleShare = () => {
-    if (!user) return toast.error('Login to share profile')
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can share profiles')
-      return
-    }
-    if (!user.emailVerified) {
-      toast.error('Verify your email to share your profile')
-      return
-    }
-    shareWithAgent(agent.id)
-  }
 
   const handleMessageOpen = () => {
     if (!user) {
@@ -100,27 +85,10 @@ export default function AgentProfile() {
               <button onClick={handleMessageOpen} className="pill-btn-ghost">
                 Message
               </button>
-              <button onClick={handleShare} className="pill-btn-ghost">
-                Share profile
-              </button>
             </div>
           </div>
         </div>
       </div>
-
-      {summary && (
-        <div className="surface p-6">
-          <h3 className="text-lg font-semibold mb-4">Post-sale summary (placeholder)</h3>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {Object.entries(summary).map(([key, val]) => (
-              <div key={key} className="rounded-lg border border-slate-100 p-4 bg-slate-50 shadow-sm">
-                <div className="text-xs uppercase text-slate-500">{key}</div>
-                <div className="font-semibold">{val}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="surface p-6">
         <h3 className="text-lg font-semibold mb-3">Recent reviews</h3>

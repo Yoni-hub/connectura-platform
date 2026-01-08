@@ -50,7 +50,6 @@ model Agent {
   reviews      String
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  customers    Customer[] @relation("AgentCustomers")
   messages     Message[]  @relation("AgentMessages")
   shares       ProfileShare[]
 
@@ -64,9 +63,6 @@ model Customer {
   preferredLangs   String
   priorInsurance   String
   coverages        String
-  sharedWithAgent  Boolean   @default(false)
-  preferredAgent   Agent?    @relation("AgentCustomers", fields: [preferredAgentId], references: [id])
-  preferredAgentId Int?
   isDisabled       Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

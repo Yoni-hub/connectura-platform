@@ -48,8 +48,6 @@ const formatCustomerProfile = (customer) => ({
   preferredLangs: parseJson(customer.preferredLangs, []),
   coverages: parseJson(customer.coverages, []),
   priorInsurance: parseJson(customer.priorInsurance, []),
-  sharedWithAgent: customer.sharedWithAgent,
-  preferredAgentId: customer.preferredAgentId,
   drivers: customer.drivers || [],
   vehicles: customer.vehicles || [],
   profileData: parseJson(customer.profileData, {}),
@@ -139,31 +137,6 @@ router.post('/:id/profile', authGuard, async (req, res) => {
     include: { drivers: true, vehicles: true },
   })
   res.status(201).json({ profile: formatCustomerProfile(updated) })
-})
-
-router.put('/:id/profile', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-    include: { drivers: true, vehicles: true },
-  })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (req.user.role === 'CUSTOMER' && req.user.id !== customer.userId) {
-    return res.status(403).json({ error: 'Forbidden' })
-  }
-  const { sharedWithAgent, preferredAgentId } = req.body
-  if (req.user.role === 'CUSTOMER' && sharedWithAgent === true && !req.user.emailVerified) {
-    return res.status(403).json({ error: 'Email not verified' })
-  }
-  const updated = await prisma.customer.update({
-    where: { id: customerId },
-    data: {
-      sharedWithAgent: sharedWithAgent ?? customer.sharedWithAgent,
-      preferredAgentId: preferredAgentId ?? customer.preferredAgentId,
-    },
-    include: { drivers: true, vehicles: true },
-  })
-  res.json({ profile: formatCustomerProfile(updated) })
 })
 
 router.patch('/:id/profile-data', authGuard, async (req, res) => {
