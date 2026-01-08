@@ -1,0 +1,341 @@
+SYSTEM ROLE
+
+You are a senior full-stack engineer and compliance-aware product architect working on the Connsura platform.
+
+Your task is to:
+
+Integrate new About Us content (public + regulatory) into the correct existing site locations
+
+Refactor static page content into a CMS-style admin-editable system
+
+Ensure all updates are reflected instantly on the public website when saved from the admin dashboard
+
+Preserve Connsura’s non-insurance, non-producer regulatory posture
+
+OBJECTIVES
+1. CONTENT INTEGRATION (MANDATORY)
+
+Using the two About Us versions provided below, do the following:
+
+A. Top Navigation → About Us
+
+Replace existing placeholder content
+
+Insert 
+
+VERSION A — PUBLIC WEBSITE
+About Connsura
+
+Connsura is a technology platform designed to simplify how people organize, manage, and share their insurance information.
+
+Buying or reviewing insurance often means filling out the same forms repeatedly, navigating unfamiliar terminology, and struggling to communicate clearly with licensed professionals. Connsura was built to solve that problem—without replacing or interfering with the insurance process itself.
+
+What We Do
+
+Connsura provides a secure digital Insurance Passport that allows individuals and families to:
+
+Create and manage their insurance-related information in one place
+
+Update details once instead of re-entering them repeatedly
+
+Share their information securely with licensed insurance agents when they choose
+
+Find independent agents based on language, location, or name
+
+Communicate directly with agents using built-in messaging tools
+
+All information shared through Connsura remains under the user’s control.
+
+What We Do Not Do
+
+To be clear:
+
+Connsura does not sell insurance
+
+We do not quote premiums or recommend policies
+
+We do not negotiate coverage terms
+
+We do not bind insurance or collect payments
+
+We do not act on behalf of any insurance company
+
+All insurance transactions occur directly between consumers and independently licensed insurance agents.
+
+Our Role in the Insurance Ecosystem
+
+Connsura serves as neutral infrastructure—a secure bridge between consumers and licensed professionals.
+
+We support:
+
+Consumers by reducing friction and improving clarity
+
+Licensed agents by providing better-organized, client-approved information
+
+We do not replace agents, carriers, or regulators.
+
+Trust, Privacy & Control
+
+Users own their data
+
+Information is shared only with explicit consent
+
+Access is logged and auditable
+
+Security and privacy are foundational to our design
+
+Trust is not a feature—it is the core of our platform.
+
+Our Vision
+
+We believe insurance should be easier to manage, easier to understand, and easier to communicate—without compromising regulation, professionalism, or consumer protection.
+
+Connsura exists to modernize access, not bypass safeguards.
+
+Structure it into clear sections:
+
+Introduction
+
+What We Do
+
+What We Do Not Do
+
+Our Role in the Insurance Ecosystem
+
+Trust, Privacy & Control
+
+Our Vision
+
+B. Bottom Left Navigation → About Us
+
+REMOVE this link entirely
+
+Do NOT redirect
+
+Ensure no duplicate “About Us” exists in footer or bottom navigation
+
+C. Contact Us (Bottom Navigation ONLY)
+
+Confirm no Contact Us link exists in the top navigation
+
+Keep existing bottom navigation Contact Us page
+
+Retain current contact form UI
+
+Add a short compliance-safe intro line above the form:
+
+“Questions about the platform, data usage, or access? Reach out and our team will respond.”
+
+D. Careers
+
+Leave current placeholder roles intact
+
+Add a short paragraph at the top aligned with Connsura’s mission:
+
+Emphasize technology, trust, accessibility, and neutrality
+
+Clearly state that all roles are non-insurance, non-producer positions
+
+E. Privacy Policy
+
+Expand current copy using language aligned with:
+
+User data ownership
+
+Consent-based sharing
+
+Auditability
+
+No data selling
+
+Avoid insurance advice or policy language
+
+Make fully admin-editable
+
+F. Legal Notice
+
+Replace current copy with 
+
+VERSION B — REGULATOR / INVESTOR APPENDIX
+Connsura: Platform Overview & Regulatory Position
+Company Overview
+
+Connsura is an insurance technology (InsurTech) platform that enables consumers to digitally store, manage, and selectively share insurance-related information with independently licensed insurance producers.
+
+Connsura operates exclusively as a technology and data-management platform and does not participate in insurance solicitation, negotiation, quoting, binding, or premium collection.
+
+Platform Functionality
+
+Connsura provides:
+
+A secure consumer-managed insurance profile (“Insurance Passport”)
+
+Consent-based data sharing with licensed agents
+
+Agent discovery tools (language, geography, name)
+
+Communication features supporting client-agent interaction
+
+Auditability and access controls for shared information
+
+All insurance-related decisions and transactions occur outside the Connsura platform.
+
+Explicit Exclusions
+
+Connsura does not:
+
+Act as an insurance producer, broker, or agency
+
+Represent insurers or underwrite risk
+
+Provide policy recommendations or pricing
+
+Receive commissions or compensation tied to policy placement
+
+Collect or transmit insurance premiums
+
+The platform is intentionally structured to avoid activities requiring insurance producer licensure.
+
+Agent Relationship Model
+
+All agents using Connsura are:
+
+Independently licensed insurance producers
+
+Responsible for their own regulatory compliance
+
+Not employees, contractors, or representatives of Connsura
+
+License verification may be performed for platform integrity, but Connsura does not sponsor, supervise, or control agent conduct.
+
+Data Governance & Consumer Protection
+
+Data ownership remains with the consumer
+
+Information sharing is opt-in and revocable
+
+Access is logged for transparency and audit purposes
+
+Security controls align with industry best practices
+
+Connsura’s compliance focus is centered on data protection, transparency, and consumer consent.
+
+Regulatory Position Statement
+
+Connsura should be classified as a non-regulated insurance technology service provider, similar to CRM platforms, data-management tools, and agent directories.
+
+The platform does not engage in activities that constitute insurance solicitation or transaction under applicable state insurance laws.
+
+Long-Term Vision
+
+Connsura aims to become trusted infrastructure that supports licensed professionals while empowering consumers—without disrupting established regulatory frameworks.
+
+Must clearly state:
+
+Connsura is not an insurer, agency, or producer
+
+No quoting, binding, or premium handling
+
+Agents are independent and licensed
+
+Use conservative, regulator-friendly language
+
+Make fully admin-editable
+
+2. CONTENT SOURCE OF TRUTH (VERY IMPORTANT)
+Create Admin-Editable Content System
+
+Implement a centralized content management model:
+
+A. Database / Storage
+
+Create a site_content system with:
+
+id
+
+slug (e.g. about_public, privacy_policy, legal_notice)
+
+title
+
+content (HTML or Markdown)
+
+last_updated
+
+updated_by
+
+B. Admin Dashboard – New Tab
+
+Create a new admin tab titled:
+
+“Website Content Manager”
+
+Features:
+
+Editable pages:
+
+About Us (Public)
+
+Privacy Policy
+
+Legal Notice
+
+Careers Intro
+
+Contact Page Intro
+
+Rich-text editor (safe HTML / Markdown)
+
+Save button
+
+Success confirmation
+
+Basic version tracking (timestamp + editor)
+
+C. Frontend Rendering
+
+Public pages must fetch content dynamically
+
+No hard-coded legal or informational text
+
+Saving content updates the website instantly (no redeploy)
+
+3. COMPLIANCE & SAFETY RULES (NON-NEGOTIABLE)
+
+Ensure:
+
+No insurance solicitation language
+
+No quoting, pricing, or carrier recommendations
+
+No commission-based or success-based wording
+
+Clear disclaimers remain intact
+
+If admin-edited content violates these rules:
+
+Log a warning
+
+(Optional) flag for review
+
+4. DELIVERABLES
+
+Output:
+
+Updated page-to-content mapping
+
+Content data model
+
+Admin dashboard UI logic
+
+Frontend rendering logic
+
+Compliance notes
+
+SUCCESS CRITERIA
+
+✔ Single About Us page (top nav only)
+✔ Footer cleaned of duplicate links
+✔ All legal content admin-editable
+✔ Zero insurance licensing risk
+
+END PROMPT

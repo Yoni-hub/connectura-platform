@@ -5,6 +5,7 @@ const { adminGuard } = require('../middleware/auth')
 const { generateToken } = require('../utils/token')
 const { parseJson } = require('../utils/transform')
 const { getEmailOtp } = require('../utils/emailOtp')
+const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = require('../utils/siteContent')
 
 const router = express.Router()
 
@@ -59,6 +60,31 @@ const logAudit = async (actorId, targetType, targetId, action, diff = null) => {
     console.error('audit log error', err)
   }
 }
+
+const ensureSiteContentDefaults = async () => {
+  const existing = await prisma.siteContent.findMany({
+    where: { slug: { in: SITE_CONTENT_DEFAULTS.map((entry) => entry.slug) } },
+  })
+  const existingSlugs = new Set(existing.map((entry) => entry.slug))
+  const missing = SITE_CONTENT_DEFAULTS.filter((entry) => !existingSlugs.has(entry.slug))
+  if (!missing.length) return
+  await prisma.siteContent.createMany({
+    data: missing.map((entry) => ({
+      slug: entry.slug,
+      title: entry.title,
+      content: entry.content,
+      updatedBy: 'system',
+    })),
+  })
+}
+
+const formatSiteContent = (entry) => ({
+  slug: entry.slug,
+  title: entry.title,
+  content: entry.content,
+  lastUpdated: entry.lastUpdated,
+  updatedBy: entry.updatedBy,
+})
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body
@@ -282,6 +308,55 @@ router.get('/audit', adminGuard, async (req, res) => {
       createdAt: log.createdAt,
     })),
   })
+})
+
+// Site content management
+router.get('/site-content', adminGuard, async (req, res) => {
+  await ensureSiteContentDefaults()
+  const entries = await prisma.siteContent.findMany({
+    where: { slug: { in: SITE_CONTENT_DEFAULTS.map((entry) => entry.slug) } },
+    orderBy: { slug: 'asc' },
+  })
+  res.json({ content: entries.map(formatSiteContent) })
+})
+
+router.put('/site-content/:slug', adminGuard, async (req, res) => {
+  const slug = String(req.params.slug || '').trim()
+  if (!slug) return res.status(400).json({ error: 'Slug is required' })
+  const incomingTitle = String(req.body?.title || '').trim()
+  const incomingContent = String(req.body?.content || '')
+  if (!incomingTitle) return res.status(400).json({ error: 'Title is required' })
+
+  const sanitizedContent = sanitizeContent(incomingContent)
+  const warnings = checkComplianceWarnings(sanitizedContent)
+
+  const entry = await prisma.siteContent.upsert({
+    where: { slug },
+    create: {
+      slug,
+      title: incomingTitle,
+      content: sanitizedContent,
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+      lastUpdated: new Date(),
+    },
+    update: {
+      title: incomingTitle,
+      content: sanitizedContent,
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+      lastUpdated: new Date(),
+    },
+  })
+
+  if (warnings.length) {
+    console.warn(`content compliance warning for ${slug}:`, warnings)
+    await logAudit(req.admin.id, 'SiteContent', slug, 'content_warning', { warnings })
+  }
+
+  await logAudit(req.admin.id, 'SiteContent', slug, 'update', {
+    title: incomingTitle,
+    warningCount: warnings.length,
+  })
+  res.json({ content: formatSiteContent(entry), warnings })
 })
 
 module.exports = router

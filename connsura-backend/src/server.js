@@ -14,6 +14,7 @@ const adminRoutes = require('./routes/admin')
 const messageRoutes = require('./routes/messages')
 const questionRoutes = require('./routes/questions')
 const shareRoutes = require('./routes/shares')
+const siteContentRoutes = require('./routes/siteContent')
 const prisma = require('./prisma')
 const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
 
@@ -45,6 +46,7 @@ app.use('/admin', adminRoutes)
 app.use('/messages', messageRoutes)
 app.use('/questions', questionRoutes)
 app.use('/shares', shareRoutes)
+app.use('/site-content', siteContentRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' })

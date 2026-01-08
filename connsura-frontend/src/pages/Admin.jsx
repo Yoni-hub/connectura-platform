@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { API_URL } from '../services/api'
 import { adminApi, ADMIN_TOKEN_KEY } from '../services/adminApi'
+import { renderSiteContent } from '../utils/siteContent'
 
 export default function Admin() {
   const [token, setToken] = useState(() => localStorage.getItem(ADMIN_TOKEN_KEY) || '')
@@ -18,6 +19,11 @@ export default function Admin() {
   const [otpResult, setOtpResult] = useState(null)
   const [otpLoading, setOtpLoading] = useState(false)
   const [otpError, setOtpError] = useState('')
+  const [contentEntries, setContentEntries] = useState([])
+  const [contentLoading, setContentLoading] = useState(false)
+  const [contentSaving, setContentSaving] = useState(false)
+  const [activeContentSlug, setActiveContentSlug] = useState('about_public')
+  const [contentWarnings, setContentWarnings] = useState([])
 
   const isAuthed = Boolean(token)
 
@@ -28,6 +34,14 @@ export default function Admin() {
       .filter(Boolean)
 
   const joinList = (value = []) => (Array.isArray(value) ? value.filter(Boolean).join(', ') : '')
+
+  const contentPages = [
+    { slug: 'about_public', label: 'About Us (Public)' },
+    { slug: 'privacy_policy', label: 'Privacy Policy' },
+    { slug: 'legal_notice', label: 'Legal Notice' },
+    { slug: 'careers_intro', label: 'Careers Intro' },
+    { slug: 'contact_intro', label: 'Contact Page Intro' },
+  ]
 
   const activeDetailTab =
     detailTabs.find((t) => t.key === activeDetailKey) || (detailTabs.length ? detailTabs[detailTabs.length - 1] : null)
@@ -63,6 +77,9 @@ export default function Admin() {
     setOtpEmail('')
     setOtpResult(null)
     setOtpError('')
+    setContentEntries([])
+    setContentWarnings([])
+    setActiveContentSlug('about_public')
   }
 
   const upsertTab = (tab) => {
@@ -314,6 +331,19 @@ export default function Admin() {
     load()
   }, [isAuthed, view])
 
+  useEffect(() => {
+    if (!isAuthed || view !== 'content') return
+    loadContentEntries()
+  }, [isAuthed, view])
+
+  useEffect(() => {
+    if (!contentEntries.length) return
+    const exists = contentEntries.some((entry) => entry.slug === activeContentSlug)
+    if (!exists) {
+      setActiveContentSlug(contentEntries[0].slug)
+    }
+  }, [contentEntries, activeContentSlug])
+
   const doAgentAction = async (id, action) => {
     try {
       await adminApi.post(`/admin/agents/${id}/${action}`)
@@ -375,6 +405,51 @@ export default function Admin() {
       toast.error(message)
     } finally {
       setOtpLoading(false)
+    }
+  }
+
+  const loadContentEntries = async () => {
+    setContentLoading(true)
+    try {
+      const res = await adminApi.get('/admin/site-content')
+      setContentEntries(res.data.content || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load site content')
+    } finally {
+      setContentLoading(false)
+    }
+  }
+
+  const updateContentEntry = (slug, patch) => {
+    setContentEntries((prev) =>
+      prev.map((entry) => (entry.slug === slug ? { ...entry, ...patch } : entry))
+    )
+  }
+
+  const saveContentEntry = async (slug) => {
+    const entry = contentEntries.find((item) => item.slug === slug)
+    if (!entry) return
+    if (!entry.title?.trim()) {
+      toast.error('Title is required')
+      return
+    }
+    setContentSaving(true)
+    setContentWarnings([])
+    try {
+      const res = await adminApi.put(`/admin/site-content/${slug}`, {
+        title: entry.title,
+        content: entry.content || '',
+      })
+      const next = res.data?.content
+      if (next) {
+        updateContentEntry(slug, next)
+      }
+      setContentWarnings(res.data?.warnings || [])
+      toast.success('Content saved')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save content')
+    } finally {
+      setContentSaving(false)
     }
   }
 
@@ -524,6 +599,103 @@ export default function Admin() {
       </div>
     </div>
   )
+
+  const renderContentManager = () => {
+    const contentEntry =
+      contentEntries.find((entry) => entry.slug === activeContentSlug) || contentEntries[0] || null
+    const contentClasses =
+      'space-y-4 text-slate-600 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_p]:leading-relaxed'
+
+    return (
+      <div className="space-y-4">
+        {contentLoading && <div className="text-slate-500">Loading content...</div>}
+        {!contentLoading && !contentEntry && (
+          <div className="text-slate-500">No content entries found.</div>
+        )}
+        {!contentLoading && contentEntry && (
+          <div className="grid gap-4 lg:grid-cols-[260px,1fr]">
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pages</div>
+              {contentPages.map((page) => (
+                <button
+                  key={page.slug}
+                  type="button"
+                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold ${
+                    activeContentSlug === page.slug
+                      ? 'border-[#0b3b8c] bg-[#e8f0ff] text-[#0b3b8c]'
+                      : 'border-slate-200 bg-white text-slate-700'
+                  }`}
+                  onClick={() => {
+                    setActiveContentSlug(page.slug)
+                    setContentWarnings([])
+                  }}
+                >
+                  {page.label}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Website Content Manager</div>
+                  <div className="text-xs text-slate-500">
+                    Last updated:{' '}
+                    {contentEntry.lastUpdated ? new Date(contentEntry.lastUpdated).toLocaleString() : 'Not yet saved'} by{' '}
+                    {contentEntry.updatedBy || 'system'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="pill-btn-primary px-4"
+                  onClick={() => saveContentEntry(contentEntry.slug)}
+                  disabled={contentSaving}
+                >
+                  {contentSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+
+              <label className="block text-sm">
+                Title
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  value={contentEntry.title || ''}
+                  onChange={(e) => updateContentEntry(contentEntry.slug, { title: e.target.value })}
+                />
+              </label>
+              <label className="block text-sm">
+                Content (HTML or Markdown-style text)
+                <textarea
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 min-h-[220px] font-mono text-xs"
+                  value={contentEntry.content || ''}
+                  onChange={(e) => updateContentEntry(contentEntry.slug, { content: e.target.value })}
+                  spellCheck={false}
+                />
+              </label>
+
+              {contentWarnings.length > 0 && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  <div className="font-semibold">Compliance warnings</div>
+                  <ul className="list-disc pl-5">
+                    {contentWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Preview</div>
+                <div
+                  className={contentClasses}
+                  dangerouslySetInnerHTML={{ __html: renderSiteContent(contentEntry.content || '') }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const renderDetailContent = (tab) => {
     if (!tab) return null
@@ -875,6 +1047,7 @@ export default function Admin() {
             { id: 'agents', label: 'Agents' },
             { id: 'clients', label: 'Clients' },
             { id: 'audit', label: 'Audit logs' },
+            { id: 'content', label: 'Website Content Manager' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -963,6 +1136,7 @@ export default function Admin() {
           {!loading && view === 'agents' && renderAgents()}
           {!loading && view === 'clients' && renderClients()}
           {!loading && view === 'audit' && renderAudit()}
+          {view === 'content' && renderContentManager()}
         </div>
       </div>
     )
@@ -982,6 +1156,11 @@ export default function Admin() {
     otpResult,
     otpLoading,
     otpError,
+    contentEntries,
+    contentLoading,
+    contentSaving,
+    activeContentSlug,
+    contentWarnings,
   ])
 
   return <main className="page-shell py-8">{content}</main>

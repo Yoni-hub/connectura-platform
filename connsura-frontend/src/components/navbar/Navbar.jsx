@@ -115,7 +115,7 @@ export default function Navbar() {
                 For agents
               </button>
             )}
-            <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
+            <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
               About us
             </Link>
           </nav>
@@ -176,7 +176,7 @@ export default function Navbar() {
                   For agents
                 </button>
               )}
-              <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+              <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                 About us
               </Link>
             </div>

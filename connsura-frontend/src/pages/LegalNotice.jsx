@@ -1,20 +1,26 @@
+import { useSiteContent } from '../hooks/useSiteContent'
+import { renderSiteContent } from '../utils/siteContent'
+
+const contentClasses =
+  'space-y-4 text-slate-600 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_p]:leading-relaxed'
+
 export default function LegalNotice() {
+  const { content } = useSiteContent('legal_notice', {
+    title: 'Legal Notice',
+    content: '<p>Legal notice content is loading.</p>',
+  })
+
   return (
     <main className="page-shell py-10 space-y-6">
       <div className="surface p-6 space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Legal notice</h1>
-        <p className="text-slate-600">Regulatory and licensing information.</p>
+        <h1 className="text-3xl font-bold text-slate-900">{content?.title || 'Legal Notice'}</h1>
       </div>
 
-      <div className="surface p-6 space-y-4">
-        <p className="text-slate-700">
-          Connsura provides a matchmaking platform between consumers and licensed insurance agents. We are not a carrier
-          and do not bind coverage. Quotes are provided by agents and subject to carrier underwriting.
-        </p>
-        <p className="text-slate-700">
-          For licensing or compliance questions, contact legal@connsura.test. State-specific producer details are
-          available upon request.
-        </p>
+      <div className="surface p-6">
+        <div
+          className={contentClasses}
+          dangerouslySetInnerHTML={{ __html: renderSiteContent(content?.content || '') }}
+        />
       </div>
     </main>
   )

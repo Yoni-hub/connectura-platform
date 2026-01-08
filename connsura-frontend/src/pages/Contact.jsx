@@ -1,10 +1,19 @@
 import { useState } from 'react'
 import { api } from '../services/api'
 import toast from 'react-hot-toast'
+import { useSiteContent } from '../hooks/useSiteContent'
+import { renderSiteContent } from '../utils/siteContent'
 
 export default function Contact() {
   const [form, setForm] = useState({ email: '', message: '' })
   const [sending, setSending] = useState(false)
+  const { content } = useSiteContent('contact_intro', {
+    title: 'Contact Intro',
+    content:
+      '<p>Questions about the platform, data usage, or access? Reach out and our team will respond.</p>',
+  })
+
+  const introHtml = renderSiteContent(content?.content || '')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,6 +37,10 @@ export default function Contact() {
       </div>
 
       <div className="surface p-6 space-y-4">
+        <div
+          className="text-sm text-slate-600 [&_p]:leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: introHtml }}
+        />
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm">
             Email

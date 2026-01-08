@@ -154,6 +154,15 @@ model AuditLog {
   createdAt  DateTime  @default(now())
 }
 
+model SiteContent {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String
+  content     String
+  updatedBy   String?
+  lastUpdated DateTime @default(now())
+}
+
 enum QuestionSource {
   SYSTEM
   CUSTOMER
