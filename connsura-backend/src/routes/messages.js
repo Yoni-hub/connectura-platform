@@ -24,17 +24,48 @@ const ensureConversation = (agentId, customerId) => {
 }
 
 const addMessage = (agentId, customerId, body, senderRole) => {
+  const now = new Date()
   const message = {
     id: messageStore.nextId++,
     agentId,
     customerId,
     body,
     senderRole,
-    createdAt: new Date(),
+    createdAt: now,
+    readByAgentAt: senderRole === 'AGENT' ? now : null,
+    readByCustomerAt: senderRole === 'CUSTOMER' ? now : null,
   }
   const conversation = ensureConversation(agentId, customerId)
   conversation.push(message)
   return message
+}
+
+const countUnreadForAgent = (conversation) =>
+  conversation.filter((message) => message.senderRole === 'CUSTOMER' && !message.readByAgentAt).length
+
+const countUnreadForCustomer = (conversation) =>
+  conversation.filter((message) => message.senderRole === 'AGENT' && !message.readByCustomerAt).length
+
+const markThreadReadForAgent = (agentId, customerId) => {
+  const conversation = getConversation(agentId, customerId)
+  if (!conversation) return
+  const now = new Date()
+  conversation.forEach((message) => {
+    if (message.senderRole === 'CUSTOMER' && !message.readByAgentAt) {
+      message.readByAgentAt = now
+    }
+  })
+}
+
+const markThreadReadForCustomer = (agentId, customerId) => {
+  const conversation = getConversation(agentId, customerId)
+  if (!conversation) return
+  const now = new Date()
+  conversation.forEach((message) => {
+    if (message.senderRole === 'AGENT' && !message.readByCustomerAt) {
+      message.readByCustomerAt = now
+    }
+  })
 }
 
 const listThreadsForAgent = (agentId) => {
@@ -44,7 +75,12 @@ const listThreadsForAgent = (agentId) => {
     const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
     if (keyAgentId !== agentId) return
     const lastMessage = messages[messages.length - 1]
-    threads.push({ agentId: keyAgentId, customerId: keyCustomerId, lastMessage })
+    threads.push({
+      agentId: keyAgentId,
+      customerId: keyCustomerId,
+      lastMessage,
+      unreadCount: countUnreadForAgent(messages),
+    })
   })
   return threads.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt)
 }
@@ -56,7 +92,12 @@ const listThreadsForCustomer = (customerId) => {
     const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
     if (keyCustomerId !== customerId) return
     const lastMessage = messages[messages.length - 1]
-    threads.push({ agentId: keyAgentId, customerId: keyCustomerId, lastMessage })
+    threads.push({
+      agentId: keyAgentId,
+      customerId: keyCustomerId,
+      lastMessage,
+      unreadCount: countUnreadForCustomer(messages),
+    })
   })
   return threads.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt)
 }
@@ -116,7 +157,7 @@ const formatMessage = (message) => ({
   agent: message.agent ? formatAgent(message.agent) : null,
 })
 
-const buildCustomerThreads = (messages) => {
+const buildCustomerThreads = (messages, unreadMap = new Map()) => {
   const seen = new Set()
   const threads = []
   messages.forEach((message) => {
@@ -126,12 +167,13 @@ const buildCustomerThreads = (messages) => {
     threads.push({
       customer: formatCustomer(customer),
       lastMessage: formatMessage(message),
+      unreadCount: unreadMap.get(customer.id) || 0,
     })
   })
   return threads
 }
 
-const buildAgentThreads = (messages) => {
+const buildAgentThreads = (messages, unreadMap = new Map()) => {
   const seen = new Set()
   const threads = []
   messages.forEach((message) => {
@@ -141,6 +183,7 @@ const buildAgentThreads = (messages) => {
     threads.push({
       agent: formatAgent(agent),
       lastMessage: formatMessage(message),
+      unreadCount: unreadMap.get(agent.id) || 0,
     })
   })
   return threads
@@ -220,7 +263,8 @@ router.get('/agent/:id/threads', authGuard, async (req, res) => {
     }
     const threads = listThreadsForAgent(agentId)
     const hydrated = await hydrateMessages(threads.map((thread) => thread.lastMessage))
-    res.json({ threads: buildCustomerThreads(hydrated) })
+    const unreadMap = new Map(threads.map((thread) => [thread.customerId, thread.unreadCount]))
+    res.json({ threads: buildCustomerThreads(hydrated, unreadMap) })
   } catch (err) {
     console.error('message threads error', err)
     res.status(500).json({ error: 'Failed to load message threads' })
@@ -240,6 +284,7 @@ router.get('/agent/:id/thread/:customerId', authGuard, async (req, res) => {
     if (agent.id !== agentId) {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
+    markThreadReadForAgent(agentId, customerId)
     const messages = listMessagesForThread(agentId, customerId)
     const hydrated = await hydrateMessages(messages)
     res.json({ messages: hydrated.map(formatMessage) })
@@ -284,7 +329,8 @@ router.get('/customer/:id/threads', authGuard, async (req, res) => {
     }
     const threads = listThreadsForCustomer(customerId)
     const hydrated = await hydrateMessages(threads.map((thread) => thread.lastMessage))
-    res.json({ threads: buildAgentThreads(hydrated) })
+    const unreadMap = new Map(threads.map((thread) => [thread.agentId, thread.unreadCount]))
+    res.json({ threads: buildAgentThreads(hydrated, unreadMap) })
   } catch (err) {
     console.error('message threads error', err)
     res.status(500).json({ error: 'Failed to load message threads' })
@@ -304,6 +350,7 @@ router.get('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
     if (customer.id !== customerId) {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
+    markThreadReadForCustomer(agentId, customerId)
     const messages = listMessagesForThread(agentId, customerId)
     const hydrated = await hydrateMessages(messages)
     res.json({ messages: hydrated.map(formatMessage) })

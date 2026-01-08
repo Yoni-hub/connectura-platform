@@ -196,6 +196,9 @@ export default function ClientDashboard() {
     try {
       const res = await api.get(`/messages/customer/${user.customerId}/thread/${agentId}`)
       setThreadMessages(res.data.messages || [])
+      setThreads((prev) =>
+        prev.map((thread) => (thread.agent?.id === agentId ? { ...thread, unreadCount: 0 } : thread))
+      )
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not load conversation')
     } finally {
@@ -230,6 +233,15 @@ export default function ClientDashboard() {
     if (activeTab !== 'Messages') return
     loadThreads()
   }, [activeTab, user?.customerId])
+
+  useEffect(() => {
+    if (!user?.customerId) return
+    loadThreads()
+    const interval = setInterval(() => {
+      loadThreads()
+    }, 12000)
+    return () => clearInterval(interval)
+  }, [user?.customerId])
 
   useEffect(() => {
     loadPendingShares()
@@ -371,6 +383,10 @@ export default function ClientDashboard() {
       : parseLangs(formatLangs(profileDetails.preferredLangs || ''))
   const previewLangs = preferredLangsList.length ? preferredLangsList.join(', ') : '-'
   const previewNotes = form.notes || profileDetails.notes || profileDetails.claimsHistory || '-'
+  const totalUnread = useMemo(
+    () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
+    [threads]
+  )
 
   const requestEmailVerification = async () => {
     if (!user?.email) {
@@ -586,11 +602,16 @@ export default function ClientDashboard() {
               <button
                 key={item}
                 onClick={() => setActiveTab(item)}
-                className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left ${
+                className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left flex items-center justify-between gap-2 ${
                   activeTab === item ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {item}
+                <span>{item}</span>
+                {item === 'Messages' && totalUnread > 0 && (
+                  <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {totalUnread}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -695,6 +716,20 @@ export default function ClientDashboard() {
             <div className="surface p-5">
               <h2 className="text-xl font-semibold mb-2">Overview</h2>
               <p className="text-slate-600">Stay on top of your insurance profile and upcoming appointments.</p>
+              {totalUnread > 0 && (
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <div className="text-sm font-semibold text-rose-800">
+                    You have {totalUnread} new {totalUnread === 1 ? 'message' : 'messages'}.
+                  </div>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={() => setActiveTab('Messages')}
+                  >
+                    View messages
+                  </button>
+                </div>
+              )}
               {needsAuthenticator && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-sm font-semibold text-amber-900">

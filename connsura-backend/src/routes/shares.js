@@ -291,6 +291,26 @@ router.get('/active', authGuard, async (req, res) => {
   })
 })
 
+router.post('/status', authGuard, async (req, res) => {
+  if (req.user.role !== 'AGENT') {
+    return res.status(403).json({ error: 'Only agents can view share status' })
+  }
+  const agent = await prisma.agent.findUnique({ where: { userId: req.user.id } })
+  if (!agent) {
+    return res.status(404).json({ error: 'Agent not found' })
+  }
+  const tokens = Array.isArray(req.body?.tokens) ? req.body.tokens : []
+  const cleanTokens = tokens.map((token) => String(token || '').trim()).filter(Boolean)
+  if (!cleanTokens.length) {
+    return res.json({ statuses: [] })
+  }
+  const shares = await prisma.profileShare.findMany({
+    where: { token: { in: cleanTokens }, agentId: agent.id },
+    select: { token: true, status: true },
+  })
+  res.json({ statuses: shares })
+})
+
 router.post('/:token/approve', authGuard, async (req, res) => {
   if (req.user.role !== 'CUSTOMER') {
     return res.status(403).json({ error: 'Only customers can approve edits' })

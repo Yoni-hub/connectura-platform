@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
@@ -28,6 +28,33 @@ const resolvePhotoUrl = (value = '') => {
   return `${API_URL}${value}`
 }
 
+const extractShareTokens = (body = '') => {
+  const tokens = []
+  const regex = /\/share\/([a-f0-9]+)/gi
+  let match = regex.exec(body)
+  while (match) {
+    tokens.push(match[1])
+    match = regex.exec(body)
+  }
+  return tokens
+}
+
+const collectShareTokens = (messages = []) => {
+  const found = new Set()
+  messages.forEach((message) => {
+    extractShareTokens(message.body).forEach((token) => found.add(token))
+  })
+  return [...found]
+}
+
+const parseShareLink = (line = '') => {
+  const match = line.match(/Link:\s*(https?:\/\/\S+)/i)
+  if (!match) return null
+  const url = match[1]
+  const tokenMatch = url.match(/\/share\/([a-f0-9]+)/i)
+  return { url, token: tokenMatch ? tokenMatch[1] : null }
+}
+
 export default function AgentDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
   const nav = useNavigate()
@@ -46,6 +73,7 @@ export default function AgentDashboard() {
   const [threadLoading, setThreadLoading] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [shareStatusByToken, setShareStatusByToken] = useState({})
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -106,6 +134,11 @@ export default function AgentDashboard() {
     try {
       const res = await api.get(`/messages/agent/${user.agentId}/thread/${customerId}`)
       setThreadMessages(res.data.messages || [])
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread.customer?.id === customerId ? { ...thread, unreadCount: 0 } : thread
+        )
+      )
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not load conversation')
     } finally {
@@ -142,6 +175,15 @@ export default function AgentDashboard() {
   }, [activeTab, user?.agentId])
 
   useEffect(() => {
+    if (!user?.agentId) return
+    loadThreads()
+    const interval = setInterval(() => {
+      loadThreads()
+    }, 12000)
+    return () => clearInterval(interval)
+  }, [user?.agentId])
+
+  useEffect(() => {
     if (activeTab !== 'Messages') return
     if (!threads.length) {
       setActiveThread(null)
@@ -160,6 +202,35 @@ export default function AgentDashboard() {
       loadThread(activeThread.customer.id)
     }
   }, [activeTab, activeThread?.customer?.id])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    const tokens = collectShareTokens(threadMessages)
+    if (!tokens.length) return
+    const missing = tokens.filter((token) => !shareStatusByToken[token])
+    if (!missing.length) return
+
+    const loadStatuses = async () => {
+      try {
+        const res = await api.post('/shares/status', { tokens: missing })
+        const statuses = res.data?.statuses || []
+        if (!statuses.length) return
+        setShareStatusByToken((prev) => {
+          const next = { ...prev }
+          statuses.forEach((entry) => {
+            if (entry?.token) {
+              next[entry.token] = entry.status
+            }
+          })
+          return next
+        })
+      } catch (err) {
+        console.warn('Failed to load share statuses', err)
+      }
+    }
+
+    loadStatuses()
+  }, [activeTab, threadMessages, shareStatusByToken])
 
   useEffect(() => {
     setReplyBody('')
@@ -305,6 +376,53 @@ export default function AgentDashboard() {
     .join(', ') || '—'
   const previewBio = agent?.bio || 'Licensed agent on Connsura.'
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
+  const totalUnread = useMemo(
+    () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
+    [threads]
+  )
+
+  const renderMessageBody = (body = '') => {
+    const lines = String(body).split('\n')
+    return (
+      <div className="space-y-1">
+        {lines.map((line, index) => {
+          const linkData = parseShareLink(line)
+          if (!linkData) {
+            return (
+              <div key={`${index}-${line}`} className="whitespace-pre-wrap break-words">
+                {line}
+              </div>
+            )
+          }
+
+          const status = linkData.token ? shareStatusByToken[linkData.token] : null
+          const isRevoked = status && status !== 'active'
+
+          if (isRevoked) {
+            return (
+              <div key={`${index}-share`} className="space-y-1 text-red-600">
+                <div className="text-xs font-semibold">Customer stopped sharing this link.</div>
+                <div className="break-words">{linkData.url}</div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={`${index}-share`} className="break-words">
+              <a
+                href={linkData.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#0b3b8c] underline"
+              >
+                {linkData.url}
+              </a>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <main className="page-shell py-8">
@@ -316,13 +434,18 @@ export default function AgentDashboard() {
               <button
                 key={item}
                 onClick={() => setActiveTab(item)}
-                className={`w-full text-left rounded-xl px-3 py-2.5 font-semibold transition ${
+                className={`w-full rounded-xl px-3 py-2.5 font-semibold transition flex items-center justify-between ${
                   activeTab === item
                     ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm'
                     : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {item}
+                <span>{item}</span>
+                {item === 'Messages' && totalUnread > 0 && (
+                  <span className="ml-2 inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {totalUnread}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -365,6 +488,20 @@ export default function AgentDashboard() {
                 <p className="text-slate-600">
                   Track your leads, profile status, and upcoming appointments.
                 </p>
+                {totalUnread > 0 && (
+                  <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="text-sm font-semibold text-rose-800">
+                      You have {totalUnread} new {totalUnread === 1 ? 'message' : 'messages'}.
+                    </div>
+                    <button
+                      type="button"
+                      className="pill-btn-primary mt-3 px-4"
+                      onClick={() => setActiveTab('Messages')}
+                    >
+                      View messages
+                    </button>
+                  </div>
+                )}
                 {needsAuthenticator && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                     <div className="text-sm font-semibold text-amber-900">
@@ -727,7 +864,7 @@ export default function AgentDashboard() {
                                           : 'bg-slate-100 text-slate-700'
                                       }`}
                                     >
-                                      {message.body}
+                                      {renderMessageBody(message.body)}
                                       <div
                                         className={`mt-1 text-[11px] ${
                                           isAgent ? 'text-white/70' : 'text-slate-400'
