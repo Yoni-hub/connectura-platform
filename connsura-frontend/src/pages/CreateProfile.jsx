@@ -130,35 +130,173 @@ const yesNoOptions = ['No', 'Yes']
 const relationToApplicantOptions = ['Named Insured', 'Spouse', 'Child', 'Parent', 'Dependent', 'Other']
 const businessTypeOptions = ['Sole Proprietor', 'Partnership', 'LLC', 'Corporation', 'Nonprofit', 'Other']
 const defaultApplicantRelation = 'Named Insured'
-
-const namedInsuredFields = [
-  { id: 'ni-first-name', label: 'First Name' },
-  { id: 'ni-middle-initial', label: 'Middle Initial' },
-  { id: 'ni-last-name', label: 'Last Name' },
-  { id: 'ni-suffix', label: 'Suffix' },
-  { id: 'ni-dob', label: 'Date of Birth', type: 'date' },
-  { id: 'ni-gender', label: 'Gender', options: genderOptions },
-  { id: 'ni-marital-status', label: 'Marital Status', options: maritalStatusOptions },
-  { id: 'ni-education-level', label: 'Education Level', options: educationLevelOptions },
-  { id: 'ni-employment', label: 'Employment', options: employmentOptions },
-  { id: 'ni-occupation', label: 'Occupation' },
-  { id: 'ni-driver-status', label: 'Driver Status', options: driverStatusOptions },
-  { id: 'ni-license-type', label: "Driver's License Type", options: driversLicenseTypeOptions },
-  { id: 'ni-license-status', label: 'License Status', options: licenseStatusOptions },
-  { id: 'ni-years-licensed', label: 'Years Licensed', options: yearsLicensedOptions },
-  { id: 'ni-license-state', label: 'License State', options: licenseStateOptions },
-  { id: 'ni-license-number', label: 'License Number' },
-  { id: 'ni-accident-prevention', label: 'Accident Prevention Course', options: yesNoOptions },
-  { id: 'ni-sr22', label: 'SR-22 Required?', options: yesNoOptions },
-  { id: 'ni-fr44', label: 'FR-44 Required?', options: yesNoOptions },
+const additionalFormProductOptions = [
+  'Personal Auto',
+  'Homeowners',
+  'Renters',
+  'Motorcycle / Off-Road',
+  'Commercial Auto',
+  'General Liability Insurance',
+  'Commercial Property Insurance',
+  "Workers' Compensation",
+  'Professional Liability (Errors & Omissions)',
+  'Umbrella Insurance',
+  'Travel Insurance',
+  'Pet Insurance',
+  'Flood or Earthquake Insurance',
+  'Health Insurance',
+  'Life Insurance',
+  'Disability Insurance',
+  'Dental & Vision Insurance',
+  'Long-Term Care Insurance',
+  'Cyber Liability Insurance',
 ]
 
-const contactFields = [
+const baseHouseholdFields = [
+  { id: 'ni-first-name', key: 'first-name', label: 'First Name' },
+  { id: 'ni-middle-initial', key: 'middle-initial', label: 'Middle Initial' },
+  { id: 'ni-last-name', key: 'last-name', label: 'Last Name' },
+  { id: 'ni-suffix', key: 'suffix', label: 'Suffix' },
+  { id: 'ni-dob', key: 'dob', label: 'Date of Birth', type: 'date' },
+  { id: 'ni-gender', key: 'gender', label: 'Gender', options: genderOptions },
+  { id: 'ni-marital-status', key: 'marital-status', label: 'Marital Status', options: maritalStatusOptions },
+  { id: 'ni-education-level', key: 'education-level', label: 'Education Level', options: educationLevelOptions },
+  { id: 'ni-employment', key: 'employment', label: 'Employment', options: employmentOptions },
+  { id: 'ni-occupation', key: 'occupation', label: 'Occupation' },
+  { id: 'ni-driver-status', key: 'driver-status', label: 'Driver Status', options: driverStatusOptions },
+  { id: 'ni-license-type', key: 'license-type', label: "Driver's License Type", options: driversLicenseTypeOptions },
+  { id: 'ni-license-status', key: 'license-status', label: 'License Status', options: licenseStatusOptions },
+  { id: 'ni-years-licensed', key: 'years-licensed', label: 'Years Licensed', options: yearsLicensedOptions },
+  { id: 'ni-license-state', key: 'license-state', label: 'License State', options: licenseStateOptions },
+  { id: 'ni-license-number', key: 'license-number', label: 'License Number' },
+  { id: 'ni-accident-prevention', key: 'accident-prevention', label: 'Accident Prevention Course', options: yesNoOptions },
+  { id: 'ni-sr22', key: 'sr22', label: 'SR-22 Required?', options: yesNoOptions },
+  { id: 'ni-fr44', key: 'fr44', label: 'FR-44 Required?', options: yesNoOptions },
+]
+
+const baseContactFields = [
   { id: 'phone1', label: 'Phone #1', type: 'tel' },
   { id: 'phone2', label: 'Phone #2', type: 'tel' },
   { id: 'email1', label: 'Email Address #1', type: 'email' },
   { id: 'email2', label: 'Email Address #2', type: 'email' },
 ]
+
+const baseResidentialFields = [
+  { id: 'address1', label: 'Street Address 1' },
+  { id: 'city', label: 'City' },
+  { id: 'state', label: 'State' },
+  { id: 'zip', label: 'Zip Code' },
+]
+
+const baseMailingFields = [
+  { id: 'address1', label: 'Street Address 1' },
+  { id: 'city', label: 'City' },
+  { id: 'state', label: 'State' },
+  { id: 'zip', label: 'Zip Code' },
+]
+
+const baseVehicleFields = [
+  { id: 'year', label: 'Year', type: 'number' },
+  { id: 'make', label: 'Make' },
+  { id: 'model', label: 'Model' },
+  { id: 'vin', label: 'VIN' },
+  { id: 'primaryUse', label: 'Primary Use' },
+]
+
+const baseBusinessFields = [
+  { id: 'name', label: 'Business Name' },
+  { id: 'type', label: 'Business Type', options: businessTypeOptions },
+  { id: 'industry', label: 'Industry' },
+  { id: 'years', label: 'Years in Business' },
+  { id: 'employees', label: 'Number of Employees' },
+  { id: 'phone', label: 'Business Phone', type: 'tel' },
+  { id: 'email', label: 'Business Email', type: 'email' },
+  { id: 'address1', label: 'Street Address 1' },
+  { id: 'city', label: 'City' },
+  { id: 'state', label: 'State', options: licenseStateOptions },
+  { id: 'zip', label: 'Zip Code' },
+]
+
+const buildDefaultSchema = () => ({
+  sections: {
+    household: {
+      label: 'Household Information',
+      fields: baseHouseholdFields.map((field) => ({
+        id: field.key,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      customFields: [],
+    },
+    address: {
+      label: 'Address Information',
+      contactFields: baseContactFields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      residentialFields: baseResidentialFields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      mailingFields: baseMailingFields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      customFields: [],
+    },
+    vehicle: {
+      label: 'Vehicle Information',
+      fields: baseVehicleFields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      customFields: [],
+    },
+    business: {
+      label: 'Business Information',
+      fields: baseBusinessFields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type || 'text',
+        visible: true,
+      })),
+      customFields: [],
+    },
+    additional: {
+      label: 'Additional Information',
+      customFields: [],
+    },
+  },
+})
+
+const applySchemaFields = (baseFields, schemaFields = [], getId = (field) => field.id) => {
+  const schemaMap = new Map(schemaFields.map((field) => [field.id, field]))
+  const mapped = baseFields.map((field) => {
+    const schemaField = schemaMap.get(getId(field))
+    return {
+      ...field,
+      label: schemaField?.label || field.label,
+      visible: schemaField?.visible !== false,
+    }
+  })
+  if (!schemaFields.length) {
+    return mapped.filter((field) => field.visible)
+  }
+  const ordered = schemaFields
+    .map((field) => mapped.find((item) => getId(item) === field.id))
+    .filter(Boolean)
+  const remaining = mapped.filter((field) => !schemaMap.has(getId(field)))
+  return [...ordered, ...remaining].filter((field) => field.visible)
+}
 
 function FieldRow({ id, label, type = 'text', value, onChange, placeholder, options, disabled }) {
   const inputProps = value === undefined ? {} : { value, onChange }
@@ -191,7 +329,7 @@ function FieldRow({ id, label, type = 'text', value, onChange, placeholder, opti
   )
 }
 
-function QuestionAutocomplete({ value, onChange, placeholder }) {
+function QuestionAutocomplete({ value, onChange, placeholder, productId }) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
 
@@ -205,9 +343,12 @@ function QuestionAutocomplete({ value, onChange, placeholder }) {
     const controller = new AbortController()
     const handle = setTimeout(async () => {
       try {
+        const productParam = productId ? `&productId=${encodeURIComponent(productId)}` : ''
+        const token = localStorage.getItem('connsura_token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
         const res = await fetch(
-          `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8`,
-          { signal: controller.signal }
+          `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8${productParam}`,
+          { signal: controller.signal, headers }
         )
         if (!res.ok) return
         const data = await res.json()
@@ -225,7 +366,7 @@ function QuestionAutocomplete({ value, onChange, placeholder }) {
       clearTimeout(handle)
       controller.abort()
     }
-  }, [value])
+  }, [value, productId])
 
   const handleSelect = (text) => {
     onChange(text)
@@ -271,6 +412,13 @@ const hasNonEmptyValue = (value) => {
   return true
 }
 
+const normalizeQuestionText = (value = '') =>
+  value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
 const hasNamedInsuredData = (person) =>
   Object.entries(person || {}).some(([key, value]) => key !== 'relation' && hasNonEmptyValue(value))
 
@@ -290,6 +438,8 @@ const parseSignupName = (fullName = '') => {
 
 export default function CreateProfile({ onShareSnapshotChange, onFormDataChange, initialData, allowedSections }) {
   const { user } = useAuth()
+  const [formSchema, setFormSchema] = useState(() => buildDefaultSchema())
+  const [products, setProducts] = useState([])
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createVehicle = () => ({ year: '', make: '', model: '', vin: '', primaryUse: '' })
@@ -352,9 +502,24 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [additionalForms, setAdditionalForms] = useState([])
   const [activeAdditionalFormIndex, setActiveAdditionalFormIndex] = useState(null)
   const [additionalFormName, setAdditionalFormName] = useState('')
+  const [additionalFormProductId, setAdditionalFormProductId] = useState('')
+  const [additionalFormMode, setAdditionalFormMode] = useState('')
   const [additionalQuestions, setAdditionalQuestions] = useState([])
+  const [baseAdditionalQuestionKeys, setBaseAdditionalQuestionKeys] = useState([])
+  const [productQuestionBank, setProductQuestionBank] = useState([])
+  const [additionalFormError, setAdditionalFormError] = useState('')
+  const [customFieldValues, setCustomFieldValues] = useState({
+    household: {},
+    address: {},
+    vehicle: {},
+    business: {},
+    additional: {},
+  })
   const [hydrated, setHydrated] = useState(false)
   const prefillKeyRef = useRef('')
+  const baseAdditionalQuestionKeysRef = useRef([])
+  const suppressProductSyncRef = useRef(false)
+  const suppressModeResetRef = useRef(false)
   const initialDataRef = useRef(false)
   const hasHouseholdData =
     hasNamedInsuredData(namedInsured) || additionalHouseholds.some((person) => hasNonEmptyValue(person))
@@ -369,12 +534,56 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const hasAdditionalData = additionalForms.length > 0
 
   useEffect(() => {
+    const controller = new AbortController()
+    const loadSchema = async () => {
+      try {
+        const res = await fetch(`${API_URL}/form-schema/create-profile`, { signal: controller.signal })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.schema?.schema) {
+          setFormSchema(data.schema.schema)
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setFormSchema(buildDefaultSchema())
+        }
+      }
+    }
+    loadSchema()
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const loadProducts = async () => {
+      try {
+        const res = await fetch(`${API_URL}/products`, { signal: controller.signal })
+        if (!res.ok) return
+        const data = await res.json()
+        const items = Array.isArray(data.products) ? data.products : []
+        setProducts(items)
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setProducts([])
+        }
+      }
+    }
+    loadProducts()
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    baseAdditionalQuestionKeysRef.current = baseAdditionalQuestionKeys
+  }, [baseAdditionalQuestionKeys])
+
+  useEffect(() => {
     if (!initialData || initialDataRef.current) return
     const household = initialData.household || {}
     const address = initialData.address || {}
     const vehicle = initialData.vehicle || {}
     const business = initialData.business || {}
     const additional = initialData.additional || {}
+    const customFields = initialData.customFields || {}
     setNamedInsured((prev) => ({
       ...prev,
       ...(household.namedInsured || {}),
@@ -390,6 +599,13 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setPrimaryBusiness(business.primaryBusiness || createBusiness())
     setAdditionalBusinesses(Array.isArray(business.additionalBusinesses) ? business.additionalBusinesses : [])
     setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
+    setCustomFieldValues({
+      household: customFields.household || {},
+      address: customFields.address || {},
+      vehicle: customFields.vehicle || {},
+      business: customFields.business || {},
+      additional: customFields.additional || {},
+    })
     initialDataRef.current = true
     setHydrated(true)
   }, [initialData])
@@ -460,6 +676,60 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     'Retired (full-time)': ['Retired (full-time)'],
     'Homemaker (full-time)': ['Homemaker (full-time)'],
   }
+  const schema = formSchema || buildDefaultSchema()
+  const householdSchemaFields = schema.sections?.household?.fields || []
+  const contactSchemaFields = schema.sections?.address?.contactFields || []
+  const residentialSchemaFields = schema.sections?.address?.residentialFields || []
+  const mailingSchemaFields = schema.sections?.address?.mailingFields || []
+  const vehicleSchemaFields = schema.sections?.vehicle?.fields || []
+  const businessSchemaFields = schema.sections?.business?.fields || []
+
+  const householdFields = applySchemaFields(baseHouseholdFields, householdSchemaFields, (field) => field.key)
+  const contactFields = applySchemaFields(baseContactFields, contactSchemaFields)
+  const residentialFields = applySchemaFields(baseResidentialFields, residentialSchemaFields)
+  const mailingFields = applySchemaFields(baseMailingFields, mailingSchemaFields)
+  const vehicleFields = applySchemaFields(baseVehicleFields, vehicleSchemaFields)
+  const businessFields = applySchemaFields(baseBusinessFields, businessSchemaFields)
+  const householdSectionLabel = schema.sections?.household?.label || 'Household Information'
+  const addressSectionLabel = schema.sections?.address?.label || 'Address Information'
+  const vehicleSectionLabel = schema.sections?.vehicle?.label || 'Vehicle Information'
+  const businessSectionLabel = schema.sections?.business?.label || 'Business Information'
+  const additionalSectionLabel = schema.sections?.additional?.label || 'Additional Information'
+
+  const customFieldsForSection = (sectionKey) =>
+    schema.sections?.[sectionKey]?.customFields || []
+
+  const setCustomFieldValue = (sectionKey, fieldId, value) => {
+    setCustomFieldValues((prev) => ({
+      ...prev,
+      [sectionKey]: {
+        ...(prev[sectionKey] || {}),
+        [fieldId]: value,
+      },
+    }))
+  }
+
+  const renderCustomFields = (sectionKey) => {
+    const fields = customFieldsForSection(sectionKey).filter((field) => field.visible !== false)
+    if (!fields.length) return null
+    return (
+      <div className="mt-4">
+        <div className="text-sm font-semibold text-slate-900">Additional Fields</div>
+        <div className={`mt-3 ${gridClass}`}>
+          {fields.map((field) => (
+            <FieldRow
+              key={`custom-${sectionKey}-${field.id}`}
+              id={`custom-${sectionKey}-${field.id}`}
+              label={field.label || field.id}
+              type={field.type || 'text'}
+              value={customFieldValues?.[sectionKey]?.[field.id] ?? ''}
+              onChange={(event) => setCustomFieldValue(sectionKey, field.id, event.target.value)}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
   const buildHouseholdFields = (person, setPerson, idPrefix) => {
     const occupationOptionsForEmployment =
       specialEmploymentOccupations[person.employment] ||
@@ -479,9 +749,9 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       }))
     }
 
-    return namedInsuredFields.map((field) => {
-      const fieldKey = field.id.replace(/^ni-/, '')
-      const fieldId = field.id.replace(/^ni-/, `${idPrefix}-`)
+    return householdFields.map((field) => {
+      const fieldKey = field.key
+      const fieldId = `${idPrefix}-${fieldKey}`
       if (fieldKey === 'employment') {
         return { ...field, id: fieldId, value: person.employment ?? '', onChange: handleEmploymentChange }
       }
@@ -580,7 +850,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   }
 
   const removeAdditionalQuestion = () => {
-    setAdditionalQuestions((prev) => (prev.length ? prev.slice(0, -1) : prev))
+    setAdditionalQuestions((prev) => {
+      if (prev.length <= baseAdditionalQuestionKeysRef.current.length) return prev
+      return prev.slice(0, -1)
+    })
   }
 
   const updateAdditionalQuestion = (index, field, value) => {
@@ -592,16 +865,18 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
   }
 
-  const saveCustomerQuestions = async (questions) => {
+  const saveCustomerQuestions = async (questions, productId) => {
     const cleaned = questions
       .map((question) => (question || '').toString().trim())
       .filter(Boolean)
     if (!cleaned.length) return
     try {
+      const token = localStorage.getItem('connsura_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
       await fetch(`${API_URL}/questions/customer`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questions: cleaned }),
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ questions: cleaned, ...(productId ? { productId } : {}) }),
       })
     } catch (error) {
       console.warn('Failed to save customer questions', error)
@@ -609,17 +884,40 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   }
 
   const editAdditionalForm = (index) => {
-    const form = additionalForms[index] ?? { name: '', questions: [] }
+    const form = additionalForms[index] ?? { name: '', questions: [], productId: null }
+    const fallbackProduct =
+      products.find(
+        (product) => product.name === form.productName || product.name === form.name
+      ) || null
+    const resolvedProductId = form.productId || fallbackProduct?.id || ''
     setActiveAdditionalFormIndex(index)
-    setAdditionalFormName(form.name ?? '')
+    if (resolvedProductId) {
+      suppressModeResetRef.current = true
+      suppressProductSyncRef.current = true
+      setAdditionalFormMode('existing')
+      setAdditionalFormProductId(String(resolvedProductId))
+      setAdditionalFormName('')
+    } else {
+      suppressModeResetRef.current = true
+      suppressProductSyncRef.current = true
+      setAdditionalFormMode('custom')
+      setAdditionalFormProductId('')
+      setAdditionalFormName(form.name ?? '')
+    }
     setAdditionalQuestions(form.questions ?? [])
+    setBaseAdditionalQuestionKeys([])
+    setAdditionalFormError('')
     setAdditionalEditing(true)
   }
 
   const startNewAdditionalForm = () => {
     setActiveAdditionalFormIndex(null)
+    setAdditionalFormMode('')
     setAdditionalFormName('')
+    setAdditionalFormProductId('')
     setAdditionalQuestions([])
+    setBaseAdditionalQuestionKeys([])
+    setAdditionalFormError('')
     setAdditionalEditing(true)
   }
 
@@ -627,6 +925,37 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (!allowedSections) return true
     if (allowedSections[section] === undefined) return true
     return Boolean(allowedSections[section])
+  }
+
+  const syncProductQuestions = async (productId) => {
+    if (!productId) {
+      setAdditionalQuestions([])
+      setBaseAdditionalQuestionKeys([])
+      setProductQuestionBank([])
+      return
+    }
+    setAdditionalQuestions([])
+    setBaseAdditionalQuestionKeys([])
+    setProductQuestionBank([])
+    try {
+      const token = localStorage.getItem('connsura_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, { headers })
+      if (!res.ok) return
+      const data = await res.json()
+      const bankQuestions = Array.isArray(data.questions) ? data.questions : []
+      setProductQuestionBank(bankQuestions)
+      const baseList = bankQuestions
+        .map((question) => ({
+          text: question?.text || '',
+          key: normalizeQuestionText(question?.text || ''),
+        }))
+        .filter((entry) => entry.key)
+      setAdditionalQuestions(baseList.map((entry) => ({ question: entry.text, input: '' })))
+      setBaseAdditionalQuestionKeys(baseList.map((entry) => entry.key))
+    } catch (error) {
+      console.warn('Failed to load product questions', error)
+    }
   }
 
   const openSection = (section) => {
@@ -660,6 +989,34 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       setAdditionalEditing(!hasAdditionalData)
     }
   }
+
+  useEffect(() => {
+    if (!additionalEditing) return
+    if (suppressProductSyncRef.current) {
+      suppressProductSyncRef.current = false
+      return
+    }
+    syncProductQuestions(additionalFormProductId)
+  }, [additionalEditing, additionalFormProductId])
+
+  useEffect(() => {
+    if (additionalFormError && additionalFormName.trim()) {
+      setAdditionalFormError('')
+    }
+  }, [additionalFormName, additionalFormError])
+
+  useEffect(() => {
+    if (suppressModeResetRef.current) {
+      suppressModeResetRef.current = false
+      return
+    }
+    setAdditionalFormProductId('')
+    setAdditionalFormName('')
+    setAdditionalQuestions([])
+    setBaseAdditionalQuestionKeys([])
+    setProductQuestionBank([])
+    setAdditionalFormError('')
+  }, [additionalFormMode])
 
   const handleSameAsResidential = () => {
     if (activeAddressIndex === 'primary') {
@@ -818,19 +1175,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }
     updateAdditionalBusiness(activeBusinessIndex, (prev) => ({ ...prev, [field]: value }))
   }
-  const businessFields = [
-    { id: 'name', label: 'Business Name' },
-    { id: 'type', label: 'Business Type', options: businessTypeOptions },
-    { id: 'industry', label: 'Industry' },
-    { id: 'years', label: 'Years in Business' },
-    { id: 'employees', label: 'Number of Employees' },
-    { id: 'phone', label: 'Business Phone', type: 'tel' },
-    { id: 'email', label: 'Business Email', type: 'email' },
-    { id: 'address1', label: 'Street Address 1' },
-    { id: 'city', label: 'City' },
-    { id: 'state', label: 'State', options: licenseStateOptions },
-    { id: 'zip', label: 'Zip Code' },
-  ]
   const buildFullName = (person) => {
     const nameParts = [person['first-name'], person['middle-initial'], person['last-name']].filter(Boolean)
     const baseName = nameParts.join(' ')
@@ -844,8 +1188,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (hasNonEmptyValue(person?.relation)) {
       details.push({ label: 'Relation to Applicant', value: person.relation })
     }
-    namedInsuredFields.forEach((field) => {
-      const fieldKey = field.id.replace(/^ni-/, '')
+    householdFields.forEach((field) => {
+      const fieldKey = field.key
       const value = person?.[fieldKey]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
@@ -861,26 +1205,14 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         details.push({ label: field.label, value })
       }
     })
-    const residentialFields = [
-      { key: 'address1', label: 'Residential Address 1' },
-      { key: 'city', label: 'Residential City' },
-      { key: 'state', label: 'Residential State' },
-      { key: 'zip', label: 'Residential Zip' },
-    ]
     residentialFields.forEach((field) => {
-      const value = residentialEntry?.[field.key]
+      const value = residentialEntry?.[field.id]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
       }
     })
-    const mailingFields = [
-      { key: 'address1', label: 'Mailing Address 1' },
-      { key: 'city', label: 'Mailing City' },
-      { key: 'state', label: 'Mailing State' },
-      { key: 'zip', label: 'Mailing Zip' },
-    ]
     mailingFields.forEach((field) => {
-      const value = mailingEntry?.[field.key]
+      const value = mailingEntry?.[field.id]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
       }
@@ -892,6 +1224,14 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
 
   useEffect(() => {
     if (!hydrated) return
+    const availableProducts = products.length
+      ? products
+      : additionalFormProductOptions.map((name) => ({ id: name, name }))
+    const parseProductId = (value) => {
+      if (!value) return null
+      const parsed = Number(value)
+      return Number.isNaN(parsed) ? null : parsed
+    }
     const formsPayload = {
       household: {
         namedInsured,
@@ -912,8 +1252,17 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         additionalBusinesses,
       },
       additional: {
-        additionalForms,
+        additionalForms: additionalForms.map((form) => {
+          const productId = parseProductId(form.productId)
+          const productName = availableProducts.find((product) => String(product.id) === String(productId))?.name
+          return {
+            ...form,
+            productId: productId || null,
+            productName: form.productName || productName || '',
+          }
+        }),
       },
+      customFields: customFieldValues,
     }
     if (typeof onFormDataChange === 'function') {
       onFormDataChange(formsPayload)
@@ -990,6 +1339,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     primaryBusiness,
     additionalBusinesses,
     additionalForms,
+    products,
+    customFieldValues,
   ])
 
   return (
@@ -1005,7 +1356,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               className={`${tabButton} w-full`}
               onClick={() => openSection('household')}
             >
-              Household information
+              {householdSectionLabel}
             </button>
           )}
           {isSectionAllowed('address') && (
@@ -1014,12 +1365,12 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               className={`${tabButton} w-full`}
               onClick={() => openSection('address')}
             >
-              Address information
+              {addressSectionLabel}
             </button>
           )}
           {isSectionAllowed('additional') && (
             <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
-              Additional information
+              {additionalSectionLabel}
             </button>
           )}
           {isSectionAllowed('summary') && (
@@ -1083,7 +1434,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Household Information</div>
+                    <div className="text-sm font-semibold text-slate-900">{householdSectionLabel}</div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeHousehold.label}</div>
                       <div className={`mt-3 ${gridClass}`}>
@@ -1101,6 +1452,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         ))}
                       </div>
                     </div>
+                    {renderCustomFields('household')}
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
@@ -1422,7 +1774,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Address Information</div>
+                    <div className="text-sm font-semibold text-slate-900">{addressSectionLabel}</div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeAddressLabel}</div>
                     </div>
@@ -1446,30 +1798,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       <div>
                         <div className="text-sm font-semibold text-slate-900">Residential Address</div>
                         <div className={`mt-3 ${gridClass}`}>
-                          <FieldRow
-                            id="res-address1"
-                            label="Street Address 1"
-                            value={activeAddressResidential?.address1 ?? ''}
-                            onChange={(e) => setActiveAddressResidentialField('address1', e.target.value)}
-                          />
-                          <FieldRow
-                            id="res-city"
-                            label="City"
-                            value={activeAddressResidential?.city ?? ''}
-                            onChange={(e) => setActiveAddressResidentialField('city', e.target.value)}
-                          />
-                          <FieldRow
-                            id="res-state"
-                            label="State"
-                            value={activeAddressResidential?.state ?? ''}
-                            onChange={(e) => setActiveAddressResidentialField('state', e.target.value)}
-                          />
-                          <FieldRow
-                            id="res-zip"
-                            label="Zip Code"
-                            value={activeAddressResidential?.zip ?? ''}
-                            onChange={(e) => setActiveAddressResidentialField('zip', e.target.value)}
-                          />
+                          {residentialFields.map((field) => (
+                            <FieldRow
+                              key={`res-${field.id}`}
+                              id={`res-${field.id}`}
+                              label={field.label}
+                              type={field.type}
+                              value={activeAddressResidential?.[field.id] ?? ''}
+                              onChange={(e) => setActiveAddressResidentialField(field.id, e.target.value)}
+                            />
+                          ))}
                         </div>
                       </div>
 
@@ -1481,33 +1819,21 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                           </button>
                         </div>
                         <div className={`mt-3 ${gridClass}`}>
-                          <FieldRow
-                            id="mail-address1"
-                            label="Street Address 1"
-                            value={activeAddressMailing?.address1 ?? ''}
-                            onChange={(e) => setActiveAddressMailingField('address1', e.target.value)}
-                          />
-                          <FieldRow
-                            id="mail-city"
-                            label="City"
-                            value={activeAddressMailing?.city ?? ''}
-                            onChange={(e) => setActiveAddressMailingField('city', e.target.value)}
-                          />
-                          <FieldRow
-                            id="mail-state"
-                            label="State"
-                            value={activeAddressMailing?.state ?? ''}
-                            onChange={(e) => setActiveAddressMailingField('state', e.target.value)}
-                          />
-                          <FieldRow
-                            id="mail-zip"
-                            label="Zip Code"
-                            value={activeAddressMailing?.zip ?? ''}
-                            onChange={(e) => setActiveAddressMailingField('zip', e.target.value)}
-                          />
+                          {mailingFields.map((field) => (
+                            <FieldRow
+                              key={`mail-${field.id}`}
+                              id={`mail-${field.id}`}
+                              label={field.label}
+                              type={field.type}
+                              value={activeAddressMailing?.[field.id] ?? ''}
+                              onChange={(e) => setActiveAddressMailingField(field.id, e.target.value)}
+                            />
+                          ))}
                         </div>
                       </div>
                     </div>
+
+                    {renderCustomFields('address')}
 
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
@@ -1653,37 +1979,18 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Vehicle</div>
                     <div className={`mt-3 ${gridClass}`}>
-                      <FieldRow
-                        id="new-vehicle-year"
-                        label="Year"
-                        type="number"
-                        value={newVehicle.year}
-                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, year: event.target.value }))}
-                      />
-                      <FieldRow
-                        id="new-vehicle-make"
-                        label="Make"
-                        value={newVehicle.make}
-                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, make: event.target.value }))}
-                      />
-                      <FieldRow
-                        id="new-vehicle-model"
-                        label="Model"
-                        value={newVehicle.model}
-                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, model: event.target.value }))}
-                      />
-                      <FieldRow
-                        id="new-vehicle-vin"
-                        label="VIN"
-                        value={newVehicle.vin}
-                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, vin: event.target.value }))}
-                      />
-                      <FieldRow
-                        id="new-vehicle-primary-use"
-                        label="Primary Use"
-                        value={newVehicle.primaryUse}
-                        onChange={(event) => setNewVehicle((prev) => ({ ...prev, primaryUse: event.target.value }))}
-                      />
+                      {vehicleFields.map((field) => (
+                        <FieldRow
+                          key={`new-vehicle-${field.id}`}
+                          id={`new-vehicle-${field.id}`}
+                          label={field.label}
+                          type={field.type}
+                          value={newVehicle[field.id] ?? ''}
+                          onChange={(event) =>
+                            setNewVehicle((prev) => ({ ...prev, [field.id]: event.target.value }))
+                          }
+                        />
+                      ))}
                     </div>
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
@@ -1719,43 +2026,23 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Vehicle Information</div>
+                    <div className="text-sm font-semibold text-slate-900">{vehicleSectionLabel}</div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeVehicleLabel}</div>
                       <div className={`mt-3 ${gridClass}`}>
-                        <FieldRow
-                          id="vehicle-year"
-                          label="Year"
-                          type="number"
-                          value={activeVehicle.year}
-                          onChange={(event) => setActiveVehicleField('year', event.target.value)}
-                        />
-                        <FieldRow
-                          id="vehicle-make"
-                          label="Make"
-                          value={activeVehicle.make}
-                          onChange={(event) => setActiveVehicleField('make', event.target.value)}
-                        />
-                        <FieldRow
-                          id="vehicle-model"
-                          label="Model"
-                          value={activeVehicle.model}
-                          onChange={(event) => setActiveVehicleField('model', event.target.value)}
-                        />
-                        <FieldRow
-                          id="vehicle-vin"
-                          label="VIN"
-                          value={activeVehicle.vin}
-                          onChange={(event) => setActiveVehicleField('vin', event.target.value)}
-                        />
-                        <FieldRow
-                          id="vehicle-primary-use"
-                          label="Primary Use"
-                          value={activeVehicle.primaryUse}
-                          onChange={(event) => setActiveVehicleField('primaryUse', event.target.value)}
-                        />
+                        {vehicleFields.map((field) => (
+                          <FieldRow
+                            key={`vehicle-${field.id}`}
+                            id={`vehicle-${field.id}`}
+                            label={field.label}
+                            type={field.type}
+                            value={activeVehicle[field.id] ?? ''}
+                            onChange={(event) => setActiveVehicleField(field.id, event.target.value)}
+                          />
+                        ))}
                       </div>
                     </div>
+                    {renderCustomFields('vehicle')}
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
@@ -1957,7 +2244,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Business Information</div>
+                    <div className="text-sm font-semibold text-slate-900">{businessSectionLabel}</div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeBusinessLabel}</div>
                       <div className={`mt-3 ${gridClass}`}>
@@ -1974,6 +2261,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         ))}
                       </div>
                     </div>
+                    {renderCustomFields('business')}
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
@@ -2115,47 +2403,129 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Additional Information</div>
-                    <div className={gridClass}>
-                      <FieldRow
-                        id="additional-form-name"
-                        label="Give your form a name"
-                        value={additionalFormName}
-                        onChange={(event) => setAdditionalFormName(event.target.value)}
-                      />
-                    </div>
+                    <div className="text-sm font-semibold text-slate-900">{additionalSectionLabel}</div>
                     <div className="space-y-3">
-                      {additionalQuestions.map((question, index) => (
-                        <div
-                          key={`additional-question-${index}`}
-                          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
-                        >
-                          <QuestionAutocomplete
-                            value={question.question}
-                            placeholder="Question"
-                            onChange={(value) => updateAdditionalQuestion(index, 'question', value)}
-                          />
+                      <div className="text-sm text-slate-600">
+                        You can create your own forms or choose from existing products.
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { id: 'existing', label: 'Choose existing product' },
+                          { id: 'custom', label: 'Create custom product' },
+                        ].map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                              additionalFormMode === option.id
+                                ? 'bg-[#0b3b8c] text-white'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                            onClick={() => setAdditionalFormMode(option.id)}
+                            disabled={typeof activeAdditionalFormIndex === 'number'}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      {additionalFormMode === 'existing' && (
+                        <div className={`${gridClass} items-start`}>
+                          <label htmlFor="additional-form-product" className={labelClass}>
+                            Choose a product
+                          </label>
+                          <select
+                            id="additional-form-product"
+                            className={inputClass}
+                            value={additionalFormProductId}
+                            onChange={(event) => {
+                              setAdditionalFormProductId(event.target.value)
+                              setAdditionalFormError('')
+                            }}
+                            disabled={typeof activeAdditionalFormIndex === 'number'}
+                          >
+                            <option value="">- Select a product -</option>
+                            {(products.length
+                              ? products
+                              : additionalFormProductOptions.map((name) => ({ id: name, name }))).map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {additionalFormMode === 'custom' && (
+                        <div className={`${gridClass} items-start`}>
+                          <label htmlFor="additional-form-name" className={labelClass}>
+                            Custom form name
+                          </label>
                           <input
-                            className={`${inputClass} w-full`}
-                            placeholder="Input field"
-                            value={question.input}
-                            onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
+                            id="additional-form-name"
+                            className={inputClass}
+                            value={additionalFormName}
+                            onChange={(event) => setAdditionalFormName(event.target.value)}
+                            placeholder="Type your custom form name"
                           />
                         </div>
-                      ))}
-                      <div className="flex flex-wrap gap-3">
-                        <button type="button" className={miniButton} onClick={addAdditionalQuestion}>
-                          Add question
-                        </button>
-                        <button
-                          type="button"
-                          className={miniButton}
-                          onClick={removeAdditionalQuestion}
-                          disabled={!additionalQuestions.length}
-                        >
-                          Remove question
-                        </button>
-                      </div>
+                      )}
+                      {additionalFormError && (
+                        <div className="text-xs font-semibold text-red-600">{additionalFormError}</div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {(additionalFormMode === 'existing' && additionalFormProductId) ||
+                      (additionalFormMode === 'custom' && additionalFormName.trim()) ? (
+                        <>
+                          {additionalQuestions.map((question, index) => (
+                            <div
+                              key={`additional-question-${index}`}
+                              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+                            >
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  Question
+                                </div>
+                                <QuestionAutocomplete
+                                  value={question.question}
+                                  placeholder="Question"
+                                  onChange={(value) => updateAdditionalQuestion(index, 'question', value)}
+                                  productId={additionalFormProductId}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  Answer
+                                </div>
+                                <input
+                                  className={`${inputClass} w-full`}
+                                  placeholder="Answer"
+                                  value={question.input}
+                                  onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex flex-wrap gap-3">
+                            <button type="button" className={miniButton} onClick={addAdditionalQuestion}>
+                              Add question
+                            </button>
+                            <button
+                              type="button"
+                              className={miniButton}
+                              onClick={removeAdditionalQuestion}
+                              disabled={additionalQuestions.length <= baseAdditionalQuestionKeys.length}
+                            >
+                              Remove question
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-slate-500">
+                          {additionalFormMode === 'existing'
+                            ? 'Select a product to add questions.'
+                            : 'Enter a custom form name to add questions.'}
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
@@ -2175,8 +2545,34 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         type="button"
                         className={nextButton}
                         onClick={async () => {
-                          await saveCustomerQuestions(additionalQuestions.map((question) => question.question))
-                          const nextForm = { name: additionalFormName, questions: additionalQuestions }
+                          const productId = additionalFormProductId ? Number(additionalFormProductId) : null
+                          const selectedProduct = products.find((product) => product.id === productId) || null
+                          const resolvedName =
+                            additionalFormMode === 'existing'
+                              ? selectedProduct?.name || ''
+                              : additionalFormName.trim()
+                          if (!additionalFormMode) {
+                            setAdditionalFormError('Please choose existing or custom first.')
+                            return
+                          }
+                          if (additionalFormMode === 'existing' && !productId) {
+                            setAdditionalFormError('Please select a product.')
+                            return
+                          }
+                          if (additionalFormMode === 'custom' && !resolvedName) {
+                            setAdditionalFormError('Please enter a custom form name.')
+                            return
+                          }
+                          await saveCustomerQuestions(
+                            additionalQuestions.map((question) => question.question),
+                            productId || null
+                          )
+                          const nextForm = {
+                            name: resolvedName,
+                            questions: additionalQuestions,
+                            productId: productId || null,
+                            productName: selectedProduct?.name || '',
+                          }
                           if (typeof activeAdditionalFormIndex === 'number') {
                             setAdditionalForms((prev) => {
                               const next = [...prev]
@@ -2266,7 +2662,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
 
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">Household information</div>
+                  <div className="text-sm font-semibold text-slate-900">{householdSectionLabel}</div>
                   <button type="button" className={miniButton} onClick={() => openSection('household')}>
                     Edit
                   </button>
@@ -2301,7 +2697,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
 
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">Address information</div>
+                  <div className="text-sm font-semibold text-slate-900">{addressSectionLabel}</div>
                   <button type="button" className={miniButton} onClick={() => openSection('address')}>
                     Edit
                   </button>
@@ -2331,7 +2727,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
 
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">Additional information</div>
+                  <div className="text-sm font-semibold text-slate-900">{additionalSectionLabel}</div>
                   <button type="button" className={miniButton} onClick={() => openSection('additional')}>
                     Edit
                   </button>

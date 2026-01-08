@@ -6,6 +6,9 @@ const { generateToken } = require('../utils/token')
 const { parseJson } = require('../utils/transform')
 const { getEmailOtp } = require('../utils/emailOtp')
 const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = require('../utils/siteContent')
+const { DEFAULT_CREATE_PROFILE_SCHEMA } = require('../utils/formSchema')
+const { slugify, ensureProductCatalog } = require('../utils/productCatalog')
+const { normalizeQuestion } = require('../utils/questionBank')
 
 const router = express.Router()
 
@@ -77,6 +80,25 @@ const ensureSiteContentDefaults = async () => {
     })),
   })
 }
+
+const ensureFormSchemaDefaults = async () => {
+  const existing = await prisma.formSchema.findUnique({ where: { slug: 'create-profile' } })
+  if (existing) return
+  await prisma.formSchema.create({
+    data: {
+      slug: 'create-profile',
+      schema: JSON.stringify(DEFAULT_CREATE_PROFILE_SCHEMA),
+      updatedBy: 'system',
+    },
+  })
+}
+
+const formatFormSchema = (entry) => ({
+  slug: entry.slug,
+  schema: JSON.parse(entry.schema),
+  updatedBy: entry.updatedBy,
+  updatedAt: entry.updatedAt,
+})
 
 const formatSiteContent = (entry) => ({
   slug: entry.slug,
@@ -357,6 +379,149 @@ router.put('/site-content/:slug', adminGuard, async (req, res) => {
     warningCount: warnings.length,
   })
   res.json({ content: formatSiteContent(entry), warnings })
+})
+
+// Form schema management
+router.get('/form-schema/:slug', adminGuard, async (req, res) => {
+  const slug = String(req.params.slug || '').trim()
+  if (!slug) return res.status(400).json({ error: 'Slug is required' })
+  if (slug === 'create-profile') {
+    await ensureFormSchemaDefaults()
+  }
+  const entry = await prisma.formSchema.findUnique({ where: { slug } })
+  if (!entry) return res.status(404).json({ error: 'Schema not found' })
+  res.json({ schema: formatFormSchema(entry) })
+})
+
+router.put('/form-schema/:slug', adminGuard, async (req, res) => {
+  const slug = String(req.params.slug || '').trim()
+  if (!slug) return res.status(400).json({ error: 'Slug is required' })
+  const schema = req.body?.schema
+  if (!schema) return res.status(400).json({ error: 'Schema is required' })
+
+  const entry = await prisma.formSchema.upsert({
+    where: { slug },
+    create: {
+      slug,
+      schema: JSON.stringify(schema),
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+    },
+    update: {
+      schema: JSON.stringify(schema),
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+    },
+  })
+  await logAudit(req.admin.id, 'FormSchema', slug, 'update')
+  res.json({ schema: formatFormSchema(entry) })
+})
+
+// Product catalog
+router.get('/products', adminGuard, async (req, res) => {
+  await ensureProductCatalog(prisma)
+  const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
+  res.json({ products })
+})
+
+router.post('/products', adminGuard, async (req, res) => {
+  const name = String(req.body?.name || '').trim()
+  if (!name) return res.status(400).json({ error: 'Name is required' })
+  const slug = slugify(req.body?.slug || name)
+  if (!slug) return res.status(400).json({ error: 'Slug is required' })
+  const product = await prisma.product.create({ data: { name, slug } })
+  await logAudit(req.admin.id, 'Product', product.id, 'create')
+  res.status(201).json({ product })
+})
+
+// Question bank management
+router.get('/questions', adminGuard, async (req, res) => {
+  const productId = req.query.productId ? Number(req.query.productId) : null
+  const source = req.query.source ? String(req.query.source).toUpperCase() : null
+  const where = {
+    ...(productId ? { productId } : {}),
+    ...(source ? { source } : {}),
+  }
+  const questions = await prisma.questionBank.findMany({
+    where,
+    orderBy: [{ source: 'desc' }, { text: 'asc' }],
+    include: { customer: { include: { user: true } } },
+  })
+  res.json({
+    questions: questions.map((row) => ({
+      id: row.id,
+      text: row.text,
+      source: row.source,
+      productId: row.productId,
+      customerId: row.customerId,
+      customerName: row.customer?.name || null,
+      customerEmail: row.customer?.user?.email || null,
+    })),
+  })
+})
+
+router.post('/questions', adminGuard, async (req, res) => {
+  const text = String(req.body?.text || '').trim()
+  const productId = req.body?.productId ? Number(req.body.productId) : null
+  if (!text) return res.status(400).json({ error: 'Question text is required' })
+  const normalized = normalizeQuestion(text)
+  if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+
+  const created = await prisma.questionBank.create({
+    data: {
+      text,
+      normalized,
+      source: 'SYSTEM',
+      productId: productId || null,
+    },
+  })
+  await logAudit(req.admin.id, 'QuestionBank', created.id, 'create', {
+    productId: created.productId,
+  })
+  res.status(201).json({
+    question: {
+      id: created.id,
+      text: created.text,
+      source: created.source,
+      productId: created.productId,
+    },
+  })
+})
+
+router.delete('/questions/:id', adminGuard, async (req, res) => {
+  const id = Number(req.params.id)
+  if (!id) return res.status(400).json({ error: 'Question id required' })
+  await prisma.questionBank.delete({ where: { id } })
+  await logAudit(req.admin.id, 'QuestionBank', id, 'delete')
+  res.json({ ok: true })
+})
+
+router.put('/questions/:id', adminGuard, async (req, res) => {
+  const id = Number(req.params.id)
+  const text = String(req.body?.text || '').trim()
+  if (!id) return res.status(400).json({ error: 'Question id required' })
+  if (!text) return res.status(400).json({ error: 'Question text is required' })
+  const existing = await prisma.questionBank.findUnique({ where: { id } })
+  if (!existing) return res.status(404).json({ error: 'Question not found' })
+  if (existing.source !== 'CUSTOMER') {
+    return res.status(400).json({ error: 'Only customer questions can be edited' })
+  }
+  const normalized = normalizeQuestion(text)
+  if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+  const updated = await prisma.questionBank.update({
+    where: { id },
+    data: {
+      text,
+      normalized,
+    },
+  })
+  await logAudit(req.admin.id, 'QuestionBank', id, 'update', { text })
+  res.json({
+    question: {
+      id: updated.id,
+      text: updated.text,
+      source: updated.source,
+      productId: updated.productId,
+    },
+  })
 })
 
 module.exports = router

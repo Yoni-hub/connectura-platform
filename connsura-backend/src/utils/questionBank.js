@@ -7,7 +7,7 @@ const normalizeQuestion = (value = '') =>
     .toLowerCase()
     .replace(/\s+/g, ' ')
 
-const buildQuestionRecords = (questions = [], source = 'SYSTEM') => {
+const buildQuestionRecords = (questions = [], source = 'SYSTEM', productId = null, customerId = null) => {
   const unique = new Map()
   questions.forEach((question) => {
     if (!question) return
@@ -15,7 +15,7 @@ const buildQuestionRecords = (questions = [], source = 'SYSTEM') => {
     if (!text) return
     const normalized = normalizeQuestion(text)
     if (!normalized || unique.has(normalized)) return
-    unique.set(normalized, { text, normalized, source })
+    unique.set(normalized, { text, normalized, source, productId, customerId })
   })
   return Array.from(unique.values())
 }

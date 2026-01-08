@@ -24,6 +24,20 @@ export default function Admin() {
   const [contentSaving, setContentSaving] = useState(false)
   const [activeContentSlug, setActiveContentSlug] = useState('about_public')
   const [contentWarnings, setContentWarnings] = useState([])
+  const [formSchema, setFormSchema] = useState(null)
+  const [formSchemaLoading, setFormSchemaLoading] = useState(false)
+  const [formSchemaSaving, setFormSchemaSaving] = useState(false)
+  const [activeFormSection, setActiveFormSection] = useState('household')
+  const [formsTab, setFormsTab] = useState('schema')
+  const [products, setProducts] = useState([])
+  const [productsLoading, setProductsLoading] = useState(false)
+  const [activeProductId, setActiveProductId] = useState('')
+  const [questions, setQuestions] = useState([])
+  const [questionsLoading, setQuestionsLoading] = useState(false)
+  const [newQuestion, setNewQuestion] = useState('')
+  const [questionSourceFilter, setQuestionSourceFilter] = useState('all')
+  const [questionEdits, setQuestionEdits] = useState({})
+  const [newProductName, setNewProductName] = useState('')
 
   const isAuthed = Boolean(token)
 
@@ -80,6 +94,16 @@ export default function Admin() {
     setContentEntries([])
     setContentWarnings([])
     setActiveContentSlug('about_public')
+    setFormSchema(null)
+    setActiveFormSection('household')
+    setFormsTab('schema')
+    setProducts([])
+    setActiveProductId('')
+    setQuestions([])
+    setNewQuestion('')
+    setQuestionSourceFilter('all')
+    setQuestionEdits({})
+    setNewProductName('')
   }
 
   const upsertTab = (tab) => {
@@ -337,6 +361,17 @@ export default function Admin() {
   }, [isAuthed, view])
 
   useEffect(() => {
+    if (!isAuthed || view !== 'forms') return
+    loadFormSchema()
+    loadProducts()
+  }, [isAuthed, view])
+
+  useEffect(() => {
+    if (!isAuthed || view !== 'forms' || formsTab !== 'questions') return
+    loadQuestions(activeProductId, questionSourceFilter)
+  }, [isAuthed, view, formsTab, activeProductId, questionSourceFilter])
+
+  useEffect(() => {
     if (!contentEntries.length) return
     const exists = contentEntries.some((entry) => entry.slug === activeContentSlug)
     if (!exists) {
@@ -450,6 +485,232 @@ export default function Admin() {
       toast.error(err.response?.data?.error || 'Failed to save content')
     } finally {
       setContentSaving(false)
+    }
+  }
+
+  const loadFormSchema = async () => {
+    setFormSchemaLoading(true)
+    try {
+      const res = await adminApi.get('/admin/form-schema/create-profile')
+      const nextSchema = res.data?.schema?.schema || null
+      setFormSchema(nextSchema)
+      if (nextSchema?.sections && !nextSchema.sections?.[activeFormSection]) {
+        const keys = Object.keys(nextSchema.sections)
+        setActiveFormSection(keys[0] || 'household')
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load form schema')
+    } finally {
+      setFormSchemaLoading(false)
+    }
+  }
+
+  const saveFormSchema = async () => {
+    if (!formSchema) return
+    setFormSchemaSaving(true)
+    try {
+      await adminApi.put('/admin/form-schema/create-profile', { schema: formSchema })
+      toast.success('Form schema saved')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save form schema')
+    } finally {
+      setFormSchemaSaving(false)
+    }
+  }
+
+  const updateSectionLabel = (sectionKey, value) => {
+    setFormSchema((prev) => {
+      if (!prev?.sections?.[sectionKey]) return prev
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...prev.sections[sectionKey],
+            label: value,
+          },
+        },
+      }
+    })
+  }
+
+  const updateField = (sectionKey, fieldGroupKey, fieldId, patch) => {
+    setFormSchema((prev) => {
+      if (!prev?.sections?.[sectionKey]) return prev
+      const section = prev.sections[sectionKey]
+      const fields = Array.isArray(section[fieldGroupKey]) ? section[fieldGroupKey] : []
+      const index = fields.findIndex((field) => field.id === fieldId)
+      if (index === -1) return prev
+      const nextFields = [...fields]
+      nextFields[index] = { ...nextFields[index], ...patch }
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...section,
+            [fieldGroupKey]: nextFields,
+          },
+        },
+      }
+    })
+  }
+
+  const addCustomField = (sectionKey) => {
+    setFormSchema((prev) => {
+      if (!prev?.sections?.[sectionKey]) return prev
+      const section = prev.sections[sectionKey]
+      const customFields = Array.isArray(section.customFields) ? section.customFields : []
+      const id = `custom-${Date.now()}`
+      const nextFields = [
+        ...customFields,
+        { id, label: 'New Field', type: 'text', visible: true },
+      ]
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...section,
+            customFields: nextFields,
+          },
+        },
+      }
+    })
+  }
+
+  const removeCustomField = (sectionKey, fieldId) => {
+    setFormSchema((prev) => {
+      if (!prev?.sections?.[sectionKey]) return prev
+      const section = prev.sections[sectionKey]
+      const customFields = Array.isArray(section.customFields) ? section.customFields : []
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...section,
+            customFields: customFields.filter((field) => field.id !== fieldId),
+          },
+        },
+      }
+    })
+  }
+
+  const loadProducts = async () => {
+    setProductsLoading(true)
+    try {
+      const res = await adminApi.get('/admin/products')
+      const items = Array.isArray(res.data?.products) ? res.data.products : []
+      setProducts(items)
+      if (!activeProductId && items.length) {
+        setActiveProductId(String(items[0].id))
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load products')
+    } finally {
+      setProductsLoading(false)
+    }
+  }
+
+  const addProduct = async () => {
+    const name = newProductName.trim()
+    if (!name) {
+      toast.error('Enter a product name')
+      return
+    }
+    try {
+      const res = await adminApi.post('/admin/products', { name })
+      const product = res.data?.product
+      if (product) {
+        setProducts((prev) => [...prev, product].sort((a, b) => a.name.localeCompare(b.name)))
+        setActiveProductId(String(product.id))
+      }
+      setNewProductName('')
+      toast.success('Product added')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add product')
+    }
+  }
+
+  const loadQuestions = async (productId, sourceFilter = 'all') => {
+    setQuestionsLoading(true)
+    try {
+      const params = {
+        ...(productId ? { productId } : {}),
+        ...(sourceFilter && sourceFilter !== 'all' ? { source: sourceFilter } : {}),
+      }
+      const res = await adminApi.get('/admin/questions', { params })
+      setQuestions(Array.isArray(res.data?.questions) ? res.data.questions : [])
+      setQuestionEdits({})
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load questions')
+    } finally {
+      setQuestionsLoading(false)
+    }
+  }
+
+  const addQuestion = async () => {
+    const text = newQuestion.trim()
+    if (!text) {
+      toast.error('Enter a question')
+      return
+    }
+    try {
+      const payload = { text }
+      if (activeProductId) payload.productId = Number(activeProductId)
+      const res = await adminApi.post('/admin/questions', payload)
+      const created = res.data?.question
+      if (created) {
+        if (questionSourceFilter === 'CUSTOMER') {
+          await loadQuestions(activeProductId, questionSourceFilter)
+        } else {
+          setQuestions((prev) => [created, ...prev])
+        }
+      }
+      setNewQuestion('')
+      toast.success('Question added')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add question')
+    }
+  }
+
+  const updateQuestionEdit = (id, value) => {
+    setQuestionEdits((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const saveQuestionEdit = async (question) => {
+    const nextText = (questionEdits[question.id] ?? question.text).trim()
+    if (!nextText) {
+      toast.error('Question text is required')
+      return
+    }
+    try {
+      const res = await adminApi.put(`/admin/questions/${question.id}`, { text: nextText })
+      const updated = res.data?.question
+      if (updated) {
+        setQuestions((prev) =>
+          prev.map((item) => (item.id === updated.id ? { ...item, text: updated.text } : item))
+        )
+        setQuestionEdits((prev) => {
+          const next = { ...prev }
+          delete next[question.id]
+          return next
+        })
+      }
+      toast.success('Question updated')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update question')
+    }
+  }
+
+  const deleteQuestion = async (id) => {
+    try {
+      await adminApi.delete(`/admin/questions/${id}`)
+      setQuestions((prev) => prev.filter((question) => question.id !== id))
+      toast.success('Question removed')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to remove question')
     }
   }
 
@@ -690,6 +951,317 @@ export default function Admin() {
                   dangerouslySetInnerHTML={{ __html: renderSiteContent(contentEntry.content || '') }}
                 />
               </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderFormsManager = () => {
+    const schema = formSchema
+    const sections = [
+      { key: 'household', label: 'Household', groups: [{ key: 'fields', label: 'Household fields' }] },
+      {
+        key: 'address',
+        label: 'Address',
+        groups: [
+          { key: 'contactFields', label: 'Contact fields' },
+          { key: 'residentialFields', label: 'Residential address fields' },
+          { key: 'mailingFields', label: 'Mailing address fields' },
+        ],
+      },
+      { key: 'vehicle', label: 'Vehicle', groups: [{ key: 'fields', label: 'Vehicle fields' }] },
+      { key: 'business', label: 'Business', groups: [{ key: 'fields', label: 'Business fields' }] },
+      { key: 'additional', label: 'Additional', groups: [] },
+    ]
+    const activeSection = sections.find((section) => section.key === activeFormSection) || sections[0]
+    const sectionData = schema?.sections?.[activeSection.key]
+    const fieldTypes = ['text', 'number', 'date', 'email', 'tel']
+    const input = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
+    const labelClass = 'text-xs font-semibold uppercase tracking-wide text-slate-500'
+
+    const renderFieldGroup = (groupKey, title) => {
+      const fields = Array.isArray(sectionData?.[groupKey]) ? sectionData[groupKey] : []
+      if (!fields.length) {
+        return (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+            No fields in {title.toLowerCase()}.
+          </div>
+        )
+      }
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+          <div className="mt-3 space-y-3">
+            {fields.map((field) => (
+              <div key={field.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_140px] md:items-center">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Label
+                    <input
+                      className={input}
+                      value={field.label || ''}
+                      onChange={(event) =>
+                        updateField(activeSection.key, groupKey, field.id, { label: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Type
+                    {groupKey === 'customFields' ? (
+                      <select
+                        className={input}
+                        value={field.type || 'text'}
+                        onChange={(event) =>
+                          updateField(activeSection.key, groupKey, field.id, { type: event.target.value })
+                        }
+                      >
+                        {fieldTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="mt-2 text-xs text-slate-500">{field.type || 'text'}</div>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={field.visible !== false}
+                        onChange={(event) =>
+                          updateField(activeSection.key, groupKey, field.id, { visible: event.target.checked })
+                        }
+                      />
+                      Visible
+                    </label>
+                    {groupKey === 'customFields' && (
+                      <button
+                        type="button"
+                        className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
+                        onClick={() => removeCustomField(activeSection.key, field.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-slate-400">Field id: {field.id}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Forms Content Manager</h2>
+            <p className="text-sm text-slate-600">Control the Create Profile schema and question bank.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="pill-btn-ghost px-4" onClick={loadFormSchema} disabled={formSchemaLoading}>
+              {formSchemaLoading ? 'Loading...' : 'Reload schema'}
+            </button>
+            <button type="button" className="pill-btn-primary px-4" onClick={saveFormSchema} disabled={formSchemaSaving || !schema}>
+              {formSchemaSaving ? 'Saving...' : 'Save schema'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'schema', label: 'Schema editor' },
+            { id: 'questions', label: 'Question bank' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                formsTab === tab.id ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+              onClick={() => setFormsTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {formsTab === 'schema' && (
+          <>
+            {formSchemaLoading && <div className="text-slate-500">Loading schema...</div>}
+            {!formSchemaLoading && !schema && <div className="text-slate-500">No schema loaded.</div>}
+            {!formSchemaLoading && schema && (
+              <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+                <div className="space-y-2">
+                  <div className={labelClass}>Sections</div>
+                  {sections.map((section) => (
+                    <button
+                      key={section.key}
+                      type="button"
+                      className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${
+                        activeSection.key === section.key ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
+                      }`}
+                      onClick={() => setActiveFormSection(section.key)}
+                    >
+                      {section.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className={labelClass}>Section label</div>
+                    <input
+                      className={input}
+                      value={sectionData?.label || ''}
+                      onChange={(event) => updateSectionLabel(activeSection.key, event.target.value)}
+                      placeholder="Section title"
+                    />
+                  </div>
+                  {activeSection.groups.map((group) => renderFieldGroup(group.key, group.label))}
+                  <div className="space-y-3">
+                    <div className={labelClass}>Custom fields</div>
+                    {renderFieldGroup('customFields', 'Custom fields')}
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-3 py-1 text-xs"
+                      onClick={() => addCustomField(activeSection.key)}
+                    >
+                      Add custom field
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {formsTab === 'questions' && (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Product
+                    <select
+                      className={input}
+                      value={activeProductId}
+                      onChange={(event) => setActiveProductId(event.target.value)}
+                      disabled={productsLoading}
+                    >
+                      <option value="">All products</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Source
+                    <select
+                      className={input}
+                      value={questionSourceFilter}
+                      onChange={(event) => setQuestionSourceFilter(event.target.value)}
+                    >
+                      <option value="all">All</option>
+                      <option value="SYSTEM">System</option>
+                      <option value="CUSTOMER">Customer</option>
+                    </select>
+                  </label>
+                  <button type="button" className="pill-btn-ghost px-3 py-1" onClick={loadProducts} disabled={productsLoading}>
+                    {productsLoading ? 'Loading...' : 'Refresh products'}
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    New product
+                    <input
+                      className={input}
+                      value={newProductName}
+                      onChange={(event) => setNewProductName(event.target.value)}
+                      placeholder="e.g. Boat Insurance"
+                    />
+                  </label>
+                  <button type="button" className="pill-btn-primary px-4" onClick={addProduct}>
+                    Add product
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Add question</div>
+                <textarea
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm min-h-[120px]"
+                  value={newQuestion}
+                  onChange={(event) => setNewQuestion(event.target.value)}
+                  placeholder="Type the question to add"
+                />
+                <button type="button" className="pill-btn-primary mt-3 w-full justify-center" onClick={addQuestion}>
+                  Add question
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Questions</div>
+                <div className="text-xs text-slate-500">{questions.length} total</div>
+              </div>
+              {questionsLoading && <div className="mt-3 text-slate-500">Loading questions...</div>}
+              {!questionsLoading && !questions.length && (
+                <div className="mt-3 text-slate-500">No questions for this product yet.</div>
+              )}
+              {!questionsLoading && questions.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {questions.map((question) => (
+                    <div key={question.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="flex-1 min-w-[220px]">
+                        {question.source === 'CUSTOMER' ? (
+                          <>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer question</div>
+                            <input
+                              className={`${input} mt-1`}
+                              value={questionEdits[question.id] ?? question.text}
+                              onChange={(event) => updateQuestionEdit(question.id, event.target.value)}
+                            />
+                            <div className="mt-1 text-xs text-slate-400">
+                              Customer: {question.customerName || question.customerEmail || `#${question.customerId || 'unknown'}`}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">System question</div>
+                            <div className="text-sm text-slate-700 mt-1">{question.text}</div>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {question.source === 'CUSTOMER' && (
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-2 py-1 text-xs"
+                            onClick={() => saveQuestionEdit(question)}
+                          >
+                            Save
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
+                          onClick={() => deleteQuestion(question.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1048,6 +1620,7 @@ export default function Admin() {
             { id: 'clients', label: 'Clients' },
             { id: 'audit', label: 'Audit logs' },
             { id: 'content', label: 'Website Content Manager' },
+            { id: 'forms', label: 'Forms Content Manager' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1137,6 +1710,7 @@ export default function Admin() {
           {!loading && view === 'clients' && renderClients()}
           {!loading && view === 'audit' && renderAudit()}
           {view === 'content' && renderContentManager()}
+          {view === 'forms' && renderFormsManager()}
         </div>
       </div>
     )
@@ -1161,6 +1735,20 @@ export default function Admin() {
     contentSaving,
     activeContentSlug,
     contentWarnings,
+    formSchema,
+    formSchemaLoading,
+    formSchemaSaving,
+    activeFormSection,
+    formsTab,
+    products,
+    productsLoading,
+    activeProductId,
+    questions,
+    questionsLoading,
+    newQuestion,
+    questionSourceFilter,
+    questionEdits,
+    newProductName,
   ])
 
   return <main className="page-shell py-8">{content}</main>

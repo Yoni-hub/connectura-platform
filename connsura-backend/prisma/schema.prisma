@@ -163,6 +163,24 @@ model SiteContent {
   lastUpdated DateTime @default(now())
 }
 
+model Product {
+  id        Int          @id @default(autoincrement())
+  name      String       @unique
+  slug      String       @unique
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  questions QuestionBank[]
+}
+
+model FormSchema {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  schema    String
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum QuestionSource {
   SYSTEM
   CUSTOMER
@@ -173,8 +191,14 @@ model QuestionBank {
   text       String
   normalized String         @unique
   source     QuestionSource @default(SYSTEM)
+  productId  Int?
+  customerId Int?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+  product    Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([source])
+  @@index([productId])
+  @@index([customerId])
 }
