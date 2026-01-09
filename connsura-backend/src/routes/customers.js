@@ -54,6 +54,24 @@ const formatCustomerProfile = (customer) => ({
   isDisabled: customer.isDisabled,
 })
 
+const formatSavedAgent = (agent) => ({
+  id: agent.id,
+  name: agent.name,
+  photo: agent.photo,
+  email: agent.user?.email,
+  languages: parseJson(agent.languages, []),
+  states: parseJson(agent.states, []),
+  specialty: agent.specialty,
+  availability: agent.availability,
+  rating: agent.rating,
+})
+
+const getSavedAgentIds = (customer) => {
+  const profileData = parseJson(customer.profileData, {})
+  const savedAgents = Array.isArray(profileData.savedAgents) ? profileData.savedAgents : []
+  return savedAgents.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
+}
+
 router.get('/:id/profile', authGuard, async (req, res) => {
   const customerId = Number(req.params.id)
   const customer = await prisma.customer.findUnique({
@@ -105,6 +123,9 @@ router.post('/:id/profile', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
+  const currentProfileData = parseJson(customer.profileData, {})
+  const mergedProfileData = { ...currentProfileData, ...profileData }
+
   await prisma.driver.deleteMany({ where: { customerId } })
   await prisma.vehicle.deleteMany({ where: { customerId } })
 
@@ -115,7 +136,7 @@ router.post('/:id/profile', authGuard, async (req, res) => {
       preferredLangs: JSON.stringify(preferredLangs),
       coverages: JSON.stringify(coverages),
       priorInsurance: JSON.stringify(priorInsurance),
-      profileData: JSON.stringify(profileData),
+      profileData: JSON.stringify(mergedProfileData),
       drivers: {
         create: drivers.map((driver) => ({
           name: driver.name,
@@ -160,6 +181,79 @@ router.patch('/:id/profile-data', authGuard, async (req, res) => {
     include: { drivers: true, vehicles: true },
   })
   res.json({ profile: formatCustomerProfile(updated) })
+})
+
+router.get('/:id/saved-agents', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot access this customer' })
+  }
+
+  const savedIds = getSavedAgentIds(customer)
+  if (!savedIds.length) return res.json({ agents: [] })
+
+  const agents = await prisma.agent.findMany({
+    where: { id: { in: savedIds } },
+    include: { user: true },
+  })
+  const agentMap = new Map(agents.map((agent) => [agent.id, agent]))
+  const ordered = savedIds.map((id) => agentMap.get(id)).filter(Boolean)
+  res.json({ agents: ordered.map(formatSavedAgent) })
+})
+
+router.post('/:id/saved-agents', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  const agentId = Number(req.body?.agentId)
+  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer id and agent id are required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+
+  const agent = await prisma.agent.findUnique({ where: { id: agentId } })
+  if (!agent) return res.status(404).json({ error: 'Agent not found' })
+
+  const savedIds = getSavedAgentIds(customer)
+  const nextSaved = savedIds.includes(agentId) ? savedIds : [...savedIds, agentId]
+  const profileData = parseJson(customer.profileData, {})
+  const updatedProfileData = { ...profileData, savedAgents: nextSaved }
+
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { profileData: JSON.stringify(updatedProfileData) },
+  })
+
+  res.status(201).json({ savedAgents: nextSaved })
+})
+
+router.delete('/:id/saved-agents/:agentId', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  const agentId = Number(req.params.agentId)
+  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer id and agent id are required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+
+  const savedIds = getSavedAgentIds(customer)
+  const nextSaved = savedIds.filter((id) => id !== agentId)
+  const profileData = parseJson(customer.profileData, {})
+  const updatedProfileData = { ...profileData, savedAgents: nextSaved }
+
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { profileData: JSON.stringify(updatedProfileData) },
+  })
+
+  res.json({ savedAgents: nextSaved })
 })
 
 module.exports = router

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { API_URL, api } from '../services/api'
@@ -9,6 +9,14 @@ import AgentCard from '../components/agents/AgentCard'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 
 const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Appointments', 'Settings']
+
+const resolveTabFromSearch = (search = '') => {
+  const params = new URLSearchParams(search)
+  const value = params.get('tab')
+  if (!value) return 'Overview'
+  const match = navItems.find((item) => item.toLowerCase() === value.toLowerCase())
+  return match || 'Overview'
+}
 
 const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '')
 
@@ -58,10 +66,11 @@ const parseShareLink = (line = '') => {
 export default function AgentDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
   const nav = useNavigate()
+  const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [agent, setAgent] = useState(null)
-  const [activeTab, setActiveTab] = useState('Overview')
+  const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -86,6 +95,18 @@ export default function AgentDashboard() {
     phone: '',
     email: user?.email || '',
   })
+
+  useEffect(() => {
+    const nextTab = resolveTabFromSearch(location.search)
+    setActiveTab(nextTab)
+  }, [location.search])
+
+  const updateTab = (nextTab) => {
+    setActiveTab(nextTab)
+    const params = new URLSearchParams(location.search)
+    params.set('tab', nextTab.toLowerCase())
+    nav(`/agent/dashboard?${params.toString()}`, { replace: true })
+  }
 
   useEffect(() => {
     const fetchAgent = async () => {
@@ -433,7 +454,7 @@ export default function AgentDashboard() {
             {navItems.map((item) => (
               <button
                 key={item}
-                onClick={() => setActiveTab(item)}
+                onClick={() => updateTab(item)}
                 className={`w-full rounded-xl px-3 py-2.5 font-semibold transition flex items-center justify-between ${
                   activeTab === item
                     ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm'
@@ -496,7 +517,7 @@ export default function AgentDashboard() {
                     <button
                       type="button"
                       className="pill-btn-primary mt-3 px-4"
-                      onClick={() => setActiveTab('Messages')}
+                      onClick={() => updateTab('Messages')}
                     >
                       View messages
                     </button>
@@ -513,7 +534,7 @@ export default function AgentDashboard() {
                     <button
                       type="button"
                       className="pill-btn-primary mt-3 px-4"
-                      onClick={() => setActiveTab('Settings')}
+                      onClick={() => updateTab('Settings')}
                     >
                       Set up now
                     </button>

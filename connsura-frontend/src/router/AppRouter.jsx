@@ -10,7 +10,6 @@ import ClientForms from '../pages/ClientForms'
 import CreateProfile from '../pages/CreateProfile'
 import Contact from '../pages/Contact'
 import About from '../pages/About'
-import Careers from '../pages/Careers'
 import PrivacyPolicy from '../pages/PrivacyPolicy'
 import LegalNotice from '../pages/LegalNotice'
 import Admin from '../pages/Admin'
@@ -104,7 +103,6 @@ function Layout() {
           <Route path="/agent/onboarding" element={<AgentOnboarding />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/about" element={<About />} />
-          <Route path="/careers" element={<Careers />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/share/:token" element={<ShareProfile />} />

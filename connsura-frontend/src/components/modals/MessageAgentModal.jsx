@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { api } from '../../services/api'
 import Modal from '../ui/Modal'
 
-export default function MessageAgentModal({ open, agent, onClose }) {
+export default function MessageAgentModal({ open, agent, onClose, onSent }) {
   const { user } = useAuth()
   const [messageBody, setMessageBody] = useState('')
   const [sending, setSending] = useState(false)
@@ -36,6 +36,7 @@ export default function MessageAgentModal({ open, agent, onClose }) {
       await api.post('/messages', { agentId: agent.id, body })
       toast.success('Message sent')
       setMessageBody('')
+      onSent?.(agent)
       onClose?.()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send message')

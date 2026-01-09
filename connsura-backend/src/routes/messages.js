@@ -23,6 +23,11 @@ const ensureConversation = (agentId, customerId) => {
   return messageStore.conversations.get(key)
 }
 
+const deleteConversation = (agentId, customerId) => {
+  const key = conversationKey(agentId, customerId)
+  messageStore.conversations.delete(key)
+}
+
 const addMessage = (agentId, customerId, body, senderRole) => {
   const now = new Date()
   const message = {
@@ -357,6 +362,27 @@ router.get('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
   } catch (err) {
     console.error('message thread error', err)
     res.status(500).json({ error: 'Failed to load messages' })
+  }
+})
+
+router.delete('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  const agentId = Number(req.params.agentId)
+  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer and agent required' })
+  if (req.user.role !== 'CUSTOMER') {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  try {
+    const customer = await prisma.customer.findUnique({ where: { userId: req.user.id } })
+    if (!customer) return res.status(404).json({ error: 'Customer not found' })
+    if (customer.id !== customerId) {
+      return res.status(403).json({ error: 'Cannot access messages for this customer' })
+    }
+    deleteConversation(agentId, customerId)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('message thread delete error', err)
+    res.status(500).json({ error: 'Failed to delete messages' })
   }
 })
 

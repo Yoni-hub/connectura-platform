@@ -1,17 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { languages } from '../../data/languages'
 import { states } from '../../data/states'
 
-export default function SearchBar({ onSearch, busy, variant = 'card' }) {
+export default function SearchBar({ onSearch, onFilterChange, busy, variant = 'card', requireFilters = false }) {
   const [filters, setFilters] = useState({ location: '', state: '', language: '', name: '' })
-
-  useEffect(() => {
-    onSearch(filters)
-  }, [])
+  const hasFilters = (value) => Object.values(value).some((entry) => String(entry || '').trim())
 
   const update = (key, value) => {
     const next = { ...filters, [key]: value }
     setFilters(next)
+    onFilterChange?.(next)
+    if (requireFilters && !hasFilters(next)) return
     onSearch(next)
   }
 
@@ -86,7 +85,10 @@ export default function SearchBar({ onSearch, busy, variant = 'card' }) {
         </div>
         <div className="flex items-end justify-center md:col-span-2 lg:col-span-5">
           <button
-            onClick={() => onSearch(filters)}
+            onClick={() => {
+              if (requireFilters && !hasFilters(filters)) return
+              onSearch(filters)
+            }}
             disabled={busy}
             className="pill-btn-primary w-full px-12 py-3.5 text-base md:w-auto disabled:opacity-60"
           >

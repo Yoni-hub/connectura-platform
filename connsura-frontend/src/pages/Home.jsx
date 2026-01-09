@@ -4,11 +4,15 @@ import Badge from '../components/ui/Badge'
 import { useAgents } from '../context/AgentContext'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import AgentCard from '../components/agents/AgentCard'
+import Skeleton from '../components/ui/Skeleton'
+import { useState } from 'react'
 
 export default function Home() {
   const { agents, loading, fetchAgents } = useAgents()
   const { user } = useAuth()
   const nav = useNavigate()
+  const [hasFilters, setHasFilters] = useState(false)
 
   const handleCreateProfile = () => {
     if (user?.role === 'CUSTOMER') {
@@ -149,7 +153,36 @@ export default function Home() {
           </div>
           <Badge label="Live filters" tone="blue" />
         </div>
-        <SearchBar busy={loading} onSearch={fetchAgents} agents={agents} variant="minimal" />
+        <SearchBar
+          busy={loading}
+          onSearch={fetchAgents}
+          onFilterChange={(filters) => {
+            const nextHasFilters = Object.values(filters).some((entry) => String(entry || '').trim())
+            setHasFilters(nextHasFilters)
+          }}
+          requireFilters
+          variant="minimal"
+        />
+        {!hasFilters ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            Choose a filter to see matching agents.
+          </div>
+        ) : loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+        ) : agents.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            No agents match these filters.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {agents.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="relative overflow-hidden bg-[#0b3b8c] px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">

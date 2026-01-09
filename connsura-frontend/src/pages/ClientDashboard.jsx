@@ -5,12 +5,15 @@ import { useAuth } from '../context/AuthContext'
 import { API_URL, api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
+import AgentCard from '../components/agents/AgentCard'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
+import MessageAgentModal from '../components/modals/MessageAgentModal'
+import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Profile', 'Forms', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -62,6 +65,11 @@ export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
+  const focusAgentId = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const value = Number(params.get('agent'))
+    return Number.isFinite(value) && value > 0 ? value : null
+  }, [location.search])
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,11 +86,17 @@ export default function ClientDashboard() {
   const autoReviewRef = useRef('')
   const [threads, setThreads] = useState([])
   const [threadsLoading, setThreadsLoading] = useState(false)
+  const [savedAgents, setSavedAgents] = useState([])
+  const [savedAgentsLoading, setSavedAgentsLoading] = useState(false)
   const [activeThread, setActiveThread] = useState(null)
   const [threadMessages, setThreadMessages] = useState([])
   const [threadLoading, setThreadLoading] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [messageOpen, setMessageOpen] = useState(false)
+  const [messageAgent, setMessageAgent] = useState(null)
+  const [rateOpen, setRateOpen] = useState(false)
+  const [rateAgent, setRateAgent] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -112,6 +126,20 @@ export default function ClientDashboard() {
     const nextTab = resolveTabFromSearch(location.search)
     setActiveTab(nextTab)
   }, [location.search])
+
+  const updateTab = (nextTab) => {
+    setActiveTab(nextTab)
+    const params = new URLSearchParams(location.search)
+    params.set('tab', nextTab.toLowerCase())
+    nav(`/client/dashboard?${params.toString()}`, { replace: true })
+  }
+
+  const clearAgentFocus = () => {
+    const params = new URLSearchParams(location.search)
+    if (!params.has('agent')) return
+    params.delete('agent')
+    nav(`/client/dashboard?${params.toString()}`, { replace: true })
+  }
 
   const fetchProfile = async () => {
     if (!user?.customerId) {
@@ -163,6 +191,19 @@ export default function ClientDashboard() {
       toast.error(err.response?.data?.error || 'Could not load messages')
     } finally {
       setThreadsLoading(false)
+    }
+  }
+
+  const loadSavedAgents = async () => {
+    if (!user?.customerId) return
+    setSavedAgentsLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/saved-agents`)
+      setSavedAgents(res.data.agents || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not load saved agents')
+    } finally {
+      setSavedAgentsLoading(false)
     }
   }
 
@@ -229,14 +270,70 @@ export default function ClientDashboard() {
     }
   }
 
+  const handleRemoveAgent = async (agentId) => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    const confirmed = window.confirm(
+      'Remove this agent? All messages with this agent will also be deleted.'
+    )
+    if (!confirmed) return
+    try {
+      await api.delete(`/customers/${user.customerId}/saved-agents/${agentId}`)
+      await api.delete(`/messages/customer/${user.customerId}/thread/${agentId}`)
+      toast.success('Agent removed')
+      await loadSavedAgents()
+      await loadThreads()
+      if (activeThread?.agent?.id === agentId) {
+        setActiveThread(null)
+        setThreadMessages([])
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to remove agent')
+    }
+  }
+
+  const handleMessageAgent = (agent) => {
+    if (!user) {
+      toast.error('Login to send a message')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can message agents')
+      return
+    }
+    setMessageAgent(agent)
+    setMessageOpen(true)
+  }
+
+  const handleRateAgent = (agent) => {
+    if (!user) {
+      toast.error('Login to rate an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can rate agents')
+      return
+    }
+    setRateAgent(agent)
+    setRateOpen(true)
+  }
+
+  const handleRemoveAgentCard = (agent) => {
+    handleRemoveAgent(agent.id)
+  }
+
   useEffect(() => {
     if (activeTab !== 'Messages') return
     loadThreads()
+    loadSavedAgents()
   }, [activeTab, user?.customerId])
 
   useEffect(() => {
     if (!user?.customerId) return
     loadThreads()
+    loadSavedAgents()
     const interval = setInterval(() => {
       loadThreads()
     }, 12000)
@@ -277,15 +374,37 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (activeTab !== 'Messages') return
     if (!threads.length) {
-      setActiveThread(null)
-      setThreadMessages([])
+      if (!focusAgentId) {
+        setActiveThread(null)
+        setThreadMessages([])
+      }
       return
     }
-    const match = activeThread
-      ? threads.find((thread) => thread.agent?.id === activeThread.agent?.id)
-      : null
-    setActiveThread(match || threads[0])
-  }, [threads, activeTab])
+    if (focusAgentId) return
+    if (activeThread?.agent?.id) {
+      const match = threads.find((thread) => thread.agent?.id === activeThread.agent?.id)
+      if (match) {
+        setActiveThread(match)
+      }
+      return
+    }
+    setActiveThread(threads[0])
+  }, [threads, activeTab, activeThread, focusAgentId])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    if (!focusAgentId) return
+    const match = threads.find((thread) => thread.agent?.id === focusAgentId)
+    if (match) {
+      setActiveThread(match)
+      return
+    }
+    const savedMatch = savedAgents.find((agent) => agent.id === focusAgentId)
+    if (savedMatch) {
+      setActiveThread({ agent: savedMatch, lastMessage: null, unreadCount: 0 })
+      setThreadMessages([])
+    }
+  }, [activeTab, focusAgentId, threads, savedAgents])
 
   useEffect(() => {
     if (activeTab !== 'Messages') return
@@ -383,6 +502,7 @@ export default function ClientDashboard() {
       : parseLangs(formatLangs(profileDetails.preferredLangs || ''))
   const previewLangs = preferredLangsList.length ? preferredLangsList.join(', ') : '-'
   const previewNotes = form.notes || profileDetails.notes || profileDetails.claimsHistory || '-'
+  const savedAgentIds = useMemo(() => new Set(savedAgents.map((agent) => agent.id)), [savedAgents])
   const totalUnread = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
     [threads]
@@ -601,7 +721,7 @@ export default function ClientDashboard() {
             {navItems.map((item) => (
               <button
                 key={item}
-                onClick={() => setActiveTab(item)}
+                onClick={() => updateTab(item)}
                 className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left flex items-center justify-between gap-2 ${
                   activeTab === item ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                 }`}
@@ -724,7 +844,7 @@ export default function ClientDashboard() {
                   <button
                     type="button"
                     className="pill-btn-primary mt-3 px-4"
-                    onClick={() => setActiveTab('Messages')}
+                    onClick={() => updateTab('Messages')}
                   >
                     View messages
                   </button>
@@ -741,7 +861,7 @@ export default function ClientDashboard() {
                   <button
                     type="button"
                     className="pill-btn-primary mt-3 px-4"
-                    onClick={() => setActiveTab('Settings')}
+                    onClick={() => updateTab('Settings')}
                   >
                     Set up now
                   </button>
@@ -959,6 +1079,51 @@ export default function ClientDashboard() {
             />
           )}
 
+          {!loading && activeTab === 'Agents' && (
+            <div className="space-y-4">
+              <div className="surface p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-xl font-semibold">Saved agents</h2>
+                  <button
+                    type="button"
+                    className="pill-btn-ghost px-4"
+                    onClick={loadSavedAgents}
+                    disabled={savedAgentsLoading}
+                  >
+                    {savedAgentsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500 mt-2">
+                  Manage the agents you have saved for quick access.
+                </p>
+              </div>
+              {savedAgentsLoading && (
+                <div className="space-y-3">
+                  <Skeleton className="h-24" />
+                  <Skeleton className="h-24" />
+                </div>
+              )}
+              {!savedAgentsLoading && savedAgents.length === 0 && (
+                <div className="surface p-5 text-sm text-slate-500">
+                  No saved agents yet.
+                </div>
+              )}
+              {!savedAgentsLoading && savedAgents.length > 0 && (
+                <div className="space-y-3">
+                  {savedAgents.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      onMessage={handleMessageAgent}
+                      onRate={handleRateAgent}
+                      onRemove={handleRemoveAgentCard}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {!loading && activeTab === 'Messages' && (
             <div className="surface p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -986,11 +1151,16 @@ export default function ClientDashboard() {
                         const previewPrefix = thread.lastMessage?.senderRole === 'CUSTOMER' ? 'You: ' : ''
                         const preview = `${previewPrefix}${thread.lastMessage?.body || ''}`.trim()
                         const isActive = activeThread?.agent?.id === thread.agent?.id
+                        const showRemove = savedAgentIds.has(thread.agent?.id)
                         return (
                           <button
                             key={thread.agent.id}
                             type="button"
-                            onClick={() => setActiveThread(thread)}
+                            onClick={() => {
+                              setActiveThread(thread)
+                              setThreadMessages([])
+                              clearAgentFocus()
+                            }}
                             className={`w-full rounded-xl border px-3 py-2 text-left transition ${
                               isActive
                                 ? 'border-[#0b3b8c] bg-[#e8f0ff]'
@@ -1013,7 +1183,19 @@ export default function ClientDashboard() {
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-[11px] text-slate-400">
+                              <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                                {showRemove && (
+                                  <button
+                                    type="button"
+                                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      handleRemoveAgent(thread.agent.id)
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                )}
                                 {formatTimestamp(thread.lastMessage?.createdAt)}
                               </div>
                             </div>
@@ -1213,6 +1395,18 @@ export default function ClientDashboard() {
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         snapshot={shareSnapshot}
+      />
+      <MessageAgentModal
+        open={messageOpen}
+        agent={messageAgent}
+        onClose={() => setMessageOpen(false)}
+        onSent={(sentAgent) => nav(`/client/dashboard?tab=messages&agent=${sentAgent.id}`)}
+      />
+      <RateAgentModal
+        open={rateOpen}
+        agent={rateAgent}
+        onClose={() => setRateOpen(false)}
+        onSubmitted={() => loadSavedAgents()}
       />
       <ReviewShareEditsModal
         open={Boolean(reviewShare)}

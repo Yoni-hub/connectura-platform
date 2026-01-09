@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAgents } from '../context/AgentContext'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
@@ -18,6 +18,7 @@ export default function AgentProfile() {
   const [messageOpen, setMessageOpen] = useState(false)
   const [rateOpen, setRateOpen] = useState(false)
   const { user } = useAuth()
+  const nav = useNavigate()
 
   useEffect(() => {
     async function load() {
@@ -46,6 +47,28 @@ export default function AgentProfile() {
       return
     }
     setMessageOpen(true)
+  }
+
+  const handleSaveAgent = async () => {
+    if (!user) {
+      toast.error('Login to save an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can save agents')
+      return
+    }
+    if (!user.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    try {
+      await api.post(`/customers/${user.customerId}/saved-agents`, { agentId: agent.id })
+      toast.success('Agent saved')
+      nav(`/client/dashboard?tab=agents`)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save agent')
+    }
   }
 
   const handleRateOpen = () => {
@@ -93,7 +116,10 @@ export default function AgentProfile() {
                 Message
               </button>
               <button onClick={handleRateOpen} className="pill-btn-ghost">
-                Rate
+                Rate Agent
+              </button>
+              <button onClick={handleSaveAgent} className="pill-btn-ghost">
+                Save Agent
               </button>
             </div>
           </div>
@@ -112,7 +138,12 @@ export default function AgentProfile() {
           ))}
         </div>
       </div>
-      <MessageAgentModal open={messageOpen} agent={agent} onClose={() => setMessageOpen(false)} />
+      <MessageAgentModal
+        open={messageOpen}
+        agent={agent}
+        onClose={() => setMessageOpen(false)}
+        onSent={(sentAgent) => nav(`/client/dashboard?tab=messages&agent=${sentAgent.id}`)}
+      />
       <RateAgentModal
         open={rateOpen}
         agent={agent}

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
 import { useAgents } from '../context/AgentContext'
 import Skeleton from '../components/ui/Skeleton'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../services/api'
 import toast from 'react-hot-toast'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
 import RateAgentModal from '../components/modals/RateAgentModal'
@@ -12,6 +13,7 @@ import RateAgentModal from '../components/modals/RateAgentModal'
 export default function AgentResults() {
   const { agents, loading, fetchAgents } = useAgents()
   const { user } = useAuth()
+  const nav = useNavigate()
   const [params] = useSearchParams()
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageAgent, setMessageAgent] = useState(null)
@@ -49,6 +51,28 @@ export default function AgentResults() {
     setRateOpen(true)
   }
 
+  const handleSave = async (agent) => {
+    if (!user) {
+      toast.error('Login to save an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can save agents')
+      return
+    }
+    if (!user.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    try {
+      await api.post(`/customers/${user.customerId}/saved-agents`, { agentId: agent.id })
+      toast.success('Agent saved')
+      nav(`/client/dashboard?tab=agents`)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save agent')
+    }
+  }
+
   const refreshResults = () => {
     const query = Object.fromEntries(params.entries())
     fetchAgents(query)
@@ -78,11 +102,17 @@ export default function AgentResults() {
               agent={agent}
               onMessage={handleMessage}
               onRate={handleRate}
+              onSave={handleSave}
             />
           ))}
         </div>
       )}
-      <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
+      <MessageAgentModal
+        open={messageOpen}
+        agent={messageAgent}
+        onClose={() => setMessageOpen(false)}
+        onSent={(agent) => nav(`/client/dashboard?tab=messages&agent=${agent.id}`)}
+      />
       <RateAgentModal
         open={rateOpen}
         agent={rateAgent}

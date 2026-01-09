@@ -46,6 +46,19 @@ const handlePhotoUpload = (req, res, next) => {
   })
 }
 
+const normalizeList = (value) => {
+  if (Array.isArray(value)) return value
+  const parsed = parseJson(value, null)
+  if (Array.isArray(parsed)) return parsed
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
 const formatAgent = (agent) => ({
   id: agent.id,
   name: agent.name,
@@ -53,14 +66,14 @@ const formatAgent = (agent) => ({
   photo: agent.photo,
   email: agent.user?.email,
   phone: agent.phone,
-  languages: parseJson(agent.languages, []),
-  states: parseJson(agent.states, []),
+  languages: normalizeList(agent.languages),
+  states: normalizeList(agent.states),
   specialty: agent.specialty,
   producerNumber: agent.producerNumber,
   address: agent.address,
   zip: agent.zip,
-  products: parseJson(agent.products, []),
-  appointedCarriers: parseJson(agent.appointedCarriers, []),
+  products: normalizeList(agent.products),
+  appointedCarriers: normalizeList(agent.appointedCarriers),
   availability: agent.availability,
   rating: agent.rating,
   reviews: parseJson(agent.reviews, []),
@@ -73,8 +86,8 @@ router.get('/', async (req, res) => {
   const { language, state, name, location } = req.query
   const agents = await prisma.agent.findMany()
   const filtered = agents.filter((agent) => {
-    const langs = parseJson(agent.languages, [])
-    const statesList = parseJson(agent.states, [])
+    const langs = normalizeList(agent.languages)
+    const statesList = normalizeList(agent.states)
     const matchLang = language ? langs.some((l) => l.toLowerCase() === language.toLowerCase()) : true
     const matchState = state ? statesList.some((s) => s.toLowerCase() === state.toLowerCase()) : true
     const matchName = name ? agent.name.toLowerCase().includes(name.toLowerCase()) : true

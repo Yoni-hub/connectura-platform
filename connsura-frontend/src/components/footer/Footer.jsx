@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 
 const links = [
   { label: 'Contact us', to: '/contact' },
-  { label: 'Careers', to: '/careers' },
   { label: 'Privacy policy', to: '/privacy-policy' },
   { label: 'Legal notice', to: '/legal-notice' },
 ]
