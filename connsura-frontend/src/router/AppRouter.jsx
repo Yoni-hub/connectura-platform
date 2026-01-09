@@ -8,8 +8,6 @@ import AgentDashboard from '../pages/AgentDashboard'
 import AgentOnboarding from '../pages/AgentOnboarding'
 import ClientForms from '../pages/ClientForms'
 import CreateProfile from '../pages/CreateProfile'
-import VideoCall from '../pages/VideoCall'
-import VoiceCall from '../pages/VoiceCall'
 import Contact from '../pages/Contact'
 import About from '../pages/About'
 import Careers from '../pages/Careers'
@@ -104,22 +102,6 @@ function Layout() {
             }
           />
           <Route path="/agent/onboarding" element={<AgentOnboarding />} />
-          <Route
-            path="/call/video/:id"
-            element={
-              <Protected>
-                <VideoCall />
-              </Protected>
-            }
-          />
-          <Route
-            path="/call/voice/:id"
-            element={
-              <Protected>
-                <VoiceCall />
-              </Protected>
-            }
-          />
           <Route path="/contact" element={<Contact />} />
           <Route path="/about" element={<About />} />
           <Route path="/careers" element={<Careers />} />

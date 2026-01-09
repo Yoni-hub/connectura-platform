@@ -356,41 +356,6 @@ select:focus {
   gap: 14px;
 }
 
-.call-ui,
-.call-live {
-  border: 1px dashed var(--border-strong);
-  border-radius: 12px;
-  padding: 14px;
-  background: #f8fafc;
-}
-
-.call-agent {
-  font-weight: 800;
-  font-size: 18px;
-}
-
-.call-status {
-  color: var(--ink-muted);
-  margin: 6px 0 10px;
-}
-
-.call-controls {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.call-live {
-  display: grid;
-  gap: 12px;
-}
-
-.call-video {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
 .customer-bubble {
   padding: 8px 12px;
   border-radius: 12px;

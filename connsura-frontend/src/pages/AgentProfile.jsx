@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useAgents } from '../context/AgentContext'
 import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
@@ -7,6 +7,7 @@ import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
+import RateAgentModal from '../components/modals/RateAgentModal'
 
 export default function AgentProfile() {
   const { id } = useParams()
@@ -15,8 +16,8 @@ export default function AgentProfile() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [messageOpen, setMessageOpen] = useState(false)
+  const [rateOpen, setRateOpen] = useState(false)
   const { user } = useAuth()
-  const nav = useNavigate()
 
   useEffect(() => {
     async function load() {
@@ -45,6 +46,18 @@ export default function AgentProfile() {
       return
     }
     setMessageOpen(true)
+  }
+
+  const handleRateOpen = () => {
+    if (!user) {
+      toast.error('Login to rate an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can rate agents')
+      return
+    }
+    setRateOpen(true)
   }
 
   if (loading || !agent) {
@@ -76,14 +89,11 @@ export default function AgentProfile() {
             <div className="text-sm text-slate-500">Phone: {agent.phone || '—'}</div>
             <div className="text-sm text-slate-500">Address: {agent.address || '—'} {agent.zip || ''}</div>
             <div className="flex gap-2 flex-wrap pt-2">
-              <button onClick={() => nav(`/call/voice/${agent.id}`)} className="pill-btn-primary">
-                Voice call
-              </button>
-              <button onClick={() => nav(`/call/video/${agent.id}`)} className="pill-btn bg-slate-900 text-white hover:bg-slate-800">
-                Video call
-              </button>
               <button onClick={handleMessageOpen} className="pill-btn-ghost">
                 Message
+              </button>
+              <button onClick={handleRateOpen} className="pill-btn-ghost">
+                Rate
               </button>
             </div>
           </div>
@@ -103,6 +113,12 @@ export default function AgentProfile() {
         </div>
       </div>
       <MessageAgentModal open={messageOpen} agent={agent} onClose={() => setMessageOpen(false)} />
+      <RateAgentModal
+        open={rateOpen}
+        agent={agent}
+        onClose={() => setRateOpen(false)}
+        onSubmitted={() => getAgent(id).then((data) => data && setAgent(data))}
+      />
     </main>
   )
 }

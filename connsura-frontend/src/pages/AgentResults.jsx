@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
 import { useAgents } from '../context/AgentContext'
@@ -7,14 +7,16 @@ import Skeleton from '../components/ui/Skeleton'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import MessageAgentModal from '../components/modals/MessageAgentModal'
+import RateAgentModal from '../components/modals/RateAgentModal'
 
 export default function AgentResults() {
   const { agents, loading, fetchAgents } = useAgents()
   const { user } = useAuth()
-  const nav = useNavigate()
   const [params] = useSearchParams()
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageAgent, setMessageAgent] = useState(null)
+  const [rateOpen, setRateOpen] = useState(false)
+  const [rateAgent, setRateAgent] = useState(null)
 
   useEffect(() => {
     const query = Object.fromEntries(params.entries())
@@ -32,6 +34,24 @@ export default function AgentResults() {
     }
     setMessageAgent(agent)
     setMessageOpen(true)
+  }
+
+  const handleRate = (agent) => {
+    if (!user) {
+      toast.error('Login to rate an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can rate agents')
+      return
+    }
+    setRateAgent(agent)
+    setRateOpen(true)
+  }
+
+  const refreshResults = () => {
+    const query = Object.fromEntries(params.entries())
+    fetchAgents(query)
   }
 
   return (
@@ -56,14 +76,19 @@ export default function AgentResults() {
             <AgentCard
               key={agent.id}
               agent={agent}
-              onVoice={() => nav(`/call/voice/${agent.id}`)}
-              onVideo={() => nav(`/call/video/${agent.id}`)}
               onMessage={handleMessage}
+              onRate={handleRate}
             />
           ))}
         </div>
       )}
       <MessageAgentModal open={messageOpen} agent={messageAgent} onClose={() => setMessageOpen(false)} />
+      <RateAgentModal
+        open={rateOpen}
+        agent={rateAgent}
+        onClose={() => setRateOpen(false)}
+        onSubmitted={refreshResults}
+      />
     </main>
   )
 }

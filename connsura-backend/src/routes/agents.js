@@ -93,6 +93,52 @@ router.get('/:id', async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
+router.post('/:id/reviews', authGuard, async (req, res) => {
+  const agentId = Number(req.params.id)
+  if (!agentId) return res.status(400).json({ error: 'Invalid agent id' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Only customers can rate agents' })
+
+  const ratingValue = Number(req.body?.rating)
+  if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5' })
+  }
+
+  const comment = String(req.body?.comment || '').trim()
+  const customer = await prisma.customer.findUnique({ where: { userId: req.user.id } })
+  if (!customer) return res.status(404).json({ error: 'Customer profile not found' })
+
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
+  if (!agent) return res.status(404).json({ error: 'Agent not found' })
+
+  const existing = parseJson(agent.reviews, [])
+  const reviews = Array.isArray(existing) ? existing : []
+  const reviewEntry = {
+    id: crypto.randomUUID(),
+    rating: ratingValue,
+    comment,
+    author: customer.name || req.user.email,
+    customerId: customer.id,
+    createdAt: new Date().toISOString(),
+  }
+  const updatedReviews = [reviewEntry, ...reviews].slice(0, 50)
+  const average =
+    updatedReviews.length === 0
+      ? 0
+      : Math.round((updatedReviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / updatedReviews.length) * 10) /
+        10
+
+  const updated = await prisma.agent.update({
+    where: { id: agentId },
+    data: {
+      reviews: JSON.stringify(updatedReviews),
+      rating: average,
+    },
+    include: { user: true },
+  })
+
+  res.json({ agent: formatAgent(updated) })
+})
+
 router.post('/:id/photo', authGuard, handlePhotoUpload, async (req, res) => {
   const agentId = Number(req.params.id)
   if (req.user.role !== 'AGENT') return res.status(403).json({ error: 'Forbidden' })

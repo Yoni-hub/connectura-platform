@@ -71,6 +71,7 @@ model Customer {
   profileData      String    @default("{}")
   messages         Message[] @relation("CustomerMessages")
   shares           ProfileShare[]
+  questions        QuestionBank[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
