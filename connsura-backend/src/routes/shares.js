@@ -3,6 +3,7 @@ const crypto = require('crypto')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
+const { sendEmail } = require('../utils/emailClient')
 
 const router = express.Router()
 
@@ -39,6 +40,39 @@ const formatShare = (share) => ({
   recipientName: share.recipientName,
   createdAt: share.createdAt,
 })
+
+const normalizeBaseUrl = (value) => {
+  if (!value) return ''
+  return value.replace(/\/+$/, '')
+}
+
+const buildShareUrl = (token) => {
+  const base = normalizeBaseUrl(process.env.FRONTEND_URL || 'http://localhost:5173')
+  return `${base}/share/${token}`
+}
+
+const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code, editable, agentName }) => {
+  const recipientLabel = recipientName ? ` for ${recipientName}` : ''
+  const customerLabel = customerName ? ` from ${customerName}` : ''
+  const accessMode = editable ? 'Editable' : 'Read-only'
+  const subject = agentName
+    ? `Connsura profile shared with you${customerLabel}`
+    : `Your Connsura share link${recipientLabel}`
+  const intro = agentName
+    ? `A customer${customerLabel} shared their Connsura profile with you.`
+    : `Here is your Connsura share link${recipientLabel}.`
+  const text = [
+    intro,
+    '',
+    `Access mode: ${accessMode}`,
+    `Share link: ${shareUrl}`,
+    `Access code: ${code}`,
+    '',
+    'This code expires if the share is inactive for too long. If you did not request this, you can ignore this email.',
+  ].join('\n')
+
+  await sendEmail({ to, subject, text })
+}
 
 const filterEditsBySections = (edits, sections) => {
   const forms = edits?.forms || {}
@@ -105,7 +139,10 @@ router.post('/', authGuard, async (req, res) => {
   if (!req.user.emailVerified) {
     return res.status(403).json({ error: 'Email not verified' })
   }
-  const customer = await prisma.customer.findUnique({ where: { userId: req.user.id } })
+  const customer = await prisma.customer.findUnique({
+    where: { userId: req.user.id },
+    include: { user: true },
+  })
   if (!customer) {
     return res.status(404).json({ error: 'Customer not found' })
   }
@@ -122,8 +159,9 @@ router.post('/', authGuard, async (req, res) => {
   if (!agentId && !recipientNameNormalized) {
     return res.status(400).json({ error: 'Recipient name is required' })
   }
+  let agent = null
   if (agentId) {
-    const agent = await prisma.agent.findUnique({ where: { id: agentId } })
+    agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' })
     }
@@ -146,6 +184,24 @@ router.post('/', authGuard, async (req, res) => {
       lastAccessedAt: new Date(),
     },
   })
+
+  const shareUrl = buildShareUrl(token)
+  const emailTarget = agent?.user?.email || customer.user?.email
+  if (emailTarget) {
+    try {
+      await sendShareEmail({
+        to: emailTarget,
+        recipientName,
+        customerName: customer.name,
+        shareUrl,
+        code,
+        editable,
+        agentName: agent?.name,
+      })
+    } catch (err) {
+      console.error('share email send error', { error: err.message })
+    }
+  }
 
   res.status(201).json({ share: formatShare(share), code })
 })

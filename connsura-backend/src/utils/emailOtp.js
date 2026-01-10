@@ -1,61 +1,28 @@
 const crypto = require('crypto')
-const nodemailer = require('nodemailer')
+const { sendEmail } = require('./emailClient')
 
 const OTP_TTL_MS = Number(process.env.EMAIL_OTP_TTL_MS || 10 * 60 * 1000)
 const OTP_MAX_ATTEMPTS = Number(process.env.EMAIL_OTP_MAX_ATTEMPTS || 5)
 
 const otpStore = new Map()
-let cachedTransporter = null
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 
 const hashCode = (code) => crypto.createHash('sha256').update(code).digest('hex')
 
-const getTransporter = () => {
-  if (cachedTransporter) return cachedTransporter
-
-  const smtpUrl = process.env.SMTP_URL
-  if (smtpUrl) {
-    cachedTransporter = nodemailer.createTransport(smtpUrl)
-    return cachedTransporter
-  }
-
-  const host = process.env.SMTP_HOST
-  if (!host) return null
-
-  const port = Number(process.env.SMTP_PORT || 587)
-  const secure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: user && pass ? { user, pass } : undefined,
-  })
-
-  return cachedTransporter
-}
-
 const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0')
 
 const deliverEmail = async (email, code) => {
-  const transport = getTransporter()
-  if (!transport) {
-    console.log(`[email-otp] code for ${email}: ${code}`)
-    return { delivery: 'log' }
-  }
-
-  const from = process.env.SMTP_FROM || 'no-reply@connsura.com'
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
-  await transport.sendMail({
-    from,
+  const delivery = await sendEmail({
     to: email,
     subject: 'Your Connsura verification code',
     text: `Your Connsura verification code is ${code}. It expires in ${expiresMinutes} minutes.`,
   })
-  return { delivery: 'smtp' }
+  if (delivery.delivery === 'disabled' && String(process.env.EMAIL_LOG_CODES || '').toLowerCase() === 'true') {
+    console.log(`[email-otp] code for ${email}: ${code}`)
+  }
+  return delivery
 }
 
 const sendEmailOtp = async (email) => {

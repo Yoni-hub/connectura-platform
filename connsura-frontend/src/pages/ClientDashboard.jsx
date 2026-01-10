@@ -13,7 +13,7 @@ import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Profile', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'Profile', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -59,6 +59,34 @@ const resolvePhotoUrl = (value = '') => {
   if (!value) return ''
   if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) return value
   return `${API_URL}${value}`
+}
+
+const hasNonEmptyValue = (value) => {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (typeof value === 'number' || typeof value === 'boolean') return true
+  if (Array.isArray(value)) return value.some(hasNonEmptyValue)
+  if (typeof value === 'object') return Object.values(value).some(hasNonEmptyValue)
+  return false
+}
+
+const safeArray = (value) => (Array.isArray(value) ? value : [])
+
+const buildPersonName = (person = {}) => {
+  const firstName = person['first-name'] || person.firstName || ''
+  const middleInitial = person['middle-initial'] || person.middleInitial || ''
+  const lastName = person['last-name'] || person.lastName || ''
+  return [firstName, middleInitial, lastName].filter(Boolean).join(' ')
+}
+
+const formatCountLabel = (count, singular, plural) => {
+  if (count === 1) return `1 ${singular}`
+  return `${count} ${plural || `${singular}s`}`
+}
+
+const resolveDetail = (detail, hasData, emptyText, filledText) => {
+  if (!hasData) return emptyText
+  return detail || filledText
 }
 
 export default function ClientDashboard() {
@@ -507,6 +535,129 @@ export default function ClientDashboard() {
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
     [threads]
   )
+  const passportForms = formsDraft || client?.profileData?.forms || {}
+  const householdForms = passportForms.household || {}
+  const namedInsured = householdForms.namedInsured || {}
+  const additionalHouseholds = safeArray(householdForms.additionalHouseholds)
+  const additionalHouseholdCount = additionalHouseholds.filter(hasNonEmptyValue).length
+  const primaryHouseholdFilled = hasNonEmptyValue(namedInsured)
+  const householdCount = (primaryHouseholdFilled ? 1 : 0) + additionalHouseholdCount
+  const primaryHouseholdName = buildPersonName(namedInsured)
+  const householdDetail = resolveDetail(
+    primaryHouseholdName ? `Primary: ${primaryHouseholdName}` : '',
+    householdCount > 0,
+    'Add household details in Forms.',
+    'Household details saved.'
+  )
+
+  const addressForms = passportForms.address || {}
+  const contacts = safeArray(addressForms.contacts)
+  const primaryContact = contacts[0] || {}
+  const residential = addressForms.residential || {}
+  const mailing = addressForms.mailing || {}
+  const additionalAddresses = safeArray(addressForms.additionalAddresses)
+  const primaryAddressFilled =
+    hasNonEmptyValue(primaryContact) || hasNonEmptyValue(residential) || hasNonEmptyValue(mailing)
+  const additionalAddressCount = additionalAddresses.filter(hasNonEmptyValue).length
+  const addressCount = (primaryAddressFilled ? 1 : 0) + additionalAddressCount
+  const primaryAddressLine = [residential.address1, residential.city, residential.state, residential.zip]
+    .filter(Boolean)
+    .join(', ')
+  const addressDetail = resolveDetail(
+    primaryAddressLine,
+    addressCount > 0,
+    'Add address details in Forms.',
+    'Address details saved.'
+  )
+
+  const vehicleForms = passportForms.vehicle || {}
+  const primaryVehicle = vehicleForms.primaryVehicle || {}
+  const additionalVehicles = safeArray(vehicleForms.additionalVehicles)
+  const additionalVehicleCount = additionalVehicles.filter(hasNonEmptyValue).length
+  const primaryVehicleFilled = hasNonEmptyValue(primaryVehicle)
+  const vehicleCount = (primaryVehicleFilled ? 1 : 0) + additionalVehicleCount
+  const primaryVehicleLabel = [primaryVehicle.year, primaryVehicle.make, primaryVehicle.model]
+    .filter(Boolean)
+    .join(' ')
+  const vehicleDetail = resolveDetail(
+    primaryVehicleLabel ? `Primary: ${primaryVehicleLabel}` : '',
+    vehicleCount > 0,
+    'Add vehicle details in Forms.',
+    'Vehicle details saved.'
+  )
+
+  const businessForms = passportForms.business || {}
+  const primaryBusiness = businessForms.primaryBusiness || {}
+  const additionalBusinesses = safeArray(businessForms.additionalBusinesses)
+  const additionalBusinessCount = additionalBusinesses.filter(hasNonEmptyValue).length
+  const primaryBusinessFilled = hasNonEmptyValue(primaryBusiness)
+  const businessCount = (primaryBusinessFilled ? 1 : 0) + additionalBusinessCount
+  const businessDetail = resolveDetail(
+    primaryBusiness.name ? `Primary: ${primaryBusiness.name}` : '',
+    businessCount > 0,
+    'Add business details in Forms.',
+    'Business details saved.'
+  )
+
+  const additionalForms = safeArray(passportForms.additional?.additionalForms)
+  const additionalNames = additionalForms
+    .map((form) => form?.name || form?.productName)
+    .filter(Boolean)
+  const additionalCount = additionalForms.filter((form) =>
+    hasNonEmptyValue(form?.questions) || hasNonEmptyValue(form?.name) || hasNonEmptyValue(form?.productName)
+  ).length
+  const additionalDetail = resolveDetail(
+    additionalNames.length
+      ? `${additionalNames.slice(0, 2).join(', ')}${
+          additionalNames.length > 2 ? ` +${additionalNames.length - 2} more` : ''
+        }`
+      : '',
+    additionalCount > 0,
+    'Add custom forms in Forms.',
+    'Custom forms saved.'
+  )
+
+  const passportSections = [
+    {
+      id: 'household',
+      label: 'Household',
+      count: householdCount,
+      singular: 'member',
+      detail: householdDetail,
+    },
+    {
+      id: 'address',
+      label: 'Address',
+      count: addressCount,
+      singular: 'address',
+      plural: 'addresses',
+      detail: addressDetail,
+    },
+    {
+      id: 'vehicle',
+      label: 'Vehicles',
+      count: vehicleCount,
+      singular: 'vehicle',
+      detail: vehicleDetail,
+    },
+    {
+      id: 'business',
+      label: 'Business',
+      count: businessCount,
+      singular: 'business',
+      plural: 'businesses',
+      detail: businessDetail,
+    },
+    {
+      id: 'additional',
+      label: 'Additional Forms',
+      count: additionalCount,
+      singular: 'form',
+      detail: additionalDetail,
+    },
+  ]
+  const passportCompletedCount = passportSections.filter((section) => section.count > 0).length
+  const passportHasData = passportCompletedCount > 0
 
   const requestEmailVerification = async () => {
     if (!user?.email) {
@@ -1068,6 +1219,60 @@ export default function ClientDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {!loading && activeTab === 'My Insurance Passport' && (
+            <div className="space-y-4">
+              <div className="surface p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold">My Insurance Passport</h2>
+                    <p className="text-sm text-slate-500">
+                      Summary of the information you have saved in your forms.
+                    </p>
+                  </div>
+                  <button type="button" className="pill-btn-primary px-4" onClick={() => updateTab('Forms')}>
+                    Edit in Forms
+                  </button>
+                </div>
+                <div className="mt-3 text-sm text-slate-600">
+                  {passportCompletedCount} of {passportSections.length} sections filled
+                </div>
+              </div>
+
+              {!passportHasData && (
+                <div className="surface p-5 space-y-3">
+                  <div className="text-sm text-slate-500">
+                    You have not filled out any forms yet. Start with the forms tab to build your insurance passport.
+                  </div>
+                  <button type="button" className="pill-btn-ghost px-4" onClick={() => updateTab('Forms')}>
+                    Start Forms
+                  </button>
+                </div>
+              )}
+
+              {passportHasData && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {passportSections.map((section) => (
+                    <div key={section.id} className="surface p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-700">{section.label}</div>
+                        <Badge label={section.count > 0 ? 'Saved' : 'Not started'} tone={section.count > 0 ? 'green' : 'gray'} />
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {section.count > 0
+                          ? formatCountLabel(section.count, section.singular, section.plural)
+                          : 'Not started'}
+                      </div>
+                      <div className="text-sm text-slate-600">{section.detail}</div>
+                      <button type="button" className="pill-btn-ghost px-4 text-sm" onClick={() => updateTab('Forms')}>
+                        Edit in Forms
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
