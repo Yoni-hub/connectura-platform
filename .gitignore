@@ -29,6 +29,10 @@ backend-dev.log
 frontend-dev.log
 automation/deployments.log
 
+# Playwright artifacts
+e2e/test-results/
+e2e/playwright-report/
+
 # Docker
 .docker/
 
