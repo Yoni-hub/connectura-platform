@@ -8,7 +8,7 @@ const { getEmailOtp } = require('../utils/emailOtp')
 const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = require('../utils/siteContent')
 const { DEFAULT_CREATE_PROFILE_SCHEMA } = require('../utils/formSchema')
 const { slugify, ensureProductCatalog } = require('../utils/productCatalog')
-const { normalizeQuestion } = require('../utils/questionBank')
+const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
 
 const router = express.Router()
 
@@ -436,61 +436,186 @@ router.post('/products', adminGuard, async (req, res) => {
 router.get('/questions', adminGuard, async (req, res) => {
   const productId = req.query.productId ? Number(req.query.productId) : null
   const source = req.query.source ? String(req.query.source).toUpperCase() : null
-  const where = {
-    ...(productId ? { productId } : {}),
-    ...(source ? { source } : {}),
-  }
-  const questions = await prisma.questionBank.findMany({
-    where,
-    orderBy: [{ source: 'desc' }, { text: 'asc' }],
-    include: { customer: { include: { user: true } } },
-  })
-  res.json({
-    questions: questions.map((row) => ({
+  const normalizedSource = source === 'SYSTEM' || source === 'CUSTOMER' ? source : null
+  const sourceRank = { SYSTEM: 1, CUSTOMER: 0 }
+
+  const systemQuestions =
+    !normalizedSource || normalizedSource === 'SYSTEM'
+      ? await prisma.questionBank.findMany({
+          where: {
+            ...(productId ? { productId } : {}),
+            source: 'SYSTEM',
+          },
+          orderBy: { id: 'asc' },
+        })
+      : []
+
+  const customerQuestions =
+    !normalizedSource || normalizedSource === 'CUSTOMER'
+      ? await prisma.customerQuestion.findMany({
+          where: {
+            ...(productId ? { productId } : {}),
+          },
+          orderBy: { id: 'asc' },
+          include: { customer: { include: { user: true } } },
+        })
+      : []
+
+  const combined = [
+    ...systemQuestions.map((row) => ({
       id: row.id,
       text: row.text,
-      source: row.source,
+      source: 'SYSTEM',
+      productId: row.productId,
+      customerId: null,
+      customerName: null,
+      customerEmail: null,
+      formName: null,
+    })),
+    ...customerQuestions.map((row) => ({
+      id: row.id,
+      text: row.text,
+      source: 'CUSTOMER',
       productId: row.productId,
       customerId: row.customerId,
       customerName: row.customer?.name || null,
       customerEmail: row.customer?.user?.email || null,
+      formName: row.formName || null,
     })),
+  ].sort((a, b) => {
+    const sourceDelta = (sourceRank[b.source] ?? 0) - (sourceRank[a.source] ?? 0)
+    if (sourceDelta !== 0) return sourceDelta
+    return a.id - b.id
   })
+
+  res.json({ questions: combined })
 })
 
 router.post('/questions', adminGuard, async (req, res) => {
-  const text = String(req.body?.text || '').trim()
   const productId = req.body?.productId ? Number(req.body.productId) : null
-  if (!text) return res.status(400).json({ error: 'Question text is required' })
-  const normalized = normalizeQuestion(text)
-  if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+  const sync = Boolean(req.body?.sync)
+  const incoming = Array.isArray(req.body?.texts) ? req.body.texts : [req.body?.text]
+  const received = incoming
+    .flatMap((entry) => String(entry || '').split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean)
 
-  const created = await prisma.questionBank.create({
-    data: {
-      text,
-      normalized,
-      source: 'SYSTEM',
-      productId: productId || null,
-    },
-  })
-  await logAudit(req.admin.id, 'QuestionBank', created.id, 'create', {
-    productId: created.productId,
-  })
-  res.status(201).json({
-    question: {
-      id: created.id,
-      text: created.text,
-      source: created.source,
-      productId: created.productId,
-    },
-  })
+  if (!received.length) return res.status(400).json({ error: 'Question text is required' })
+
+  const records = buildQuestionRecords(received, 'SYSTEM', productId || null, null)
+  if (!records.length) return res.status(400).json({ error: 'Invalid question text' })
+
+  if (sync) {
+    if (!productId) return res.status(400).json({ error: 'Product is required for sync' })
+
+    const existing = await prisma.questionBank.findMany({
+      where: { productId, source: 'SYSTEM' },
+      orderBy: { id: 'asc' },
+    })
+    const existingByNormalized = new Map(existing.map((item) => [item.normalized, item]))
+    const incomingNormalized = new Set(records.map((record) => record.normalized))
+
+    const toDelete = existing.filter((item) => !incomingNormalized.has(item.normalized))
+    const toCreate = records.filter((record) => !existingByNormalized.has(record.normalized))
+
+    if (toDelete.length) {
+      await prisma.questionBank.deleteMany({ where: { id: { in: toDelete.map((item) => item.id) } } })
+      for (const item of toDelete) {
+        await logAudit(req.admin.id, 'QuestionBank', item.id, 'delete', { productId })
+      }
+    }
+
+    const createdQuestions = []
+    for (const record of toCreate) {
+      try {
+        const created = await prisma.questionBank.create({ data: record })
+        createdQuestions.push(created)
+        await logAudit(req.admin.id, 'QuestionBank', created.id, 'create', {
+          productId: created.productId,
+        })
+      } catch (err) {
+        if (err?.code !== 'P2002') {
+          throw err
+        }
+      }
+    }
+
+    const updated = await prisma.questionBank.findMany({
+      where: { productId, source: 'SYSTEM' },
+      orderBy: { id: 'asc' },
+    })
+
+    return res.status(201).json({
+      created: createdQuestions.length,
+      deleted: toDelete.length,
+      prepared: records.length,
+      received: received.length,
+      questions: updated.map((question) => ({
+        id: question.id,
+        text: question.text,
+        source: question.source,
+        productId: question.productId,
+      })),
+    })
+  }
+
+  const createdQuestions = []
+  let skipped = 0
+  for (const record of records) {
+    try {
+      const created = await prisma.questionBank.create({ data: record })
+      createdQuestions.push(created)
+      await logAudit(req.admin.id, 'QuestionBank', created.id, 'create', {
+        productId: created.productId,
+      })
+    } catch (err) {
+      if (err?.code === 'P2002') {
+        skipped += 1
+        continue
+      }
+      throw err
+    }
+  }
+
+  const payload = {
+    created: createdQuestions.length,
+    prepared: records.length,
+    received: received.length,
+    skipped,
+    questions: createdQuestions.map((question) => ({
+      id: question.id,
+      text: question.text,
+      source: question.source,
+      productId: question.productId,
+    })),
+  }
+
+  if (payload.questions.length === 1) {
+    payload.question = payload.questions[0]
+  }
+
+  res.status(201).json(payload)
 })
 
 router.delete('/questions/:id', adminGuard, async (req, res) => {
   const id = Number(req.params.id)
   if (!id) return res.status(400).json({ error: 'Question id required' })
-  await prisma.questionBank.delete({ where: { id } })
-  await logAudit(req.admin.id, 'QuestionBank', id, 'delete')
+  const source = req.query.source ? String(req.query.source).toUpperCase() : null
+  if (source === 'CUSTOMER') {
+    await prisma.customerQuestion.delete({ where: { id } })
+    await logAudit(req.admin.id, 'CustomerQuestion', id, 'delete')
+  } else {
+    const existing = await prisma.questionBank.findUnique({ where: { id } })
+    if (!existing && source !== 'SYSTEM') {
+      const customer = await prisma.customerQuestion.findUnique({ where: { id } })
+      if (!customer) return res.status(404).json({ error: 'Question not found' })
+      await prisma.customerQuestion.delete({ where: { id } })
+      await logAudit(req.admin.id, 'CustomerQuestion', id, 'delete')
+      return res.json({ ok: true })
+    }
+    await prisma.questionBank.delete({ where: { id } })
+    await logAudit(req.admin.id, 'QuestionBank', id, 'delete')
+  }
   res.json({ ok: true })
 })
 
@@ -499,6 +624,31 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
   const text = String(req.body?.text || '').trim()
   if (!id) return res.status(400).json({ error: 'Question id required' })
   if (!text) return res.status(400).json({ error: 'Question text is required' })
+  const source = String(req.body?.source || req.query.source || '').toUpperCase()
+  if (source === 'CUSTOMER') {
+    const existing = await prisma.customerQuestion.findUnique({ where: { id } })
+    if (!existing) return res.status(404).json({ error: 'Question not found' })
+    const normalized = normalizeQuestion(text)
+    if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+    const updated = await prisma.customerQuestion.update({
+      where: { id },
+      data: {
+        text,
+        normalized,
+      },
+    })
+    await logAudit(req.admin.id, 'CustomerQuestion', id, 'update', { text })
+    return res.json({
+      question: {
+        id: updated.id,
+        text: updated.text,
+        source: 'CUSTOMER',
+        productId: updated.productId,
+        formName: updated.formName,
+      },
+    })
+  }
+
   const existing = await prisma.questionBank.findUnique({ where: { id } })
   if (!existing) return res.status(404).json({ error: 'Question not found' })
   if (existing.source !== 'CUSTOMER') {

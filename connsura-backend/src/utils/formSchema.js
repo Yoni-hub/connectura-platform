@@ -33,6 +33,7 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
         { id: 'email1', label: 'Email Address #1', type: 'email', visible: true },
         { id: 'email2', label: 'Email Address #2', type: 'email', visible: true },
       ],
+      addressTypes: ['Secondary Home', 'Rental Property'],
       residentialFields: [
         { id: 'address1', label: 'Street Address 1', type: 'text', visible: true },
         { id: 'city', label: 'City', type: 'text', visible: true },

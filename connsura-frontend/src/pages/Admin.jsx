@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { API_URL } from '../services/api'
 import { adminApi, ADMIN_TOKEN_KEY } from '../services/adminApi'
@@ -38,6 +38,7 @@ export default function Admin() {
   const [questionSourceFilter, setQuestionSourceFilter] = useState('all')
   const [questionEdits, setQuestionEdits] = useState({})
   const [newProductName, setNewProductName] = useState('')
+  const lastQuestionPrefillProductRef = useRef('')
 
   const isAuthed = Boolean(token)
 
@@ -641,8 +642,23 @@ export default function Admin() {
         ...(sourceFilter && sourceFilter !== 'all' ? { source: sourceFilter } : {}),
       }
       const res = await adminApi.get('/admin/questions', { params })
-      setQuestions(Array.isArray(res.data?.questions) ? res.data.questions : [])
+      const items = Array.isArray(res.data?.questions) ? res.data.questions : []
+      setQuestions(items)
       setQuestionEdits({})
+      const currentProductKey = productId ? String(productId) : ''
+      if (currentProductKey !== lastQuestionPrefillProductRef.current) {
+        if (currentProductKey && sourceFilter !== 'CUSTOMER') {
+          const listText = items
+            .filter((question) => question.source === 'SYSTEM')
+            .map((question) => question.text)
+            .filter(Boolean)
+            .join(', ')
+          setNewQuestion(listText)
+        } else {
+          setNewQuestion('')
+        }
+        lastQuestionPrefillProductRef.current = currentProductKey
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to load questions')
     } finally {
@@ -657,19 +673,42 @@ export default function Admin() {
       return
     }
     try {
-      const payload = { text }
+      const syncMode = Boolean(activeProductId) && questionSourceFilter !== 'CUSTOMER'
+      const payload = { text, ...(syncMode ? { sync: true } : {}) }
       if (activeProductId) payload.productId = Number(activeProductId)
       const res = await adminApi.post('/admin/questions', payload)
-      const created = res.data?.question
-      if (created) {
-        if (questionSourceFilter === 'CUSTOMER') {
+      const createdCount = Number(res.data?.created || 0)
+      const deletedCount = Number(res.data?.deleted || 0)
+      const skippedCount = Number(res.data?.skipped || 0)
+
+      if (syncMode) {
+        const updated = Array.isArray(res.data?.questions) ? res.data.questions : []
+        if (questionSourceFilter === 'all') {
           await loadQuestions(activeProductId, questionSourceFilter)
         } else {
-          setQuestions((prev) => [created, ...prev])
+          setQuestions(updated)
+          setQuestionEdits({})
         }
+        setNewQuestion(updated.map((question) => question.text).filter(Boolean).join(', '))
+        if (createdCount || deletedCount) {
+          toast.success(`Saved questions (${createdCount} added, ${deletedCount} removed)`)
+        } else {
+          toast.success('Saved questions')
+        }
+        return
       }
+
+      await loadQuestions(activeProductId, questionSourceFilter)
       setNewQuestion('')
-      toast.success('Question added')
+      if (createdCount > 1) {
+        toast.success(`Added ${createdCount} questions`)
+      } else if (createdCount === 1) {
+        toast.success('Question added')
+      } else if (skippedCount > 0) {
+        toast.error('All questions already exist')
+      } else {
+        toast.error('No questions added')
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to add question')
     }
@@ -686,11 +725,16 @@ export default function Admin() {
       return
     }
     try {
-      const res = await adminApi.put(`/admin/questions/${question.id}`, { text: nextText })
+      const res = await adminApi.put(`/admin/questions/${question.id}`, {
+        text: nextText,
+        source: question.source,
+      })
       const updated = res.data?.question
       if (updated) {
         setQuestions((prev) =>
-          prev.map((item) => (item.id === updated.id ? { ...item, text: updated.text } : item))
+          prev.map((item) =>
+            item.id === updated.id && item.source === updated.source ? { ...item, text: updated.text } : item
+          )
         )
         setQuestionEdits((prev) => {
           const next = { ...prev }
@@ -704,10 +748,12 @@ export default function Admin() {
     }
   }
 
-  const deleteQuestion = async (id) => {
+  const deleteQuestion = async (question) => {
     try {
-      await adminApi.delete(`/admin/questions/${id}`)
-      setQuestions((prev) => prev.filter((question) => question.id !== id))
+      await adminApi.delete(`/admin/questions/${question.id}`, {
+        params: question.source ? { source: question.source } : {},
+      })
+      setQuestions((prev) => prev.filter((item) => item.id !== question.id || item.source !== question.source))
       toast.success('Question removed')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to remove question')
@@ -980,6 +1026,69 @@ export default function Admin() {
     const fieldTypes = ['text', 'number', 'date', 'email', 'tel']
     const input = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
     const labelClass = 'text-xs font-semibold uppercase tracking-wide text-slate-500'
+    const defaultAddressTypes = ['Secondary Home', 'Rental Property']
+    const resolvedAddressTypes = Array.isArray(schema?.sections?.address?.addressTypes)
+      ? schema.sections.address.addressTypes
+      : defaultAddressTypes
+
+    const updateAddressType = (index, value) => {
+      setFormSchema((prev) => {
+        if (!prev?.sections?.address) return prev
+        const current = Array.isArray(prev.sections.address.addressTypes)
+          ? [...prev.sections.address.addressTypes]
+          : [...defaultAddressTypes]
+        current[index] = value
+        return {
+          ...prev,
+          sections: {
+            ...prev.sections,
+            address: {
+              ...prev.sections.address,
+              addressTypes: current,
+            },
+          },
+        }
+      })
+    }
+
+    const addAddressType = () => {
+      setFormSchema((prev) => {
+        if (!prev?.sections?.address) return prev
+        const current = Array.isArray(prev.sections.address.addressTypes)
+          ? [...prev.sections.address.addressTypes]
+          : [...defaultAddressTypes]
+        return {
+          ...prev,
+          sections: {
+            ...prev.sections,
+            address: {
+              ...prev.sections.address,
+              addressTypes: [...current, ''],
+            },
+          },
+        }
+      })
+    }
+
+    const removeAddressType = (index) => {
+      setFormSchema((prev) => {
+        if (!prev?.sections?.address) return prev
+        const current = Array.isArray(prev.sections.address.addressTypes)
+          ? [...prev.sections.address.addressTypes]
+          : [...defaultAddressTypes]
+        const nextTypes = current.filter((_, itemIndex) => itemIndex !== index)
+        return {
+          ...prev,
+          sections: {
+            ...prev.sections,
+            address: {
+              ...prev.sections.address,
+              addressTypes: nextTypes,
+            },
+          },
+        }
+      })
+    }
 
     const renderFieldGroup = (groupKey, title) => {
       const fields = Array.isArray(sectionData?.[groupKey]) ? sectionData[groupKey] : []
@@ -1124,6 +1233,40 @@ export default function Admin() {
                     />
                   </div>
                   {activeSection.groups.map((group) => renderFieldGroup(group.key, group.label))}
+                  {activeSection.key === 'address' && (
+                    <div className="space-y-3">
+                      <div className={labelClass}>Additional address types</div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Options</div>
+                        <div className="mt-3 space-y-2">
+                          {resolvedAddressTypes.map((option, index) => (
+                            <div key={`address-type-${index}`} className="flex flex-wrap items-center gap-2">
+                              <input
+                                className={input}
+                                value={option}
+                                onChange={(event) => updateAddressType(index, event.target.value)}
+                                placeholder="Address type"
+                              />
+                              <button
+                                type="button"
+                                className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
+                                onClick={() => removeAddressType(index)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost mt-3 px-3 py-1 text-xs"
+                          onClick={addAddressType}
+                        >
+                          Add address type
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <div className={labelClass}>Custom fields</div>
                     {renderFieldGroup('customFields', 'Custom fields')}
@@ -1194,15 +1337,15 @@ export default function Admin() {
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Add question</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Add question(s)</div>
                 <textarea
                   className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm min-h-[120px]"
                   value={newQuestion}
                   onChange={(event) => setNewQuestion(event.target.value)}
-                  placeholder="Type the question to add"
+                  placeholder="Type questions separated by commas"
                 />
                 <button type="button" className="pill-btn-primary mt-3 w-full justify-center" onClick={addQuestion}>
-                  Add question
+                  Add question(s)
                 </button>
               </div>
             </div>
@@ -1219,7 +1362,10 @@ export default function Admin() {
               {!questionsLoading && questions.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {questions.map((question) => (
-                    <div key={question.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                    <div
+                      key={`${question.source || 'SYSTEM'}-${question.id}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                    >
                       <div className="flex-1 min-w-[220px]">
                         {question.source === 'CUSTOMER' ? (
                           <>
@@ -1232,6 +1378,9 @@ export default function Admin() {
                             <div className="mt-1 text-xs text-slate-400">
                               Customer: {question.customerName || question.customerEmail || `#${question.customerId || 'unknown'}`}
                             </div>
+                            {question.formName ? (
+                              <div className="mt-1 text-xs text-slate-400">Form: {question.formName}</div>
+                            ) : null}
                           </>
                         ) : (
                           <>
@@ -1253,7 +1402,7 @@ export default function Admin() {
                         <button
                           type="button"
                           className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
-                          onClick={() => deleteQuestion(question.id)}
+                          onClick={() => deleteQuestion(question)}
                         >
                           Remove
                         </button>

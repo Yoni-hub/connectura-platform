@@ -1,6 +1,6 @@
 const express = require('express')
 const prisma = require('../prisma')
-const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
+const { buildCustomerQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
 const { authGuard } = require('../middleware/auth')
 const { verifyToken } = require('../utils/token')
 
@@ -26,15 +26,21 @@ router.get('/product', async (req, res) => {
       return res.json({ questions: [] })
     }
     const customerId = await resolveCustomerId(req)
-    const where = customerId
-      ? { productId, OR: [{ source: 'SYSTEM' }, { customerId }] }
-      : { productId, source: 'SYSTEM' }
-    const questions = await prisma.questionBank.findMany({
-      where,
-      orderBy: [{ source: 'desc' }, { text: 'asc' }],
+    const systemQuestions = await prisma.questionBank.findMany({
+      where: { productId, source: 'SYSTEM' },
+      orderBy: { id: 'asc' },
     })
+    const customerQuestions = customerId
+      ? await prisma.customerQuestion.findMany({
+          where: { productId, customerId },
+          orderBy: { id: 'asc' },
+        })
+      : []
     return res.json({
-      questions: questions.map((row) => ({ id: row.id, text: row.text, source: row.source })),
+      questions: [
+        ...systemQuestions.map((row) => ({ id: row.id, text: row.text, source: 'SYSTEM' })),
+        ...customerQuestions.map((row) => ({ id: row.id, text: row.text, source: 'CUSTOMER' })),
+      ],
     })
   } catch (error) {
     console.error('Question bank load error', error)
@@ -55,26 +61,42 @@ router.get('/search', async (req, res) => {
       return res.json({ results: [] })
     }
     const customerId = await resolveCustomerId(req)
-    const results = await prisma.questionBank.findMany({
+    const systemResults = await prisma.questionBank.findMany({
       where: {
         normalized: {
           contains: normalized,
         },
         ...(productId ? { productId } : {}),
-        ...(customerId ? { OR: [{ source: 'SYSTEM' }, { customerId }] } : { source: 'SYSTEM' }),
+        source: 'SYSTEM',
       },
-      orderBy: [
-        { source: 'desc' },
-        { text: 'asc' },
-      ],
+      orderBy: [{ text: 'asc' }],
       take: limit,
     })
+    const customerResults = customerId
+      ? await prisma.customerQuestion.findMany({
+          where: {
+            normalized: {
+              contains: normalized,
+            },
+            ...(productId ? { productId } : {}),
+            customerId,
+          },
+          orderBy: [{ text: 'asc' }],
+          take: limit,
+        })
+      : []
+    const deduped = new Map()
+    systemResults.forEach((row) => {
+      deduped.set(row.normalized, { id: row.id, text: row.text, source: 'SYSTEM' })
+    })
+    customerResults.forEach((row) => {
+      if (!deduped.has(row.normalized)) {
+        deduped.set(row.normalized, { id: row.id, text: row.text, source: 'CUSTOMER' })
+      }
+    })
+    const results = Array.from(deduped.values()).slice(0, limit)
     return res.json({
-      results: results.map((row) => ({
-        id: row.id,
-        text: row.text,
-        source: row.source,
-      })),
+      results,
     })
   } catch (error) {
     console.error('Question search error', error)
@@ -90,11 +112,23 @@ router.post('/customer', authGuard, async (req, res) => {
     }
     const payload = Array.isArray(req.body?.questions) ? req.body.questions : []
     const productId = req.body?.productId ? Number(req.body.productId) : null
-    const records = buildQuestionRecords(payload, 'CUSTOMER', productId || null, customer.id)
+    const formName = String(req.body?.formName || '').trim()
+    if (!productId && !formName) {
+      return res.status(400).json({ error: 'Form name is required for custom questions' })
+    }
+    let resolvedFormName = formName
+    if (!resolvedFormName && productId) {
+      const product = await prisma.product.findUnique({ where: { id: productId } })
+      resolvedFormName = product?.name || ''
+    }
+    if (!resolvedFormName) {
+      return res.status(400).json({ error: 'Form name is required' })
+    }
+    const records = buildCustomerQuestionRecords(payload, productId || null, customer.id, resolvedFormName)
     if (!records.length) {
       return res.json({ created: 0 })
     }
-    const result = await prisma.questionBank.createMany({
+    const result = await prisma.customerQuestion.createMany({
       data: records,
       skipDuplicates: true,
     })

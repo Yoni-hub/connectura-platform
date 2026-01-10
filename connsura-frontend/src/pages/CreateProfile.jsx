@@ -195,6 +195,8 @@ const baseMailingFields = [
   { id: 'zip', label: 'Zip Code' },
 ]
 
+const baseAddressTypeOptions = ['Secondary Home', 'Rental Property']
+
 const baseVehicleFields = [
   { id: 'year', label: 'Year', type: 'number' },
   { id: 'make', label: 'Make' },
@@ -237,6 +239,7 @@ const buildDefaultSchema = () => ({
         type: field.type || 'text',
         visible: true,
       })),
+      addressTypes: [...baseAddressTypeOptions],
       residentialFields: baseResidentialFields.map((field) => ({
         id: field.id,
         label: field.label,
@@ -329,11 +332,29 @@ function FieldRow({ id, label, type = 'text', value, onChange, placeholder, opti
   )
 }
 
-function QuestionAutocomplete({ value, onChange, placeholder, productId }) {
+function QuestionAutocomplete({ value, onChange, placeholder, productId, resetKey }) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
+  const [allowSuggestions, setAllowSuggestions] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const lastUserValueRef = useRef('')
+  const lastResetKeyRef = useRef(resetKey)
 
   useEffect(() => {
+    if (resetKey === lastResetKeyRef.current) return
+    lastResetKeyRef.current = resetKey
+    lastUserValueRef.current = ''
+    setAllowSuggestions(false)
+    setSuggestions([])
+    setOpen(false)
+  }, [resetKey])
+
+  useEffect(() => {
+    if (!allowSuggestions) {
+      setSuggestions([])
+      setOpen(false)
+      return undefined
+    }
     const query = (value || '').trim()
     if (query.length < 2) {
       setSuggestions([])
@@ -354,7 +375,7 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId }) {
         const data = await res.json()
         const results = Array.isArray(data.results) ? data.results : []
         setSuggestions(results)
-        setOpen(results.length > 0)
+        setOpen(isFocused && results.length > 0)
       } catch (error) {
         if (error.name !== 'AbortError') {
           setSuggestions([])
@@ -366,11 +387,28 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId }) {
       clearTimeout(handle)
       controller.abort()
     }
-  }, [value, productId])
+  }, [value, productId, allowSuggestions, isFocused])
+
+  useEffect(() => {
+    if (allowSuggestions && value !== lastUserValueRef.current) {
+      setAllowSuggestions(false)
+      setSuggestions([])
+      setOpen(false)
+    }
+  }, [value, allowSuggestions])
 
   const handleSelect = (text) => {
+    lastUserValueRef.current = text
+    setAllowSuggestions(false)
     onChange(text)
     setOpen(false)
+  }
+
+  const handleChange = (event) => {
+    const nextValue = event.target.value
+    lastUserValueRef.current = nextValue
+    setAllowSuggestions(true)
+    onChange(nextValue)
   }
 
   return (
@@ -379,17 +417,22 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId }) {
         className={`${inputClass} w-full`}
         placeholder={placeholder}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={handleChange}
         onFocus={() => {
-          if (suggestions.length) setOpen(true)
+          setIsFocused(true)
+          if (allowSuggestions && suggestions.length) setOpen(true)
         }}
-        onBlur={() => setOpen(false)}
+        onBlur={() => {
+          setIsFocused(false)
+          setAllowSuggestions(false)
+          setOpen(false)
+        }}
       />
       {open && suggestions.length > 0 && (
         <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
           {suggestions.map((suggestion) => (
             <button
-              key={suggestion.id ?? suggestion.text}
+              key={`${suggestion.source || 'SYSTEM'}-${suggestion.id ?? suggestion.text}`}
               type="button"
               className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 whitespace-normal break-words"
               onMouseDown={(event) => event.preventDefault()}
@@ -444,6 +487,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createVehicle = () => ({ year: '', make: '', model: '', vin: '', primaryUse: '' })
   const createAddressEntry = () => ({
+    addressType: '',
     contact: createContact(),
     residential: { address1: '', city: '', state: '', zip: '' },
     mailing: { address1: '', city: '', state: '', zip: '' },
@@ -690,6 +734,12 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const mailingFields = applySchemaFields(baseMailingFields, mailingSchemaFields)
   const vehicleFields = applySchemaFields(baseVehicleFields, vehicleSchemaFields)
   const businessFields = applySchemaFields(baseBusinessFields, businessSchemaFields)
+  const rawAddressTypeOptions = Array.isArray(schema.sections?.address?.addressTypes)
+    ? schema.sections.address.addressTypes
+    : baseAddressTypeOptions
+  const addressTypeOptions = rawAddressTypeOptions
+    .map((option) => option?.toString().trim())
+    .filter(Boolean)
   const householdSectionLabel = schema.sections?.household?.label || 'Household Information'
   const addressSectionLabel = schema.sections?.address?.label || 'Address Information'
   const vehicleSectionLabel = schema.sections?.vehicle?.label || 'Vehicle Information'
@@ -865,7 +915,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
   }
 
-  const saveCustomerQuestions = async (questions, productId) => {
+  const saveCustomerQuestions = async (questions, productId, formName) => {
     const cleaned = questions
       .map((question) => (question || '').toString().trim())
       .filter(Boolean)
@@ -876,7 +926,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       await fetch(`${API_URL}/questions/customer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ questions: cleaned, ...(productId ? { productId } : {}) }),
+        body: JSON.stringify({ questions: cleaned, ...(productId ? { productId } : {}), formName: formName || '' }),
       })
     } catch (error) {
       console.warn('Failed to save customer questions', error)
@@ -1068,13 +1118,18 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   )
   const primaryContact = contacts[0] || createContact()
   const primaryAddressLabel = 'Primary Address'
-  const getAdditionalAddressLabel = (index) => `Additional Address ${index + 1}`
+  const getAdditionalAddressLabel = (entry, index) => {
+    const type = entry?.addressType ? entry.addressType.trim() : ''
+    return type || `Additional Address ${index + 1}`
+  }
   const activeAdditionalAddressIndex = typeof activeAddressIndex === 'number' ? activeAddressIndex : null
   const activeAdditionalAddress =
     activeAdditionalAddressIndex !== null ? additionalAddresses[activeAdditionalAddressIndex] : null
   const activeAddressEntry = activeAdditionalAddress ?? createAddressEntry()
   const activeAddressLabel =
-    activeAdditionalAddressIndex === null ? primaryAddressLabel : getAdditionalAddressLabel(activeAdditionalAddressIndex)
+    activeAdditionalAddressIndex === null
+      ? primaryAddressLabel
+      : getAdditionalAddressLabel(activeAdditionalAddress, activeAdditionalAddressIndex)
   const activeAddressContact =
     activeAdditionalAddressIndex === null ? primaryContact : activeAddressEntry.contact
   const activeAddressResidential =
@@ -1197,8 +1252,11 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
     return details
   }
-  const buildAddressDetails = (contact, residentialEntry, mailingEntry) => {
+  const buildAddressDetails = (contact, residentialEntry, mailingEntry, addressType) => {
     const details = []
+    if (hasNonEmptyValue(addressType)) {
+      details.push({ label: 'Address Type', value: addressType })
+    }
     contactFields.forEach((field) => {
       const value = contact?.[field.id]
       if (hasNonEmptyValue(value)) {
@@ -1289,16 +1347,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       phone1: primaryContactSnapshot?.phone1 || '',
       email1: primaryContactSnapshot?.email1 || '',
       street1: residential?.address1 || '',
-      details: buildAddressDetails(primaryContactSnapshot, residential, mailing),
+      details: buildAddressDetails(primaryContactSnapshot, residential, mailing, ''),
     }
     const additionalAddressSnapshots = additionalAddresses
       .filter((entry) => hasNonEmptyValue(entry))
       .map((entry, index) => ({
-        label: `Additional Address ${index + 1}`,
+        label: getAdditionalAddressLabel(entry, index),
         phone1: entry?.contact?.phone1 || '',
         email1: entry?.contact?.email1 || '',
         street1: entry?.residential?.address1 || '',
-        details: buildAddressDetails(entry?.contact, entry?.residential, entry?.mailing),
+        details: buildAddressDetails(entry?.contact, entry?.residential, entry?.mailing, entry?.addressType),
       }))
     const snapshot = {
       household: {
@@ -1604,6 +1662,24 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Address</div>
                     <div>
+                      <div className="text-sm font-semibold text-slate-900">Address Type</div>
+                      <div className={`mt-3 ${gridClass}`}>
+                        <FieldRow
+                          id="new-address-type"
+                          label="Address Type"
+                          value={newAddress.addressType ?? ''}
+                          onChange={(event) =>
+                            setNewAddress((prev) => ({
+                              ...prev,
+                              addressType: event.target.value,
+                            }))
+                          }
+                          options={addressTypeOptions}
+                          placeholder="Select address type"
+                        />
+                      </div>
+                    </div>
+                    <div>
                       <div className="text-sm font-semibold text-slate-900">Contact Information</div>
                       <div className={`mt-3 ${gridClass}`}>
                         {contactFields.map((field) => (
@@ -1778,6 +1854,26 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeAddressLabel}</div>
                     </div>
+                    {activeAdditionalAddressIndex !== null && (
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Address Type</div>
+                        <div className={`mt-3 ${gridClass}`}>
+                          <FieldRow
+                            id="active-address-type"
+                            label="Address Type"
+                            value={activeAddressEntry.addressType ?? ''}
+                            onChange={(event) =>
+                              updateAdditionalAddress(activeAdditionalAddressIndex, (prev) => ({
+                                ...prev,
+                                addressType: event.target.value,
+                              }))
+                            }
+                            options={addressTypeOptions}
+                            placeholder="Select address type"
+                          />
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <div className="text-sm font-semibold text-slate-900">Contact Information</div>
                       <div className={`mt-3 ${gridClass}`}>
@@ -1905,7 +2001,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     >
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-semibold text-slate-900">
-                          {getAdditionalAddressLabel(index)}
+                          {getAdditionalAddressLabel(address, index)}
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -1928,6 +2024,12 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                        {address?.addressType ? (
+                          <div>
+                            <span className="font-semibold text-slate-900">Address Type:</span>{' '}
+                            {summaryValue(address.addressType)}
+                          </div>
+                        ) : null}
                         <div>
                           <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
                           {summaryValue(address.contact?.phone1)}
@@ -2490,6 +2592,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                                   placeholder="Question"
                                   onChange={(value) => updateAdditionalQuestion(index, 'question', value)}
                                   productId={additionalFormProductId}
+                                  resetKey={`${additionalFormMode}-${additionalFormProductId || 'custom'}-${activeAdditionalFormIndex ?? 'new'}`}
                                 />
                               </div>
                               <div className="space-y-1">
@@ -2565,7 +2668,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                           }
                           await saveCustomerQuestions(
                             additionalQuestions.map((question) => question.question),
-                            productId || null
+                            productId || null,
+                            resolvedName
                           )
                           const nextForm = {
                             name: resolvedName,

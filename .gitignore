@@ -29,5 +29,8 @@ backend-dev.log
 frontend-dev.log
 automation/deployments.log
 
+# Docker
+.docker/
+
 # OS
 .DS_Store
