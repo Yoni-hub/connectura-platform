@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import Home from '../pages/Home'
 import AgentResults from '../pages/AgentResults'
 import AgentProfile from '../pages/AgentProfile'
-import Dashboard from '../pages/Dashboard'
 import ClientDashboard from '../pages/ClientDashboard'
 import AgentDashboard from '../pages/AgentDashboard'
 import AgentOnboarding from '../pages/AgentOnboarding'

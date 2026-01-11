@@ -32,6 +32,7 @@ automation/deployments.log
 # Playwright artifacts
 e2e/test-results/
 e2e/playwright-report/
+e2e/tests/core-flows.spec.js
 
 # Docker
 .docker/

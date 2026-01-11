@@ -570,35 +570,6 @@ export default function ClientDashboard() {
     'Address details saved.'
   )
 
-  const vehicleForms = passportForms.vehicle || {}
-  const primaryVehicle = vehicleForms.primaryVehicle || {}
-  const additionalVehicles = safeArray(vehicleForms.additionalVehicles)
-  const additionalVehicleCount = additionalVehicles.filter(hasNonEmptyValue).length
-  const primaryVehicleFilled = hasNonEmptyValue(primaryVehicle)
-  const vehicleCount = (primaryVehicleFilled ? 1 : 0) + additionalVehicleCount
-  const primaryVehicleLabel = [primaryVehicle.year, primaryVehicle.make, primaryVehicle.model]
-    .filter(Boolean)
-    .join(' ')
-  const vehicleDetail = resolveDetail(
-    primaryVehicleLabel ? `Primary: ${primaryVehicleLabel}` : '',
-    vehicleCount > 0,
-    'Add vehicle details in Forms.',
-    'Vehicle details saved.'
-  )
-
-  const businessForms = passportForms.business || {}
-  const primaryBusiness = businessForms.primaryBusiness || {}
-  const additionalBusinesses = safeArray(businessForms.additionalBusinesses)
-  const additionalBusinessCount = additionalBusinesses.filter(hasNonEmptyValue).length
-  const primaryBusinessFilled = hasNonEmptyValue(primaryBusiness)
-  const businessCount = (primaryBusinessFilled ? 1 : 0) + additionalBusinessCount
-  const businessDetail = resolveDetail(
-    primaryBusiness.name ? `Primary: ${primaryBusiness.name}` : '',
-    businessCount > 0,
-    'Add business details in Forms.',
-    'Business details saved.'
-  )
-
   const additionalForms = safeArray(passportForms.additional?.additionalForms)
   const additionalNames = additionalForms
     .map((form) => form?.name || form?.productName)
@@ -632,21 +603,6 @@ export default function ClientDashboard() {
       singular: 'address',
       plural: 'addresses',
       detail: addressDetail,
-    },
-    {
-      id: 'vehicle',
-      label: 'Vehicles',
-      count: vehicleCount,
-      singular: 'vehicle',
-      detail: vehicleDetail,
-    },
-    {
-      id: 'business',
-      label: 'Business',
-      count: businessCount,
-      singular: 'business',
-      plural: 'businesses',
-      detail: businessDetail,
     },
     {
       id: 'additional',

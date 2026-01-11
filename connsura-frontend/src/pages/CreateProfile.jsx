@@ -128,7 +128,6 @@ const educationLevelOptions = [
 ]
 const yesNoOptions = ['No', 'Yes']
 const relationToApplicantOptions = ['Named Insured', 'Spouse', 'Child', 'Parent', 'Dependent', 'Other']
-const businessTypeOptions = ['Sole Proprietor', 'Partnership', 'LLC', 'Corporation', 'Nonprofit', 'Other']
 const defaultApplicantRelation = 'Named Insured'
 const additionalFormProductOptions = [
   'Personal Auto',
@@ -197,28 +196,6 @@ const baseMailingFields = [
 
 const baseAddressTypeOptions = ['Secondary Home', 'Rental Property']
 
-const baseVehicleFields = [
-  { id: 'year', label: 'Year', type: 'number' },
-  { id: 'make', label: 'Make' },
-  { id: 'model', label: 'Model' },
-  { id: 'vin', label: 'VIN' },
-  { id: 'primaryUse', label: 'Primary Use' },
-]
-
-const baseBusinessFields = [
-  { id: 'name', label: 'Business Name' },
-  { id: 'type', label: 'Business Type', options: businessTypeOptions },
-  { id: 'industry', label: 'Industry' },
-  { id: 'years', label: 'Years in Business' },
-  { id: 'employees', label: 'Number of Employees' },
-  { id: 'phone', label: 'Business Phone', type: 'tel' },
-  { id: 'email', label: 'Business Email', type: 'email' },
-  { id: 'address1', label: 'Street Address 1' },
-  { id: 'city', label: 'City' },
-  { id: 'state', label: 'State', options: licenseStateOptions },
-  { id: 'zip', label: 'Zip Code' },
-]
-
 const buildDefaultSchema = () => ({
   sections: {
     household: {
@@ -247,26 +224,6 @@ const buildDefaultSchema = () => ({
         visible: true,
       })),
       mailingFields: baseMailingFields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      customFields: [],
-    },
-    vehicle: {
-      label: 'Vehicle Information',
-      fields: baseVehicleFields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      customFields: [],
-    },
-    business: {
-      label: 'Business Information',
-      fields: baseBusinessFields.map((field) => ({
         id: field.id,
         label: field.label,
         type: field.type || 'text',
@@ -485,42 +442,22 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [products, setProducts] = useState([])
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
-  const createVehicle = () => ({ year: '', make: '', model: '', vin: '', primaryUse: '' })
   const createAddressEntry = () => ({
     addressType: '',
     contact: createContact(),
     residential: { address1: '', city: '', state: '', zip: '' },
     mailing: { address1: '', city: '', state: '', zip: '' },
   })
-  const createBusiness = () => ({
-    name: '',
-    type: '',
-    industry: '',
-    years: '',
-    employees: '',
-    phone: '',
-    email: '',
-    address1: '',
-    city: '',
-    state: '',
-    zip: '',
-  })
   const createAdditionalQuestion = () => ({ question: '', input: '' })
   const [activeSection, setActiveSection] = useState(null)
   const [householdComplete, setHouseholdComplete] = useState(false)
   const [addressComplete, setAddressComplete] = useState(false)
-  const [vehicleComplete, setVehicleComplete] = useState(false)
-  const [businessComplete, setBusinessComplete] = useState(false)
   const [additionalComplete, setAdditionalComplete] = useState(false)
   const [householdEditing, setHouseholdEditing] = useState(false)
   const [addressEditing, setAddressEditing] = useState(false)
-  const [vehicleEditing, setVehicleEditing] = useState(false)
-  const [businessEditing, setBusinessEditing] = useState(false)
   const [additionalEditing, setAdditionalEditing] = useState(false)
   const [activeHouseholdIndex, setActiveHouseholdIndex] = useState('primary')
   const [activeAddressIndex, setActiveAddressIndex] = useState('primary')
-  const [activeVehicleIndex, setActiveVehicleIndex] = useState('primary')
-  const [activeBusinessIndex, setActiveBusinessIndex] = useState('primary')
   const [namedInsured, setNamedInsured] = useState({
     relation: defaultApplicantRelation,
     employment: '',
@@ -535,14 +472,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [additionalAddresses, setAdditionalAddresses] = useState([])
   const [newAddress, setNewAddress] = useState(createAddressEntry())
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
-  const [primaryVehicle, setPrimaryVehicle] = useState(createVehicle())
-  const [additionalVehicles, setAdditionalVehicles] = useState([])
-  const [newVehicle, setNewVehicle] = useState(createVehicle())
-  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false)
-  const [primaryBusiness, setPrimaryBusiness] = useState(createBusiness())
-  const [additionalBusinesses, setAdditionalBusinesses] = useState([])
-  const [newBusiness, setNewBusiness] = useState(createBusiness())
-  const [showAddBusinessModal, setShowAddBusinessModal] = useState(false)
   const [additionalForms, setAdditionalForms] = useState([])
   const [activeAdditionalFormIndex, setActiveAdditionalFormIndex] = useState(null)
   const [additionalFormName, setAdditionalFormName] = useState('')
@@ -555,8 +484,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [customFieldValues, setCustomFieldValues] = useState({
     household: {},
     address: {},
-    vehicle: {},
-    business: {},
     additional: {},
   })
   const [hydrated, setHydrated] = useState(false)
@@ -573,8 +500,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     mailing,
     additionalAddresses,
   })
-  const hasVehicleData = hasNonEmptyValue({ primaryVehicle, additionalVehicles })
-  const hasBusinessData = hasNonEmptyValue({ primaryBusiness, additionalBusinesses })
   const hasAdditionalData = additionalForms.length > 0
 
   useEffect(() => {
@@ -624,8 +549,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (!initialData || initialDataRef.current) return
     const household = initialData.household || {}
     const address = initialData.address || {}
-    const vehicle = initialData.vehicle || {}
-    const business = initialData.business || {}
     const additional = initialData.additional || {}
     const customFields = initialData.customFields || {}
     setNamedInsured((prev) => ({
@@ -638,16 +561,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setResidential(address.residential || { address1: '', city: '', state: '', zip: '' })
     setMailing(address.mailing || { address1: '', city: '', state: '', zip: '' })
     setAdditionalAddresses(Array.isArray(address.additionalAddresses) ? address.additionalAddresses : [])
-    setPrimaryVehicle(vehicle.primaryVehicle || createVehicle())
-    setAdditionalVehicles(Array.isArray(vehicle.additionalVehicles) ? vehicle.additionalVehicles : [])
-    setPrimaryBusiness(business.primaryBusiness || createBusiness())
-    setAdditionalBusinesses(Array.isArray(business.additionalBusinesses) ? business.additionalBusinesses : [])
     setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
     setCustomFieldValues({
       household: customFields.household || {},
       address: customFields.address || {},
-      vehicle: customFields.vehicle || {},
-      business: customFields.business || {},
       additional: customFields.additional || {},
     })
     initialDataRef.current = true
@@ -699,19 +616,13 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   useEffect(() => {
     if (hasHouseholdData && !householdComplete) setHouseholdComplete(true)
     if (hasAddressData && !addressComplete) setAddressComplete(true)
-    if (hasVehicleData && !vehicleComplete) setVehicleComplete(true)
-    if (hasBusinessData && !businessComplete) setBusinessComplete(true)
     if (hasAdditionalData && !additionalComplete) setAdditionalComplete(true)
   }, [
     hasHouseholdData,
     hasAddressData,
-    hasVehicleData,
-    hasBusinessData,
     hasAdditionalData,
     householdComplete,
     addressComplete,
-    vehicleComplete,
-    businessComplete,
     additionalComplete,
   ])
 
@@ -725,15 +636,11 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const contactSchemaFields = schema.sections?.address?.contactFields || []
   const residentialSchemaFields = schema.sections?.address?.residentialFields || []
   const mailingSchemaFields = schema.sections?.address?.mailingFields || []
-  const vehicleSchemaFields = schema.sections?.vehicle?.fields || []
-  const businessSchemaFields = schema.sections?.business?.fields || []
 
   const householdFields = applySchemaFields(baseHouseholdFields, householdSchemaFields, (field) => field.key)
   const contactFields = applySchemaFields(baseContactFields, contactSchemaFields)
   const residentialFields = applySchemaFields(baseResidentialFields, residentialSchemaFields)
   const mailingFields = applySchemaFields(baseMailingFields, mailingSchemaFields)
-  const vehicleFields = applySchemaFields(baseVehicleFields, vehicleSchemaFields)
-  const businessFields = applySchemaFields(baseBusinessFields, businessSchemaFields)
   const rawAddressTypeOptions = Array.isArray(schema.sections?.address?.addressTypes)
     ? schema.sections.address.addressTypes
     : baseAddressTypeOptions
@@ -742,8 +649,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     .filter(Boolean)
   const householdSectionLabel = schema.sections?.household?.label || 'Household Information'
   const addressSectionLabel = schema.sections?.address?.label || 'Address Information'
-  const vehicleSectionLabel = schema.sections?.vehicle?.label || 'Vehicle Information'
-  const businessSectionLabel = schema.sections?.business?.label || 'Business Information'
   const additionalSectionLabel = schema.sections?.additional?.label || 'Additional Information'
 
   const customFieldsForSection = (sectionKey) =>
@@ -855,40 +760,12 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
   }
 
-  const updateAdditionalVehicle = (index, updater) => {
-    setAdditionalVehicles((prev) => {
-      const next = [...prev]
-      const current = next[index] ?? createVehicle()
-      const nextVehicle = typeof updater === 'function' ? updater(current) : updater
-      next[index] = nextVehicle
-      return next
-    })
-  }
-
-  const updateAdditionalBusiness = (index, updater) => {
-    setAdditionalBusinesses((prev) => {
-      const next = [...prev]
-      const current = next[index] ?? createBusiness()
-      const nextBusiness = typeof updater === 'function' ? updater(current) : updater
-      next[index] = nextBusiness
-      return next
-    })
-  }
-
   const removeAdditionalHousehold = (index) => {
     setAdditionalHouseholds((prev) => prev.filter((_, idx) => idx !== index))
   }
 
   const removeAdditionalAddress = (index) => {
     setAdditionalAddresses((prev) => prev.filter((_, idx) => idx !== index))
-  }
-
-  const removeAdditionalVehicle = (index) => {
-    setAdditionalVehicles((prev) => prev.filter((_, idx) => idx !== index))
-  }
-
-  const removeAdditionalBusiness = (index) => {
-    setAdditionalBusinesses((prev) => prev.filter((_, idx) => idx !== index))
   }
 
   const removeAdditionalForm = (index) => {
@@ -1013,12 +890,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setActiveSection(section)
     setShowAddHouseholdModal(false)
     setShowAddAddressModal(false)
-    setShowAddVehicleModal(false)
-    setShowAddBusinessModal(false)
     setHouseholdEditing(false)
     setAddressEditing(false)
-    setVehicleEditing(false)
-    setBusinessEditing(false)
     if (section === 'household') {
       setActiveHouseholdIndex('primary')
       setHouseholdEditing(!hasHouseholdData)
@@ -1026,14 +899,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (section === 'address') {
       setActiveAddressIndex('primary')
       setAddressEditing(!hasAddressData)
-    }
-    if (section === 'vehicle') {
-      setActiveVehicleIndex('primary')
-      setVehicleEditing(!hasVehicleData)
-    }
-    if (section === 'business') {
-      setActiveBusinessIndex('primary')
-      setBusinessEditing(!hasBusinessData)
     }
     if (section === 'additional') {
       setAdditionalEditing(!hasAdditionalData)
@@ -1135,38 +1000,14 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const activeAddressResidential =
     activeAdditionalAddressIndex === null ? residential : activeAddressEntry.residential
   const activeAddressMailing = activeAdditionalAddressIndex === null ? mailing : activeAddressEntry.mailing
-  const primaryVehicleLabel = 'Primary Vehicle'
-  const getAdditionalVehicleLabel = (index) => `Additional Vehicle ${index + 1}`
-  const activeAdditionalVehicleIndex = typeof activeVehicleIndex === 'number' ? activeVehicleIndex : null
-  const activeAdditionalVehicle =
-    activeAdditionalVehicleIndex !== null ? additionalVehicles[activeAdditionalVehicleIndex] : null
-  const activeVehicle =
-    activeAdditionalVehicleIndex === null ? primaryVehicle : activeAdditionalVehicle ?? createVehicle()
-  const activeVehicleLabel =
-    activeAdditionalVehicleIndex === null ? primaryVehicleLabel : getAdditionalVehicleLabel(activeAdditionalVehicleIndex)
-  const primaryBusinessLabel = 'Primary Business'
-  const getAdditionalBusinessLabel = (index) => `Additional Business ${index + 1}`
-  const activeAdditionalBusinessIndex = typeof activeBusinessIndex === 'number' ? activeBusinessIndex : null
-  const activeAdditionalBusiness =
-    activeAdditionalBusinessIndex !== null ? additionalBusinesses[activeAdditionalBusinessIndex] : null
-  const activeBusiness =
-    activeAdditionalBusinessIndex === null ? primaryBusiness : activeAdditionalBusiness ?? createBusiness()
-  const activeBusinessLabel =
-    activeAdditionalBusinessIndex === null ? primaryBusinessLabel : getAdditionalBusinessLabel(activeAdditionalBusinessIndex)
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
-  const showVehicleSection = activeSection === 'vehicle' && isSectionAllowed('vehicle')
-  const showBusinessSection = activeSection === 'business' && isSectionAllowed('business')
   const showHouseholdForm =
     showHouseholdSection && (!hasHouseholdData || householdEditing) && !showAddHouseholdModal
   const showHouseholdSummary =
     showHouseholdSection && hasHouseholdData && !householdEditing && !showAddHouseholdModal
   const showAddressForm = showAddressSection && (!hasAddressData || addressEditing) && !showAddAddressModal
   const showAddressSummary = showAddressSection && hasAddressData && !addressEditing && !showAddAddressModal
-  const showVehicleForm = showVehicleSection && (!hasVehicleData || vehicleEditing) && !showAddVehicleModal
-  const showVehicleSummary = showVehicleSection && hasVehicleData && !vehicleEditing && !showAddVehicleModal
-  const showBusinessForm = showBusinessSection && (!hasBusinessData || businessEditing) && !showAddBusinessModal
-  const showBusinessSummary = showBusinessSection && hasBusinessData && !businessEditing && !showAddBusinessModal
   const showAdditionalSection = activeSection === 'additional' && isSectionAllowed('additional')
   const showSummarySection = activeSection === 'summary' && isSectionAllowed('summary')
   const showAdditionalForm = showAdditionalSection && (!hasAdditionalData || additionalEditing)
@@ -1209,26 +1050,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       ...prev,
       mailing: { ...(prev.mailing ?? { address1: '', city: '', state: '', zip: '' }), [field]: value },
     }))
-  }
-  const setActiveVehicleField = (field, value) => {
-    if (activeVehicleIndex === 'primary') {
-      setPrimaryVehicle((prev) => ({ ...prev, [field]: value }))
-      return
-    }
-    if (typeof activeVehicleIndex !== 'number') {
-      return
-    }
-    updateAdditionalVehicle(activeVehicleIndex, (prev) => ({ ...prev, [field]: value }))
-  }
-  const setActiveBusinessField = (field, value) => {
-    if (activeBusinessIndex === 'primary') {
-      setPrimaryBusiness((prev) => ({ ...prev, [field]: value }))
-      return
-    }
-    if (typeof activeBusinessIndex !== 'number') {
-      return
-    }
-    updateAdditionalBusiness(activeBusinessIndex, (prev) => ({ ...prev, [field]: value }))
   }
   const buildFullName = (person) => {
     const nameParts = [person['first-name'], person['middle-initial'], person['last-name']].filter(Boolean)
@@ -1300,14 +1121,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         residential,
         mailing,
         additionalAddresses,
-      },
-      vehicle: {
-        primaryVehicle,
-        additionalVehicles,
-      },
-      business: {
-        primaryBusiness,
-        additionalBusinesses,
       },
       additional: {
         additionalForms: additionalForms.map((form) => {
@@ -1392,10 +1205,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     residential,
     mailing,
     additionalAddresses,
-    primaryVehicle,
-    additionalVehicles,
-    primaryBusiness,
-    additionalBusinesses,
     additionalForms,
     products,
     customFieldValues,
@@ -2065,432 +1874,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       }}
                     >
                       Continue
-                    </button>
-                  </div>
-                </div>
-              </section>
-            )}
-          </>
-        )}
-
-        {showVehicleSection && (
-          <>
-            {showAddVehicleModal && (
-              <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Additional Vehicle</div>
-                    <div className={`mt-3 ${gridClass}`}>
-                      {vehicleFields.map((field) => (
-                        <FieldRow
-                          key={`new-vehicle-${field.id}`}
-                          id={`new-vehicle-${field.id}`}
-                          label={field.label}
-                          type={field.type}
-                          value={newVehicle[field.id] ?? ''}
-                          onChange={(event) =>
-                            setNewVehicle((prev) => ({ ...prev, [field.id]: event.target.value }))
-                          }
-                        />
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          setShowAddVehicleModal(false)
-                          setNewVehicle(createVehicle())
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={nextButton}
-                        onClick={() => {
-                          setAdditionalVehicles((prev) => [...prev, newVehicle])
-                          setShowAddVehicleModal(false)
-                          setNewVehicle(createVehicle())
-                          setVehicleComplete(true)
-                          setActiveVehicleIndex('primary')
-                          setVehicleEditing(false)
-                        }}
-                      >
-                        Save &amp; Continue
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </section>
-            )}
-            {showVehicleForm && (
-              <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">{vehicleSectionLabel}</div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{activeVehicleLabel}</div>
-                      <div className={`mt-3 ${gridClass}`}>
-                        {vehicleFields.map((field) => (
-                          <FieldRow
-                            key={`vehicle-${field.id}`}
-                            id={`vehicle-${field.id}`}
-                            label={field.label}
-                            type={field.type}
-                            value={activeVehicle[field.id] ?? ''}
-                            onChange={(event) => setActiveVehicleField(field.id, event.target.value)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    {renderCustomFields('vehicle')}
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          if (vehicleComplete) {
-                            setVehicleEditing(false)
-                          } else {
-                            setActiveSection(null)
-                          }
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={nextButton}
-                        onClick={() => {
-                          setVehicleComplete(true)
-                          setVehicleEditing(false)
-                        }}
-                      >
-                        Save &amp; Continue
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            {showVehicleSummary && (
-              <section className="mt-6">
-                <div className="space-y-4">
-                  <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-slate-900">{primaryVehicleLabel}</div>
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          setActiveVehicleIndex('primary')
-                          setVehicleEditing(true)
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                      <div>
-                        <span className="font-semibold text-slate-900">Year:</span> {summaryValue(primaryVehicle.year)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Make:</span> {summaryValue(primaryVehicle.make)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Model:</span> {summaryValue(primaryVehicle.model)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">VIN:</span> {summaryValue(primaryVehicle.vin)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Primary Use:</span>{' '}
-                        {summaryValue(primaryVehicle.primaryUse)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {additionalVehicles.map((vehicle, index) => (
-                    <div
-                      key={`vehicle-summary-${index}`}
-                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-slate-900">{getAdditionalVehicleLabel(index)}</div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => {
-                              setActiveVehicleIndex(index)
-                              setVehicleEditing(true)
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => removeAdditionalVehicle(index)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                        <div>
-                          <span className="font-semibold text-slate-900">Year:</span> {summaryValue(vehicle.year)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Make:</span> {summaryValue(vehicle.make)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Model:</span> {summaryValue(vehicle.model)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">VIN:</span> {summaryValue(vehicle.vin)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Primary Use:</span>{' '}
-                          {summaryValue(vehicle.primaryUse)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <button
-                      type="button"
-                      className={miniButton}
-                      onClick={() => {
-                        setNewVehicle(createVehicle())
-                        setShowAddVehicleModal(true)
-                      }}
-                    >
-                      Add more vehicle
-                    </button>
-                    <button
-                      type="button"
-                      className={nextButton}
-                      onClick={() => {
-                        setActiveSection('business')
-                        setActiveBusinessIndex('primary')
-                        setBusinessEditing(!businessComplete)
-                      }}
-                    >
-                      Continue
-                    </button>
-                  </div>
-                </div>
-              </section>
-            )}
-          </>
-        )}
-
-        {showBusinessSection && (
-          <>
-            {showAddBusinessModal && (
-              <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">Additional Business</div>
-                    <div className={gridClass}>
-                      {businessFields.map((field) => (
-                        <FieldRow
-                          key={`new-business-${field.id}`}
-                          id={`new-business-${field.id}`}
-                          label={field.label}
-                          type={field.type}
-                          options={field.options}
-                          value={newBusiness[field.id] ?? ''}
-                          onChange={(event) =>
-                            setNewBusiness((prev) => ({ ...prev, [field.id]: event.target.value }))
-                          }
-                        />
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          setShowAddBusinessModal(false)
-                          setNewBusiness(createBusiness())
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={nextButton}
-                        onClick={() => {
-                          setAdditionalBusinesses((prev) => [...prev, newBusiness])
-                          setShowAddBusinessModal(false)
-                          setNewBusiness(createBusiness())
-                          setBusinessComplete(true)
-                          setActiveBusinessIndex('primary')
-                          setBusinessEditing(false)
-                        }}
-                      >
-                        Save &amp; Continue
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            {showBusinessForm && (
-              <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                  <div className="space-y-4">
-                    <div className="text-sm font-semibold text-slate-900">{businessSectionLabel}</div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{activeBusinessLabel}</div>
-                      <div className={`mt-3 ${gridClass}`}>
-                        {businessFields.map((field) => (
-                          <FieldRow
-                            key={`business-${field.id}`}
-                            id={`business-${field.id}`}
-                            label={field.label}
-                            type={field.type}
-                            options={field.options}
-                            value={activeBusiness[field.id] ?? ''}
-                            onChange={(event) => setActiveBusinessField(field.id, event.target.value)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    {renderCustomFields('business')}
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          if (businessComplete) {
-                            setBusinessEditing(false)
-                          } else {
-                            setActiveSection(null)
-                          }
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={nextButton}
-                        onClick={() => {
-                          setBusinessComplete(true)
-                          setBusinessEditing(false)
-                        }}
-                      >
-                        Save &amp; Continue
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            {showBusinessSummary && (
-              <section className="mt-6">
-                <div className="space-y-4">
-                  <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-slate-900">{primaryBusinessLabel}</div>
-                      <button
-                        type="button"
-                        className={miniButton}
-                        onClick={() => {
-                          setActiveBusinessIndex('primary')
-                          setBusinessEditing(true)
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                      <div>
-                        <span className="font-semibold text-slate-900">Business Name:</span>{' '}
-                        {summaryValue(primaryBusiness.name)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Type:</span>{' '}
-                        {summaryValue(primaryBusiness.type)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Phone:</span>{' '}
-                        {summaryValue(primaryBusiness.phone)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
-                        {summaryValue(primaryBusiness.address1)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {additionalBusinesses.map((business, index) => (
-                    <div
-                      key={`business-summary-${index}`}
-                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {getAdditionalBusinessLabel(index)}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => {
-                              setActiveBusinessIndex(index)
-                              setBusinessEditing(true)
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => removeAdditionalBusiness(index)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                        <div>
-                          <span className="font-semibold text-slate-900">Business Name:</span>{' '}
-                          {summaryValue(business.name)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Type:</span>{' '}
-                          {summaryValue(business.type)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Phone:</span>{' '}
-                          {summaryValue(business.phone)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
-                          {summaryValue(business.address1)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <button
-                      type="button"
-                      className={miniButton}
-                      onClick={() => {
-                        setNewBusiness(createBusiness())
-                        setShowAddBusinessModal(true)
-                      }}
-                    >
-                      Add more business
                     </button>
                   </div>
                 </div>
