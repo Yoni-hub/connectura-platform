@@ -6,8 +6,9 @@ if (!JWT_SECRET) {
 }
 const JWT_EXPIRY = '7d'
 
-function generateToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY })
+function generateToken(payload, options = {}) {
+  const expiresIn = options.expiresIn || JWT_EXPIRY
+  return jwt.sign(payload, JWT_SECRET, { expiresIn })
 }
 
 function verifyToken(token) {

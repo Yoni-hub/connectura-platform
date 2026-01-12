@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { API_URL } from '../services/api'
-import { adminApi, ADMIN_TOKEN_KEY } from '../services/adminApi'
+import { adminApi } from '../services/adminApi'
 import { renderSiteContent } from '../utils/siteContent'
 
 export default function Admin() {
-  const [token, setToken] = useState(() => localStorage.getItem(ADMIN_TOKEN_KEY) || '')
   const [admin, setAdmin] = useState(null)
+  const [authChecking, setAuthChecking] = useState(true)
   const [view, setView] = useState('agents')
   const [loading, setLoading] = useState(false)
   const [agents, setAgents] = useState([])
@@ -40,7 +40,27 @@ export default function Admin() {
   const [newProductName, setNewProductName] = useState('')
   const lastQuestionPrefillProductRef = useRef('')
 
-  const isAuthed = Boolean(token)
+  const isAuthed = Boolean(admin)
+
+  useEffect(() => {
+    let active = true
+    const checkSession = async () => {
+      try {
+        const res = await adminApi.get('/admin/me')
+        if (!active) return
+        setAdmin(res.data.admin)
+      } catch (err) {
+        if (!active) return
+        setAdmin(null)
+      } finally {
+        if (active) setAuthChecking(false)
+      }
+    }
+    checkSession()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const splitList = (value = '') =>
     value
@@ -67,13 +87,13 @@ export default function Admin() {
       const res = await fetch(`${API_URL}/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: form.email, password: form.password }),
       })
       if (!res.ok) throw new Error('Invalid credentials')
       const data = await res.json()
-      localStorage.setItem(ADMIN_TOKEN_KEY, data.token)
-      setToken(data.token)
       setAdmin(data.admin)
+      setAuthChecking(false)
       toast.success('Admin logged in')
     } catch (err) {
       toast.error(err.message || 'Login failed')
@@ -81,8 +101,7 @@ export default function Admin() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem(ADMIN_TOKEN_KEY)
-    setToken('')
+    adminApi.post('/admin/logout').catch(() => {})
     setAdmin(null)
     setAgents([])
     setClients([])
@@ -1715,6 +1734,9 @@ export default function Admin() {
   }
 
   const content = useMemo(() => {
+    if (authChecking) {
+      return <div className="text-sm text-slate-500">Checking admin session...</div>
+    }
     if (!isAuthed) {
       return (
         <form className="max-w-md space-y-4" onSubmit={handleLogin}>
@@ -1865,6 +1887,7 @@ export default function Admin() {
     )
   }, [
     isAuthed,
+    authChecking,
     view,
     loading,
     agents,

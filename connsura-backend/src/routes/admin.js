@@ -1,7 +1,7 @@
 const express = require('express')
 const bcrypt = require('bcrypt')
 const prisma = require('../prisma')
-const { adminGuard } = require('../middleware/auth')
+const { adminGuard, ADMIN_AUTH_COOKIE } = require('../middleware/auth')
 const { generateToken } = require('../utils/token')
 const { parseJson } = require('../utils/transform')
 const { getEmailOtp } = require('../utils/emailOtp')
@@ -11,6 +11,42 @@ const { slugify, ensureProductCatalog } = require('../utils/productCatalog')
 const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
 
 const router = express.Router()
+
+const ADMIN_JWT_EXPIRY = process.env.ADMIN_JWT_EXPIRY || '2h'
+
+const parseDurationMs = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  if (/^\d+$/.test(raw)) {
+    return Number(raw) * 1000
+  }
+  const match = raw.match(/^(\d+)(s|m|h|d)$/i)
+  if (!match) return null
+  const amount = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 }
+  return amount * multipliers[unit]
+}
+
+const getAdminCookieOptions = () => {
+  const rawSameSite = String(process.env.ADMIN_COOKIE_SAMESITE || 'lax').toLowerCase()
+  const sameSite = ['lax', 'strict', 'none'].includes(rawSameSite) ? rawSameSite : 'lax'
+  const domain = String(process.env.ADMIN_COOKIE_DOMAIN || '').trim()
+  const secureFromEnv = String(process.env.ADMIN_COOKIE_SECURE || '').toLowerCase() === 'true'
+  const secure = secureFromEnv || process.env.NODE_ENV === 'production' || sameSite === 'none'
+  const options = {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: '/admin',
+  }
+  if (domain) {
+    options.domain = domain
+  }
+  return options
+}
+
+const getAdminCookieMaxAge = () => parseDurationMs(ADMIN_JWT_EXPIRY) || 2 * 60 * 60 * 1000
 
 const formatAgent = (agent) => ({
   id: agent.id,
@@ -115,8 +151,21 @@ router.post('/login', async (req, res) => {
   if (!admin) return res.status(400).json({ error: 'Invalid credentials' })
   const match = await bcrypt.compare(password, admin.password)
   if (!match) return res.status(400).json({ error: 'Invalid credentials' })
-  const token = generateToken({ adminId: admin.id, role: admin.role, type: 'ADMIN' })
+  const token = generateToken({ adminId: admin.id, role: admin.role, type: 'ADMIN' }, { expiresIn: ADMIN_JWT_EXPIRY })
+  const cookieOptions = getAdminCookieOptions()
+  res.cookie(ADMIN_AUTH_COOKIE, token, { ...cookieOptions, maxAge: getAdminCookieMaxAge() })
   res.json({ token, admin: { id: admin.id, email: admin.email, role: admin.role } })
+})
+
+router.post('/logout', (req, res) => {
+  const cookieOptions = getAdminCookieOptions()
+  res.clearCookie(ADMIN_AUTH_COOKIE, cookieOptions)
+  res.json({ ok: true })
+})
+
+router.get('/me', adminGuard, async (req, res) => {
+  if (!req.admin) return res.status(401).json({ error: 'Invalid token' })
+  res.json({ admin: { id: req.admin.id, email: req.admin.email, role: req.admin.role } })
 })
 
 router.get('/email-otp', adminGuard, async (req, res) => {

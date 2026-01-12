@@ -1,6 +1,25 @@
 const prisma = require('../prisma')
 const { verifyToken } = require('../utils/token')
 
+const ADMIN_AUTH_COOKIE = process.env.ADMIN_AUTH_COOKIE || 'connsura_admin_session'
+
+const getCookieValue = (req, name) => {
+  const header = req.headers?.cookie
+  if (!header) return null
+  const parts = header.split(';')
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    const eqIndex = trimmed.indexOf('=')
+    if (eqIndex === -1) continue
+    const key = trimmed.slice(0, eqIndex).trim()
+    if (key !== name) continue
+    const value = trimmed.slice(eqIndex + 1)
+    return decodeURIComponent(value)
+  }
+  return null
+}
+
 async function authGuard(req, res, next) {
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer ')) {
@@ -23,10 +42,16 @@ async function authGuard(req, res, next) {
 
 async function adminGuard(req, res, next) {
   const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) {
+  let token = null
+  if (header && header.startsWith('Bearer ')) {
+    token = header.replace('Bearer ', '')
+  }
+  if (!token) {
+    token = getCookieValue(req, ADMIN_AUTH_COOKIE)
+  }
+  if (!token) {
     return res.status(401).json({ error: 'Missing auth token' })
   }
-  const token = header.replace('Bearer ', '')
   try {
     const decoded = verifyToken(token)
     if (!(decoded.type === 'ADMIN' || decoded.role === 'ADMIN')) {
@@ -42,4 +67,4 @@ async function adminGuard(req, res, next) {
   }
 }
 
-module.exports = { authGuard, adminGuard }
+module.exports = { authGuard, adminGuard, ADMIN_AUTH_COOKIE }

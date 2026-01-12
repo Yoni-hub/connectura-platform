@@ -39,35 +39,13 @@ For your security, never share this code. If you did not request this, you can i
 Thanks,
 The Connsura Team`
 
-const buildOtpHtml = (code, expiresMinutes) => `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background-color:#f7f9fc;font-family:Arial,sans-serif;color:#0b1f3a;">
-    <div style="width:100%;padding:24px 16px;box-sizing:border-box;">
-      <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;">
-        <h1 style="font-size:20px;margin:0 0 12px;">Verify your Connsura account</h1>
-        <p style="margin:0 0 16px;">Use this one-time verification code to confirm your email address:</p>
-        <div style="font-size:28px;font-weight:700;letter-spacing:4px;padding:12px 16px;background:#f1f5f9;border-radius:10px;text-align:center;margin-bottom:16px;">
-          ${code}
-        </div>
-        <p style="margin:0 0 16px;">This code expires in ${expiresMinutes} minutes.</p>
-        <p style="margin:0 0 16px;font-size:13px;color:#475569;">
-          For your security, never share this code. If you did not request this, you can ignore this email.
-        </p>
-        <p style="margin:0;font-size:13px;color:#475569;">Thanks,<br />The Connsura Team</p>
-      </div>
-    </div>
-  </body>
-</html>`
-
 const deliverEmail = async (email, code) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
   const text = buildOtpText(code, expiresMinutes)
-  const html = buildOtpHtml(code, expiresMinutes)
   const delivery = await sendEmail({
     to: email,
     subject: 'Your Connsura verification code',
     text,
-    html,
   })
   if (delivery.delivery === 'disabled' && String(process.env.EMAIL_LOG_CODES || '').toLowerCase() === 'true') {
     console.log(`[email-otp] code for ${email}: ${code}`)
