@@ -23,15 +23,10 @@ const hashCode = (code) => crypto.createHash('sha256').update(code).digest('hex'
 
 const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0')
 
-const getLogoUrl = () => {
-  const explicit = String(process.env.EMAIL_LOGO_URL || '').trim()
-  if (explicit) return explicit
-  const base = String(process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '')
-  if (!base) return null
-  return `${base}/logo-email.png`
-}
+const buildOtpText = (code, expiresMinutes) => `CONNSURA
+================
 
-const buildOtpText = (code, expiresMinutes) => `Verify your Connsura account
+Verify your Connsura account
 
 Use this one-time verification code to confirm your email address:
 
@@ -44,17 +39,11 @@ For your security, never share this code. If you did not request this, you can i
 Thanks,
 The Connsura Team`
 
-const buildOtpHtml = (code, expiresMinutes) => {
-  const logoUrl = getLogoUrl()
-  const logo = logoUrl
-    ? `<img src="${logoUrl}" alt="Connsura" style="height:32px;width:auto;display:block;margin:0 0 16px;" />`
-    : ''
-  return `<!doctype html>
+const buildOtpHtml = (code, expiresMinutes) => `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background-color:#f7f9fc;font-family:Arial,sans-serif;color:#0b1f3a;">
     <div style="width:100%;padding:24px 16px;box-sizing:border-box;">
       <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;">
-        ${logo}
         <h1 style="font-size:20px;margin:0 0 12px;">Verify your Connsura account</h1>
         <p style="margin:0 0 16px;">Use this one-time verification code to confirm your email address:</p>
         <div style="font-size:28px;font-weight:700;letter-spacing:4px;padding:12px 16px;background:#f1f5f9;border-radius:10px;text-align:center;margin-bottom:16px;">
@@ -69,7 +58,6 @@ const buildOtpHtml = (code, expiresMinutes) => {
     </div>
   </body>
 </html>`
-}
 
 const deliverEmail = async (email, code) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
