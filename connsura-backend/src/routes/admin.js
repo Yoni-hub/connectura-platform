@@ -119,10 +119,10 @@ router.post('/login', async (req, res) => {
   res.json({ token, admin: { id: admin.id, email: admin.email, role: admin.role } })
 })
 
-router.get('/email-otp', adminGuard, (req, res) => {
+router.get('/email-otp', adminGuard, async (req, res) => {
   const email = String(req.query?.email || '').trim().toLowerCase()
   if (!email) return res.status(400).json({ error: 'Email is required' })
-  const otp = getEmailOtp(email)
+  const otp = await getEmailOtp(email)
   if (!otp) return res.status(404).json({ error: 'No active verification code for this email.' })
   res.json({ code: otp.code, createdAt: otp.createdAt, expiresAt: otp.expiresAt, attempts: otp.attempts })
 })

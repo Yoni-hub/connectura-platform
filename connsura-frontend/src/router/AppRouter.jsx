@@ -14,6 +14,7 @@ import LegalNotice from '../pages/LegalNotice'
 import Admin from '../pages/Admin'
 import ShareProfile from '../pages/ShareProfile'
 import AccountRecovery from '../pages/AccountRecovery'
+import AccountDeleted from '../pages/AccountDeleted'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
@@ -106,6 +107,7 @@ function Layout() {
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/share/:token" element={<ShareProfile />} />
           <Route path="/recover" element={<AccountRecovery />} />
+          <Route path="/account-deleted" element={<AccountDeleted />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </div>

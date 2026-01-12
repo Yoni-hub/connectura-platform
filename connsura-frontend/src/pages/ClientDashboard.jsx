@@ -132,6 +132,10 @@ export default function ClientDashboard() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
   const [verificationSent, setVerificationSent] = useState(false)
   const [verificationSending, setVerificationSending] = useState(false)
@@ -814,6 +818,26 @@ export default function ClientDashboard() {
     setNewPassword('')
     setConfirmPassword('')
     toast.success('Password updated locally (connect backend to persist)')
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      toast.error('Enter your password to continue')
+      return
+    }
+    if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
+      toast.error('Type DELETE to confirm')
+      return
+    }
+    setDeleting(true)
+    try {
+      await api.post('/auth/account/delete', { password: deletePassword })
+      nav('/account-deleted', { replace: true })
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete account')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
@@ -1547,6 +1571,65 @@ export default function ClientDashboard() {
               </div>
               <div className="pt-2">
                 <AuthenticatorPanel />
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
+                <div className="text-sm font-semibold text-rose-700">Delete account</div>
+                <p className="text-xs text-rose-700">
+                  This permanently deletes your account, profile, and messages. This cannot be undone.
+                </p>
+                {!deleteOpen ? (
+                  <button
+                    type="button"
+                    className="pill-btn-ghost text-rose-700 border-rose-200 hover:border-rose-300"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Delete account
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-sm text-rose-800">
+                      Password
+                      <input
+                        type="password"
+                        className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        placeholder="Enter your password"
+                      />
+                    </label>
+                    <label className="block text-sm text-rose-800">
+                      Type DELETE to confirm
+                      <input
+                        type="text"
+                        className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5 uppercase tracking-widest"
+                        value={deleteConfirm}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                        placeholder="DELETE"
+                      />
+                    </label>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="pill-btn-ghost"
+                        onClick={() => {
+                          setDeleteOpen(false)
+                          setDeletePassword('')
+                          setDeleteConfirm('')
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn-primary px-5"
+                        onClick={handleDeleteAccount}
+                        disabled={deleting}
+                      >
+                        {deleting ? 'Deleting...' : 'Delete account'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

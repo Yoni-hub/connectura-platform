@@ -225,3 +225,25 @@ model CustomerQuestion {
   @@index([normalized])
   @@unique([customerId, productId, formName, normalized])
 }
+
+model EmailOtp {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  code       String
+  codeHash   String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  lastSentAt DateTime?
+  lastSentIp String?
+}
+
+model EmailOtpRequest {
+  id        Int      @id @default(autoincrement())
+  email     String
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}

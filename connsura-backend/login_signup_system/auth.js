@@ -39,6 +39,24 @@ const RECOVERY_MAX_ATTEMPTS = Number(process.env.RECOVERY_MAX_ATTEMPTS || 5)
 const RECOVERY_ERROR = 'Unable to recover account. Check your details and try again.'
 const recoveryAttempts = new Map()
 
+const getRequestIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for']
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded
+  const ip = raw || req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ''
+  return String(ip).split(',')[0].trim().replace(/^::ffff:/, '')
+}
+
+const handleOtpSendError = (err, res) => {
+  if (err && err.code === 'RATE_LIMIT') {
+    if (err.retryAfterSeconds) {
+      res.set('Retry-After', String(err.retryAfterSeconds))
+    }
+    return res.status(429).json({ error: err.message || 'Too many requests' })
+  }
+  console.error('email otp send error', err)
+  return res.status(500).json({ error: 'Failed to send verification code' })
+}
+
 const parseBackupCodes = (value) => {
   if (!value) return []
   if (Array.isArray(value)) return value
@@ -158,25 +176,29 @@ router.post('/email-otp', async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: 'Email already registered. Please sign in.' })
     }
-    const result = await sendEmailOtp(email)
+    const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
     res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
-    console.error('email otp send error', err)
-    res.status(500).json({ error: 'Failed to send verification code' })
+    return handleOtpSendError(err, res)
   }
 })
 
-router.post('/email-otp/verify', (req, res) => {
+router.post('/email-otp/verify', async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase()
   const code = String(req.body?.code || '').trim()
   if (!email || !code) {
     return res.status(400).json({ error: 'Email and code are required' })
   }
-  const result = verifyEmailOtp(email, code)
-  if (!result.valid) {
-    return res.status(400).json({ error: result.error || 'Invalid code' })
+  try {
+    const result = await verifyEmailOtp(email, code)
+    if (!result.valid) {
+      return res.status(400).json({ error: result.error || 'Invalid code' })
+    }
+    return res.json({ verified: true })
+  } catch (err) {
+    console.error('email otp verify error', err)
+    return res.status(500).json({ error: 'Failed to verify email' })
   }
-  return res.json({ verified: true })
 })
 
 router.post('/email-otp/request', authGuard, async (req, res) => {
@@ -188,11 +210,10 @@ router.post('/email-otp/request', authGuard, async (req, res) => {
     return res.json({ verified: true, user: sanitizeUser(req.user) })
   }
   try {
-    const result = await sendEmailOtp(email)
+    const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
     return res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
-    console.error('email otp request error', err)
-    return res.status(500).json({ error: 'Failed to send verification code' })
+    return handleOtpSendError(err, res)
   }
 })
 
@@ -204,7 +225,13 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
   if (!code) {
     return res.status(400).json({ error: 'Verification code is required' })
   }
-  const result = verifyEmailOtp(req.user.email, code)
+  let result
+  try {
+    result = await verifyEmailOtp(req.user.email, code)
+  } catch (err) {
+    console.error('email otp confirm error', err)
+    return res.status(500).json({ error: 'Failed to verify email' })
+  }
   if (!result.valid) {
     return res.status(400).json({ error: result.error || 'Invalid code' })
   }
@@ -472,6 +499,33 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('login error', err)
     res.status(500).json({ error: 'Failed to login' })
+  }
+})
+
+router.post('/account/delete', authGuard, async (req, res) => {
+  const password = String(req.body?.password || '')
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required' })
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    const match = await bcrypt.compare(password, user.password)
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid password' })
+    }
+    const email = user.email
+    await prisma.user.delete({ where: { id: user.id } })
+    await prisma.emailOtp.delete({ where: { email } }).catch(() => {})
+    await prisma.emailOtpRequest.deleteMany({ where: { email } }).catch(() => {})
+    return res.json({ deleted: true })
+  } catch (err) {
+    console.error('delete account error', err)
+    return res.status(500).json({ error: 'Failed to delete account' })
   }
 })
 

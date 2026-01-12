@@ -6,7 +6,7 @@ import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 
 const steps = [
-  { id: 'availability', title: 'Connsura account credentials', blurb: 'Your Connsura account login and security answers.' },
+  { id: 'availability', title: 'Connsura account credentials', blurb: 'Your Connsura account login credentials.' },
   { id: 'identity', title: 'Identity & licensing', blurb: 'Who you are, where you are licensed, and your producer number.' },
   { id: 'offerings', title: 'Products & audiences', blurb: 'What you sell, languages you support, and service areas.' },
   { id: 'review', title: 'Confirm & finish', blurb: 'Review and save your onboarding details.' },
@@ -172,9 +172,6 @@ export default function AgentOnboarding() {
     accountEmail: '',
     accountPassword: '',
     accountPasswordConfirm: '',
-    securityQ1: '',
-    securityQ2: '',
-    securityQ3: '',
   })
 
   useEffect(() => {
@@ -219,9 +216,6 @@ export default function AgentOnboarding() {
           accountEmail: agent?.email || '',
           accountPassword: '',
           accountPasswordConfirm: '',
-          securityQ1: '',
-          securityQ2: '',
-          securityQ3: '',
         })
         const status = agent?.status || 'pending'
         const underReviewFlag = Boolean(agent?.underReview)
@@ -448,9 +442,6 @@ export default function AgentOnboarding() {
       { key: 'accountEmail', label: 'Account email', step: 0, el: 'account-email' },
       { key: 'accountPassword', label: 'Password', step: 0, el: 'account-password' },
       { key: 'accountPasswordConfirm', label: 'Repeat password', step: 0, el: 'account-password-confirm' },
-      { key: 'securityQ1', label: 'Security phrase 1', step: 0, el: 'security-phrase-1' },
-      { key: 'securityQ2', label: 'Security phrase 2', step: 0, el: 'security-phrase-2' },
-      { key: 'securityQ3', label: 'Security phrase 3', step: 0, el: 'security-phrase-3' },
       { key: 'producerNumber', label: 'Virginia License Number', step: 1, el: 'producer-number' },
       { key: 'verifyNpn', label: 'National Producer Number (NPN)', step: 1, el: 'npn' },
       { key: 'state', label: 'State', step: 1, el: 'state' },
@@ -529,9 +520,6 @@ export default function AgentOnboarding() {
         { key: 'accountEmail', label: 'Account email', el: 'account-email' },
         { key: 'accountPassword', label: 'Password', el: 'account-password' },
         { key: 'accountPasswordConfirm', label: 'Repeat password', el: 'account-password-confirm' },
-        { key: 'securityQ1', label: 'Security phrase 1', el: 'security-phrase-1' },
-        { key: 'securityQ2', label: 'Security phrase 2', el: 'security-phrase-2' },
-        { key: 'securityQ3', label: 'Security phrase 3', el: 'security-phrase-3' },
       ]
     }
     if (stepIndex === 1) {
@@ -692,42 +680,6 @@ export default function AgentOnboarding() {
                   id="account-password-confirm"
                 />
               </label>
-              <label className="block text-sm">
-                Security phrase 1 <span className="text-red-500">*</span>
-                <input
-                  className={commonInput}
-                  value={form.securityQ1}
-                  onChange={(e) => setForm({ ...form, securityQ1: e.target.value })}
-                  placeholder="Phrase 1"
-                  required
-                  id="security-phrase-1"
-                />
-              </label>
-              <label className="block text-sm">
-                Security phrase 2 <span className="text-red-500">*</span>
-                <input
-                  className={commonInput}
-                  value={form.securityQ2}
-                  onChange={(e) => setForm({ ...form, securityQ2: e.target.value })}
-                  placeholder="Phrase 2"
-                  required
-                  id="security-phrase-2"
-                />
-              </label>
-              <label className="block text-sm">
-                Security phrase 3 <span className="text-red-500">*</span>
-                <input
-                  className={commonInput}
-                  value={form.securityQ3}
-                  onChange={(e) => setForm({ ...form, securityQ3: e.target.value })}
-                  placeholder="Phrase 3"
-                  required
-                  id="security-phrase-3"
-                />
-              </label>
-              <div className="text-xs text-slate-600 text-right">
-                In case you lose your account, you have to remember your security phrases.
-              </div>
             </div>
             <div className="flex items-center justify-end gap-3 pt-4 mt-auto">
               <button
@@ -1117,9 +1069,6 @@ export default function AgentOnboarding() {
               <div>Appointed carriers: {form.appointedCarriers || '--'}</div>
               <div>Specialty: {form.specialty || '--'}</div>
               <div>Account email: {form.accountEmail || '--'}</div>
-              <div>
-                Security phrases saved: {['securityQ1', 'securityQ2', 'securityQ3'].filter((key) => form[key]).length}/3
-              </div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connsura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.

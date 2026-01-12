@@ -101,9 +101,22 @@ export default function AuthenticatorPanel() {
       <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
         <div className="font-semibold text-slate-700">Setup guide</div>
         <ul className="mt-2 list-disc pl-5 space-y-1">
-          <li>When: set this up right after your first login.</li>
-          <li>How: click "Set up authenticator" below. You will get a QR code, a recovery ID, and backup codes. Scan the QR in Google Authenticator, enter the 6-digit code to confirm, and save your recovery ID and backup codes for future use.</li>
-          <li>Use it: click "Forgot password" on the sign-in screen. On the recovery page, enter your email or recovery ID, then enter either the authenticator code or a backup code, plus your new password.</li>
+          <li>WHEN: set this up right after your first login.</li>
+          <li>
+            How: click "Set up authenticator" below.
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+              <li>You will get a QR code, manual setup key, a recovery ID, and backup codes.</li>
+              <li>Save your recovery ID and backup codes for future use.</li>
+              <li>Scan the QR or enter the manual setup key in Google Authenticator, then enter the 6-digit code to confirm.</li>
+            </ul>
+          </li>
+          <li>
+            USE IT: click "Forgot password" on the sign-in screen.
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+              <li>On the recovery page, enter your email or recovery ID.</li>
+              <li>Enter either the authenticator code or a backup code, plus your new password.</li>
+            </ul>
+          </li>
         </ul>
       </div>
 
