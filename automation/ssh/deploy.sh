@@ -98,6 +98,28 @@ if [[ -n "${ADMIN_EMAIL:-}" && -n "${ADMIN_PASSWORD:-}" ]]; then
   } >> "${ENV_DIR}/backend.env"
 fi
 
+if [[ -n "${SES_SMTP_HOST:-}" ]]; then
+  echo "SES_SMTP_HOST=${SES_SMTP_HOST}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${SES_SMTP_PORT:-}" ]]; then
+  echo "SES_SMTP_PORT=${SES_SMTP_PORT}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${SES_SMTP_USER:-}" ]]; then
+  echo "SES_SMTP_USER=${SES_SMTP_USER}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${SES_SMTP_PASS:-}" ]]; then
+  echo "SES_SMTP_PASS=${SES_SMTP_PASS}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${EMAIL_FROM:-}" ]]; then
+  echo "EMAIL_FROM=${EMAIL_FROM}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${EMAIL_REPLY_TO:-}" ]]; then
+  echo "EMAIL_REPLY_TO=${EMAIL_REPLY_TO}" >> "${ENV_DIR}/backend.env"
+fi
+if [[ -n "${EMAIL_SUPPORT_INBOX:-}" ]]; then
+  echo "EMAIL_SUPPORT_INBOX=${EMAIL_SUPPORT_INBOX}" >> "${ENV_DIR}/backend.env"
+fi
+
 cat > "${ENV_DIR}/postgres.env" <<EOF
 POSTGRES_DB=${DB_NAME}
 POSTGRES_USER=${DB_USER}

@@ -105,6 +105,13 @@ $repoBranch = Get-RequiredEnv "REPO_BRANCH"
 $jwtSecret = Get-OptionalEnv "JWT_SECRET"
 $adminEmail = Get-OptionalEnv "ADMIN_EMAIL"
 $adminPassword = Get-OptionalEnv "ADMIN_PASSWORD"
+$sesSmtpHost = Get-OptionalEnv "SES_SMTP_HOST"
+$sesSmtpPort = Get-OptionalEnv "SES_SMTP_PORT"
+$sesSmtpUser = Get-OptionalEnv "SES_SMTP_USER"
+$sesSmtpPass = Get-OptionalEnv "SES_SMTP_PASS"
+$emailFrom = Get-OptionalEnv "EMAIL_FROM"
+$emailReplyTo = Get-OptionalEnv "EMAIL_REPLY_TO"
+$emailSupportInbox = Get-OptionalEnv "EMAIL_SUPPORT_INBOX"
 
 $sshTarget = "$sshUser@$sshHost"
 $sshArgs = @("-i", $sshKey, "-p", $sshPort, "-o", "StrictHostKeyChecking=accept-new")
@@ -157,6 +164,13 @@ $remoteEnv += "REPO_BRANCH=$(Quote-BashValue $repoBranch)"
 if (-not [string]::IsNullOrWhiteSpace($jwtSecret)) { $remoteEnv += "JWT_SECRET=$(Quote-BashValue $jwtSecret)" }
 if (-not [string]::IsNullOrWhiteSpace($adminEmail)) { $remoteEnv += "ADMIN_EMAIL=$(Quote-BashValue $adminEmail)" }
 if (-not [string]::IsNullOrWhiteSpace($adminPassword)) { $remoteEnv += "ADMIN_PASSWORD=$(Quote-BashValue $adminPassword)" }
+if (-not [string]::IsNullOrWhiteSpace($sesSmtpHost)) { $remoteEnv += "SES_SMTP_HOST=$(Quote-BashValue $sesSmtpHost)" }
+if (-not [string]::IsNullOrWhiteSpace($sesSmtpPort)) { $remoteEnv += "SES_SMTP_PORT=$(Quote-BashValue $sesSmtpPort)" }
+if (-not [string]::IsNullOrWhiteSpace($sesSmtpUser)) { $remoteEnv += "SES_SMTP_USER=$(Quote-BashValue $sesSmtpUser)" }
+if (-not [string]::IsNullOrWhiteSpace($sesSmtpPass)) { $remoteEnv += "SES_SMTP_PASS=$(Quote-BashValue $sesSmtpPass)" }
+if (-not [string]::IsNullOrWhiteSpace($emailFrom)) { $remoteEnv += "EMAIL_FROM=$(Quote-BashValue $emailFrom)" }
+if (-not [string]::IsNullOrWhiteSpace($emailReplyTo)) { $remoteEnv += "EMAIL_REPLY_TO=$(Quote-BashValue $emailReplyTo)" }
+if (-not [string]::IsNullOrWhiteSpace($emailSupportInbox)) { $remoteEnv += "EMAIL_SUPPORT_INBOX=$(Quote-BashValue $emailSupportInbox)" }
 
 $remoteEnvText = ($remoteEnv -join "`n") + "`n"
 [System.IO.File]::WriteAllText($remoteEnvPath, $remoteEnvText, (New-Object System.Text.UTF8Encoding($false)))
