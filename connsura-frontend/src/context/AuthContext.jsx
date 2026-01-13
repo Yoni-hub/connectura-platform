@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api } from '../services/api'
+import { clearStoredToken, getStoredToken, setStoredToken } from '../utils/authStorage'
 import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(localStorage.getItem('connsura_token'))
+  const [token, setToken] = useState(getStoredToken())
   const [loading, setLoading] = useState(false)
   const [authChecking, setAuthChecking] = useState(true)
   const [lastPassword, setLastPassword] = useState('')
@@ -36,21 +37,18 @@ export function AuthProvider({ children }) {
       .catch(() => {
         setUser(null)
         setToken(null)
-        localStorage.removeItem('connsura_token')
+        clearStoredToken()
       })
       .finally(() => {
         setAuthChecking(false)
       })
   }, [token])
 
-  const applyAuth = (nextToken, nextUser, password) => {
+  const applyAuth = (nextToken, nextUser, password, options = {}) => {
+    const persist = options.persist !== false
     setToken(nextToken)
     setUser(nextUser)
-    if (nextToken) {
-      localStorage.setItem('connsura_token', nextToken)
-    } else {
-      localStorage.removeItem('connsura_token')
-    }
+    setStoredToken(nextToken, { persist })
     if (password) {
       setLastPassword(password)
     }
@@ -67,11 +65,12 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const login = async (email, password) => {
+  const login = async (email, password, options = {}) => {
     setLoading(true)
     try {
       const res = await api.post('/auth/login', { email, password })
-      applyAuth(res.data.token, res.data.user, password)
+      const remember = options.remember !== false
+      applyAuth(res.data.token, res.data.user, password, { persist: remember })
       toast.success('Logged in')
       return res.data.user
     } catch (err) {
@@ -86,7 +85,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const res = await api.post('/auth/register', payload)
-      applyAuth(res.data.token, res.data.user, payload.password)
+      applyAuth(res.data.token, res.data.user, payload.password, { persist: true })
       if (res.data.user.role === 'AGENT') {
         localStorage.setItem('connsura_agent_onboarding_pending', 'true')
         localStorage.removeItem('connsura_agent_onboarding_submitted')
@@ -105,7 +104,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     setToken(null)
     setLastPassword('')
-    localStorage.removeItem('connsura_token')
+    clearStoredToken()
     localStorage.removeItem('connsura_agent_onboarding_pending')
     localStorage.removeItem('connsura_agent_onboarding_submitted')
   }

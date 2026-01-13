@@ -73,6 +73,8 @@ export default function AgentDashboard() {
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordUpdating, setPasswordUpdating] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -345,8 +347,12 @@ export default function AgentDashboard() {
     }
   }
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault()
+    if (!currentPassword) {
+      toast.error('Enter your current password')
+      return
+    }
     if (!newPassword || !confirmPassword) {
       toast.error('Enter and confirm your new password')
       return
@@ -355,11 +361,27 @@ export default function AgentDashboard() {
       toast.error('Passwords do not match')
       return
     }
-    setLastPassword(newPassword)
-    setChangingPassword(false)
-    setNewPassword('')
-    setConfirmPassword('')
-    toast.success('Password updated locally (wire backend to persist)')
+    setPasswordUpdating(true)
+    try {
+      const res = await api.post('/auth/password', {
+        currentPassword,
+        newPassword,
+      })
+      if (res.data?.user) {
+        setUser(res.data.user)
+      }
+      setLastPassword(newPassword)
+      setChangingPassword(false)
+      setShowPassword(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Password updated')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update password')
+    } finally {
+      setPasswordUpdating(false)
+    }
   }
 
   const handleDeleteAccount = async () => {
@@ -604,22 +626,38 @@ export default function AgentDashboard() {
                       {showPassword ? lastPassword || 'No password captured this session' : '••••••••'}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="pill-btn-ghost text-sm px-4"
-                    onClick={() => setChangingPassword((v) => !v)}
-                  >
-                    {changingPassword ? 'Cancel' : 'Change'}
-                  </button>
+                    <button
+                      type="button"
+                      className="pill-btn-ghost text-sm px-4"
+                      onClick={() => {
+                        if (changingPassword) {
+                          setCurrentPassword('')
+                          setNewPassword('')
+                          setConfirmPassword('')
+                        }
+                        setChangingPassword((v) => !v)
+                      }}
+                    >
+                      {changingPassword ? 'Cancel' : 'Change'}
+                    </button>
                 </div>
-                {changingPassword && (
-                  <form className="space-y-2" onSubmit={handlePasswordSubmit}>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                  {changingPassword && (
+                    <form className="space-y-2" onSubmit={handlePasswordSubmit}>
                       <label className="block text-sm">
-                        New password
+                        Current password
                         <input
-                          type={showPassword ? 'text' : 'password'}
+                          type="password"
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                        />
+                      </label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="block text-sm">
+                          New password
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                         />
@@ -634,16 +672,16 @@ export default function AgentDashboard() {
                         />
                       </label>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <button type="submit" className="pill-btn-primary px-5">
-                        Save password
-                      </button>
-                    </div>
-                  </form>
-                )}
-                <div className="pt-2">
-                  <AuthenticatorPanel />
-                </div>
+                      <div className="flex justify-end gap-2">
+                        <button type="submit" className="pill-btn-primary px-5" disabled={passwordUpdating}>
+                          {passwordUpdating ? 'Saving...' : 'Save password'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                  <div className="pt-2">
+                    <AuthenticatorPanel />
+                  </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
                   <div className="text-sm font-semibold text-rose-700">Delete account</div>
                   <p className="text-xs text-rose-700">

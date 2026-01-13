@@ -416,6 +416,37 @@ router.post('/totp/disable', authGuard, async (req, res) => {
   }
 })
 
+router.post('/password', authGuard, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '')
+  const newPassword = String(req.body?.newPassword || '')
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current and new password are required' })
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { agent: true, customer: true },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    const match = await bcrypt.compare(currentPassword, user.password)
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid current password' })
+    }
+    const hashed = await bcrypt.hash(newPassword, 10)
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+      include: { agent: true, customer: true },
+    })
+    return res.json({ updated: true, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('password change error', err)
+    return res.status(500).json({ error: 'Failed to update password' })
+  }
+})
+
 router.post('/recovery/reset', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim()
   const code = String(req.body?.code || '').trim()

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { allOccupations, occupationMap } from '../data/occupationMap'
 import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
+import { getStoredToken } from '../utils/authStorage'
 
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
@@ -322,7 +323,7 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId, resetKe
     const handle = setTimeout(async () => {
       try {
         const productParam = productId ? `&productId=${encodeURIComponent(productId)}` : ''
-        const token = localStorage.getItem('connsura_token')
+        const token = getStoredToken()
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
         const res = await fetch(
           `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8${productParam}`,
@@ -798,7 +799,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       .filter(Boolean)
     if (!cleaned.length) return
     try {
-      const token = localStorage.getItem('connsura_token')
+      const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
       await fetch(`${API_URL}/questions/customer`, {
         method: 'POST',
@@ -865,7 +866,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setBaseAdditionalQuestionKeys([])
     setProductQuestionBank([])
     try {
-      const token = localStorage.getItem('connsura_token')
+      const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
       const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, { headers })
       if (!res.ok) return

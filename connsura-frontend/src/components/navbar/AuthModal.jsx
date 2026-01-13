@@ -60,7 +60,7 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (mode === 'login') {
-      const user = await login(form.email, form.password)
+      const user = await login(form.email, form.password, { remember })
       if (user) {
         handleClose()
         const redirectTarget = consumePostAuthRedirect()

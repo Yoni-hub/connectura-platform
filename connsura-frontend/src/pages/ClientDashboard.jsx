@@ -130,6 +130,8 @@ export default function ClientDashboard() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordUpdating, setPasswordUpdating] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -802,8 +804,12 @@ export default function ClientDashboard() {
     setSaving(false)
   }
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e?.preventDefault()
+    if (!currentPassword) {
+      toast.error('Enter your current password')
+      return
+    }
     if (!newPassword || !confirmPassword) {
       toast.error('Enter and confirm your new password')
       return
@@ -812,12 +818,27 @@ export default function ClientDashboard() {
       toast.error('Passwords do not match')
       return
     }
-    setLastPassword(newPassword)
-    setChangingPassword(false)
-    setShowPassword(false)
-    setNewPassword('')
-    setConfirmPassword('')
-    toast.success('Password updated locally (connect backend to persist)')
+    setPasswordUpdating(true)
+    try {
+      const res = await api.post('/auth/password', {
+        currentPassword,
+        newPassword,
+      })
+      if (res.data?.user) {
+        setUser(res.data.user)
+      }
+      setLastPassword(newPassword)
+      setChangingPassword(false)
+      setShowPassword(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Password updated')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update password')
+    } finally {
+      setPasswordUpdating(false)
+    }
   }
 
   const handleDeleteAccount = async () => {
@@ -1530,6 +1551,15 @@ export default function ClientDashboard() {
 
                 {changingPassword && (
                   <div className="space-y-2">
+                    <label className="block text-sm">
+                      Current password
+                      <input
+                        type="password"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                      />
+                    </label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="block text-sm">
                         New password
@@ -1556,14 +1586,20 @@ export default function ClientDashboard() {
                         className="pill-btn-ghost"
                         onClick={() => {
                           setChangingPassword(false)
+                          setCurrentPassword('')
                           setNewPassword('')
                           setConfirmPassword('')
                         }}
                       >
                         Cancel
                       </button>
-                      <button type="button" className="pill-btn-primary px-5" onClick={handlePasswordSubmit}>
-                        Save password
+                      <button
+                        type="button"
+                        className="pill-btn-primary px-5"
+                        onClick={handlePasswordSubmit}
+                        disabled={passwordUpdating}
+                      >
+                        {passwordUpdating ? 'Saving...' : 'Save password'}
                       </button>
                     </div>
                   </div>
@@ -1663,4 +1699,3 @@ export default function ClientDashboard() {
     </main>
   )
 }
-
