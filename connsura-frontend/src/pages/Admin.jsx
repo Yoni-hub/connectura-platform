@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { API_URL } from '../services/api'
-import { adminApi } from '../services/adminApi'
+import { adminApi, clearAdminToken, setAdminToken } from '../services/adminApi'
 import { renderSiteContent } from '../utils/siteContent'
 
 export default function Admin() {
@@ -92,6 +92,9 @@ export default function Admin() {
       })
       if (!res.ok) throw new Error('Invalid credentials')
       const data = await res.json()
+      if (data?.token) {
+        setAdminToken(data.token)
+      }
       setAdmin(data.admin)
       setAuthChecking(false)
       toast.success('Admin logged in')
@@ -102,6 +105,7 @@ export default function Admin() {
 
   const handleLogout = () => {
     adminApi.post('/admin/logout').catch(() => {})
+    clearAdminToken()
     setAdmin(null)
     setAgents([])
     setClients([])
@@ -576,6 +580,36 @@ export default function Admin() {
     })
   }
 
+  const removeField = (sectionKey, fieldGroupKey, fieldId) => {
+    setFormSchema((prev) => {
+      if (!prev?.sections?.[sectionKey]) return prev
+      const section = prev.sections[sectionKey]
+      const fields = Array.isArray(section[fieldGroupKey]) ? section[fieldGroupKey] : []
+      const index = fields.findIndex((field) => field.id === fieldId)
+      if (index === -1) return prev
+      let nextFields = [...fields]
+      if (fieldGroupKey === 'customFields') {
+        nextFields = nextFields.filter((field) => field.id !== fieldId)
+      } else {
+        nextFields[index] = {
+          ...nextFields[index],
+          visible: false,
+          removed: true,
+        }
+      }
+      return {
+        ...prev,
+        sections: {
+          ...prev.sections,
+          [sectionKey]: {
+            ...section,
+            [fieldGroupKey]: nextFields,
+          },
+        },
+      }
+    })
+  }
+
   const addCustomField = (sectionKey) => {
     setFormSchema((prev) => {
       if (!prev?.sections?.[sectionKey]) return prev
@@ -593,24 +627,6 @@ export default function Admin() {
           [sectionKey]: {
             ...section,
             customFields: nextFields,
-          },
-        },
-      }
-    })
-  }
-
-  const removeCustomField = (sectionKey, fieldId) => {
-    setFormSchema((prev) => {
-      if (!prev?.sections?.[sectionKey]) return prev
-      const section = prev.sections[sectionKey]
-      const customFields = Array.isArray(section.customFields) ? section.customFields : []
-      return {
-        ...prev,
-        sections: {
-          ...prev.sections,
-          [sectionKey]: {
-            ...section,
-            customFields: customFields.filter((field) => field.id !== fieldId),
           },
         },
       }
@@ -1040,6 +1056,29 @@ export default function Admin() {
       { key: 'business', label: 'Business', groups: [{ key: 'fields', label: 'Business fields' }] },
       { key: 'additional', label: 'Additional', groups: [] },
     ]
+    const groupDefaults = {
+      household: {
+        fields: { label: 'Household fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
+      address: {
+        contactFields: { label: 'Contact fields', visible: true },
+        residentialFields: { label: 'Residential address fields', visible: true },
+        mailingFields: { label: 'Mailing address fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
+      vehicle: {
+        fields: { label: 'Vehicle fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
+      business: {
+        fields: { label: 'Business fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
+      additional: {
+        customFields: { label: 'Custom fields', visible: true },
+      },
+    }
     const activeSection = sections.find((section) => section.key === activeFormSection) || sections[0]
     const sectionData = schema?.sections?.[activeSection.key]
     const fieldTypes = ['text', 'number', 'date', 'email', 'tel']
@@ -1109,8 +1148,47 @@ export default function Admin() {
       })
     }
 
+    const resolveGroupSettings = (sectionKey, groupKey, fallbackLabel) => {
+      const defaults = groupDefaults?.[sectionKey]?.[groupKey] || { label: fallbackLabel, visible: true }
+      const stored = sectionData?.groupSettings?.[groupKey] || {}
+      const label =
+        Object.prototype.hasOwnProperty.call(stored, 'label') ? stored.label : defaults.label || fallbackLabel
+      const visible = stored.visible !== false
+      return { label, visible }
+    }
+
+    const updateGroupSettings = (sectionKey, groupKey, patch) => {
+      setFormSchema((prev) => {
+        if (!prev?.sections?.[sectionKey]) return prev
+        const section = prev.sections[sectionKey]
+        const currentGroups = section.groupSettings || {}
+        const current = currentGroups[groupKey] || {}
+        return {
+          ...prev,
+          sections: {
+            ...prev.sections,
+            [sectionKey]: {
+              ...section,
+              groupSettings: {
+                ...currentGroups,
+                [groupKey]: {
+                  ...current,
+                  ...patch,
+                },
+              },
+            },
+          },
+        }
+      })
+    }
+
     const renderFieldGroup = (groupKey, title) => {
-      const fields = Array.isArray(sectionData?.[groupKey]) ? sectionData[groupKey] : []
+      const fields = Array.isArray(sectionData?.[groupKey])
+        ? sectionData[groupKey].filter((field) => field.removed !== true)
+        : []
+      const groupSettings = resolveGroupSettings(activeSection.key, groupKey, title)
+      const groupLabel = String(groupSettings.label || '').trim()
+      const groupHeading = groupLabel || title
       if (!fields.length) {
         return (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -1120,7 +1198,44 @@ export default function Admin() {
       }
       return (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{groupHeading}</div>
+            {!groupSettings.visible && (
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
+                Hidden label
+              </div>
+            )}
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+            <label className="block text-sm font-semibold text-slate-700">
+              Group label
+              <input
+                className={input}
+                value={groupSettings.label ?? ''}
+                onChange={(event) =>
+                  updateGroupSettings(activeSection.key, groupKey, { label: event.target.value })
+                }
+                placeholder={title}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={groupSettings.visible !== false}
+                onChange={(event) =>
+                  updateGroupSettings(activeSection.key, groupKey, { visible: event.target.checked })
+                }
+              />
+              Show label
+            </label>
+            <button
+              type="button"
+              className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
+              onClick={() => updateGroupSettings(activeSection.key, groupKey, { label: '', visible: false })}
+            >
+              Remove label
+            </button>
+          </div>
           <div className="mt-3 space-y-3">
             {fields.map((field) => (
               <div key={field.id} className="rounded-lg border border-slate-200 bg-white p-3">
@@ -1166,15 +1281,13 @@ export default function Admin() {
                       />
                       Visible
                     </label>
-                    {groupKey === 'customFields' && (
-                      <button
-                        type="button"
-                        className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
-                        onClick={() => removeCustomField(activeSection.key, field.id)}
-                      >
-                        Remove
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
+                      onClick={() => removeField(activeSection.key, groupKey, field.id)}
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-slate-400">Field id: {field.id}</div>
@@ -1287,7 +1400,6 @@ export default function Admin() {
                     </div>
                   )}
                   <div className="space-y-3">
-                    <div className={labelClass}>Custom fields</div>
                     {renderFieldGroup('customFields', 'Custom fields')}
                     <button
                       type="button"

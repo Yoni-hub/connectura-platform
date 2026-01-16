@@ -12,6 +12,11 @@ const formatValue = (value) => {
   return String(value)
 }
 
+const buildHouseholdRows = (person) => {
+  const rows = [{ label: 'Full Name', value: person?.fullName }]
+  return rows.filter((row) => hasValue(row.value))
+}
+
 const renderDetails = (details = []) => {
   const filtered = Array.isArray(details) ? details.filter((detail) => hasValue(detail?.value)) : []
   if (!filtered.length) return null
@@ -58,19 +63,15 @@ export default function ShareSummary({ snapshot, sections }) {
         <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
           <div className="text-sm font-semibold text-slate-900">{household.primary.label || 'Household'}</div>
           <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-            <div>
-              <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(household.primary.fullName)}
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(household.primary.dob)}
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(household.primary.gender)}
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900">License Number:</span>{' '}
-              {summaryValue(household.primary.licenseNumber)}
-            </div>
+            {buildHouseholdRows(household.primary).length ? (
+              buildHouseholdRows(household.primary).map((item, index) => (
+                <div key={`share-primary-${index}`}>
+                  <span className="font-semibold text-slate-900">{item.label}:</span> {summaryValue(item.value)}
+                </div>
+              ))
+            ) : (
+              <div className="text-slate-500">No household details added.</div>
+            )}
           </div>
           {renderDetails(household.primary.details)}
         </div>
@@ -85,19 +86,15 @@ export default function ShareSummary({ snapshot, sections }) {
           >
             <div className="text-sm font-semibold text-slate-900">{person.label || `Household ${index + 1}`}</div>
             <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-              <div>
-                <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(person.fullName)}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(person.dob)}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(person.gender)}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900">License Number:</span>{' '}
-                {summaryValue(person.licenseNumber)}
-              </div>
+              {buildHouseholdRows(person).length ? (
+                buildHouseholdRows(person).map((item, rowIndex) => (
+                  <div key={`share-additional-${index}-${rowIndex}`}>
+                    <span className="font-semibold text-slate-900">{item.label}:</span> {summaryValue(item.value)}
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-500">No household details added.</div>
+              )}
             </div>
             {renderDetails(person.details)}
           </div>

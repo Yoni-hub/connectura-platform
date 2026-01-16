@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { API_URL, api } from '../services/api'
+import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import AgentCard from '../components/agents/AgentCard'
@@ -13,7 +13,7 @@ import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Profile', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -41,24 +41,6 @@ const getInitials = (name = '', fallback = 'AG') => {
     .map((part) => part[0])
     .join('')
     .toUpperCase()
-}
-
-const formatLangs = (value) => {
-  if (Array.isArray(value)) return value.join(', ')
-  if (typeof value === 'string') return value
-  return ''
-}
-
-const parseLangs = (value = '') =>
-  value
-    .split(',')
-    .map((lang) => lang.trim())
-    .filter(Boolean)
-
-const resolvePhotoUrl = (value = '') => {
-  if (!value) return ''
-  if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) return value
-  return `${API_URL}${value}`
 }
 
 const hasNonEmptyValue = (value) => {
@@ -100,7 +82,6 @@ export default function ClientDashboard() {
   }, [location.search])
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [client, setClient] = useState(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareSnapshot, setShareSnapshot] = useState(null)
@@ -125,9 +106,6 @@ export default function ClientDashboard() {
   const [messageAgent, setMessageAgent] = useState(null)
   const [rateOpen, setRateOpen] = useState(false)
   const [rateAgent, setRateAgent] = useState(null)
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState('')
-  const [photoUploading, setPhotoUploading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordUpdating, setPasswordUpdating] = useState(false)
@@ -147,13 +125,6 @@ export default function ClientDashboard() {
     middleName: '',
     lastName: '',
     email: user?.email || '',
-    phone: '',
-    address: '',
-    zip: '',
-    state: '',
-    availability: 'online',
-    preferredLangs: '',
-    notes: '',
   })
 
   useEffect(() => {
@@ -187,20 +158,11 @@ export default function ClientDashboard() {
       setClient(profile)
       const nameParts = parseFullName(profile?.name || '')
       const details = profile?.profileData || {}
-      setPhotoPreview(resolvePhotoUrl(details.photo))
-      setPhotoFile(null)
       setForm({
         firstName: details.firstName || nameParts.firstName,
         middleName: details.middleName || nameParts.middleName,
         lastName: details.lastName || nameParts.lastName,
         email: details.email || user?.email || '',
-        phone: details.phone || '',
-        address: details.address || '',
-        zip: details.zip || '',
-        state: details.state || '',
-        availability: details.availability || 'online',
-        preferredLangs: formatLangs(details.preferredLangs || profile?.preferredLangs || []),
-        notes: details.notes || '',
       })
     } catch {
       setClient(null)
@@ -477,65 +439,10 @@ export default function ClientDashboard() {
     }
   }, [formsDraft, user?.customerId])
 
-  useEffect(() => {
-    return () => {
-      if (photoPreview && photoPreview.startsWith('blob:')) {
-        URL.revokeObjectURL(photoPreview)
-      }
-    }
-  }, [photoPreview])
-
-  const handlePhotoChange = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file.')
-      return
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be under 2MB.')
-      return
-    }
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
-  }
-
   const isEmailVerified = user?.emailVerified === true
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
   const displayName = client?.name || user?.name || user?.email || 'client'
-  const initials = useMemo(() => getInitials(displayName, 'CL'), [displayName])
-  const profileDetails = client?.profileData || {}
-  const rawAddress = profileDetails.address
-  const addressLine =
-    form.address ||
-    (typeof rawAddress === 'string' ? rawAddress : rawAddress?.street) ||
-    ''
-  const addressState = form.state || profileDetails.state || rawAddress?.state || ''
-  const addressZip = form.zip || profileDetails.zip || rawAddress?.zip || ''
-  const previewAddress =
-    [addressLine, [addressState, addressZip].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '-'
-  const previewName =
-    [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ') ||
-    client?.name ||
-    user?.email ||
-    'Customer'
-  const previewEmail = form.email || profileDetails.email || user?.email || '-'
-  const previewPhone = form.phone || profileDetails.phone || profileDetails.contact?.phone || '-'
-  const previewAvailability = (form.availability || profileDetails.availability || 'online').toLowerCase()
-  const previewAvailabilityLabel = previewAvailability
-    ? `${previewAvailability[0].toUpperCase()}${previewAvailability.slice(1)}`
-    : 'Online'
-  const previewStatusTone =
-    previewAvailability === 'online' ? 'green' : previewAvailability === 'busy' ? 'amber' : 'gray'
-  const previewPhoto = photoPreview || resolvePhotoUrl(profileDetails.photo)
-  const preferredLangsList = form.preferredLangs?.trim()
-    ? parseLangs(form.preferredLangs)
-    : Array.isArray(client?.preferredLangs) && client.preferredLangs.length
-      ? client.preferredLangs
-      : parseLangs(formatLangs(profileDetails.preferredLangs || ''))
-  const previewLangs = preferredLangsList.length ? preferredLangsList.join(', ') : '-'
-  const previewNotes = form.notes || profileDetails.notes || profileDetails.claimsHistory || '-'
   const savedAgentIds = useMemo(() => new Set(savedAgents.map((agent) => agent.id)), [savedAgents])
   const totalUnread = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
@@ -708,100 +615,6 @@ export default function ClientDashboard() {
     } finally {
       setRevokingShare('')
     }
-  }
-
-  const resetProfileForm = () => {
-    if (client) {
-      const nameParts = parseFullName(client?.name || '')
-      const details = client?.profileData || {}
-      setPhotoPreview(resolvePhotoUrl(details.photo))
-      setPhotoFile(null)
-      setForm({
-        firstName: details.firstName || nameParts.firstName,
-        middleName: details.middleName || nameParts.middleName,
-        lastName: details.lastName || nameParts.lastName,
-        email: details.email || user?.email || '',
-        phone: details.phone || '',
-        address: details.address || '',
-        zip: details.zip || '',
-        state: details.state || '',
-        availability: details.availability || 'online',
-        preferredLangs: formatLangs(details.preferredLangs || client?.preferredLangs || []),
-        notes: details.notes || '',
-      })
-    } else {
-      setPhotoPreview('')
-      setPhotoFile(null)
-      setForm({
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        email: user?.email || '',
-        phone: '',
-        address: '',
-        zip: '',
-        state: '',
-        availability: 'online',
-        preferredLangs: '',
-        notes: '',
-      })
-    }
-  }
-
-  const handleProfileSave = async (e) => {
-    e.preventDefault()
-    if (!user?.customerId) {
-      toast.error('Customer account required')
-      return
-    }
-    setSaving(true)
-    let uploadedPhoto = ''
-    if (photoFile) {
-      setPhotoUploading(true)
-      try {
-        const data = new FormData()
-        data.append('photo', photoFile)
-        const res = await api.post(`/customers/${user.customerId}/photo`, data)
-        uploadedPhoto = res.data?.profile?.profileData?.photo || res.data?.photo || ''
-        if (uploadedPhoto) {
-          setPhotoPreview(resolvePhotoUrl(uploadedPhoto))
-        }
-        setPhotoFile(null)
-      } catch (err) {
-        toast.error(err.response?.data?.error || 'Photo upload failed')
-        setSaving(false)
-        return
-      } finally {
-        setPhotoUploading(false)
-      }
-    }
-    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
-    const preferredLangs = parseLangs(form.preferredLangs)
-    setClient((prev) => {
-      const currentPhoto = uploadedPhoto || prev?.profileData?.photo || ''
-      return {
-        ...(prev || {}),
-        name: fullName,
-        preferredLangs,
-        profileData: {
-          ...(prev?.profileData || {}),
-          firstName: form.firstName,
-          middleName: form.middleName,
-          lastName: form.lastName,
-          phone: form.phone,
-          email: form.email,
-          address: form.address,
-          zip: form.zip,
-          state: form.state,
-          availability: form.availability,
-          preferredLangs: form.preferredLangs,
-          notes: form.notes,
-          photo: currentPhoto,
-        },
-      }
-    })
-    toast.success('Profile saved')
-    setSaving(false)
   }
 
   const handlePasswordSubmit = async (e) => {
@@ -1019,207 +832,6 @@ export default function ClientDashboard() {
                   </button>
                 </div>
               )}
-            </div>
-          )}
-
-          {!loading && activeTab === 'Profile' && (
-            <div className="grid gap-6 lg:grid-cols-[420px,1fr]">
-              <form className="surface p-4 space-y-2 max-w-md w-full" onSubmit={handleProfileSave}>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">Profile & availability</h2>
-                  <Badge label="Visible to agents" tone="green" />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
-                    {photoPreview ? (
-                      <img src={photoPreview} alt="Client profile" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-lg font-semibold">{initials}</span>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <label
-                      className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
-                        photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                      }`}
-                    >
-                      Upload photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handlePhotoChange}
-                        disabled={photoUploading || saving}
-                      />
-                    </label>
-                    <div className="text-xs text-slate-500">JPG or PNG, up to 2MB.</div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <label className="block text-sm">
-                    First name
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.firstName}
-                      onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    Middle name
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.middleName}
-                      onChange={(e) => setForm({ ...form, middleName: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    Last name
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.lastName}
-                      onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block text-sm">
-                    Email
-                    <input
-                      type="email"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    Phone number
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.phone}
-                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    />
-                  </label>
-                </div>
-
-                <label className="block text-sm">
-                  Address
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                    value={form.address}
-                    onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  />
-                </label>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block text-sm">
-                    ZIP
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.zip}
-                      onChange={(e) => setForm({ ...form, zip: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    State
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.state}
-                      onChange={(e) => setForm({ ...form, state: e.target.value })}
-                    />
-                  </label>
-                </div>
-
-                <label className="block text-sm">
-                  Availability
-                  <select
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                    value={form.availability}
-                    onChange={(e) => setForm({ ...form, availability: e.target.value })}
-                  >
-                    <option value="online">Online</option>
-                    <option value="busy">Busy</option>
-                    <option value="offline">Offline</option>
-                  </select>
-                </label>
-
-                <label className="block text-sm">
-                  Preferred languages
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                    value={form.preferredLangs}
-                    onChange={(e) => setForm({ ...form, preferredLangs: e.target.value })}
-                    placeholder="e.g., English, Spanish"
-                  />
-                </label>
-
-                <label className="block text-sm">
-                  Notes
-                  <textarea
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 min-h-[96px]"
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  />
-                </label>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" className="pill-btn-ghost" onClick={resetProfileForm}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="pill-btn-primary px-8" disabled={saving || photoUploading}>
-                    {saving || photoUploading ? 'Saving...' : 'Save changes'}
-                  </button>
-                </div>
-              </form>
-
-              <div className="surface p-4 space-y-3 min-h-[420px]">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-lg font-semibold">What agents see</h3>
-                  <Badge label="Preview" tone="blue" />
-                </div>
-                <p className="text-sm text-slate-500">
-                  This is the profile snapshot agents see when you share your details.
-                </p>
-                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-14 w-14 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
-                      {previewPhoto ? (
-                        <img src={previewPhoto} alt={previewName} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-semibold">{initials}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-semibold text-slate-900 truncate">{previewName}</div>
-                      <div className="text-xs text-slate-500 truncate">{previewEmail}</div>
-                      <div className="mt-2">
-                        <Badge label={previewAvailabilityLabel} tone={previewStatusTone} />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid gap-2 text-sm text-slate-600">
-                    <div>
-                      <span className="text-slate-500">Phone:</span> {previewPhone}
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Address:</span> {previewAddress}
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
-                  <div className="grid gap-2 text-sm text-slate-600">
-                    <div>
-                      <span className="text-slate-500">Preferred languages:</span> {previewLangs}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                    <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Notes</div>
-                    <p>{previewNotes}</p>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 

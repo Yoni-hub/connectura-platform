@@ -2,6 +2,10 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
   sections: {
     household: {
       label: 'Household Information',
+      groupSettings: {
+        fields: { label: 'Household fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
       fields: [
         { id: 'first-name', label: 'First Name', type: 'text', visible: true },
         { id: 'middle-initial', label: 'Middle Initial', type: 'text', visible: true },
@@ -27,6 +31,12 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
     },
     address: {
       label: 'Address Information',
+      groupSettings: {
+        contactFields: { label: 'Contact fields', visible: true },
+        residentialFields: { label: 'Residential address fields', visible: true },
+        mailingFields: { label: 'Mailing address fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
       contactFields: [
         { id: 'phone1', label: 'Phone #1', type: 'tel', visible: true },
         { id: 'phone2', label: 'Phone #2', type: 'tel', visible: true },
@@ -35,13 +45,16 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
       ],
       addressTypes: ['Secondary Home', 'Rental Property'],
       residentialFields: [
+        { id: 'addressType', label: 'Address Type', type: 'select', visible: true },
         { id: 'address1', label: 'Street Address 1', type: 'text', visible: true },
+        { id: 'address2', label: 'Street Address 2', type: 'text', visible: true },
         { id: 'city', label: 'City', type: 'text', visible: true },
         { id: 'state', label: 'State', type: 'text', visible: true },
         { id: 'zip', label: 'Zip Code', type: 'text', visible: true },
       ],
       mailingFields: [
         { id: 'address1', label: 'Street Address 1', type: 'text', visible: true },
+        { id: 'address2', label: 'Street Address 2', type: 'text', visible: true },
         { id: 'city', label: 'City', type: 'text', visible: true },
         { id: 'state', label: 'State', type: 'text', visible: true },
         { id: 'zip', label: 'Zip Code', type: 'text', visible: true },
@@ -50,6 +63,10 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
     },
     vehicle: {
       label: 'Vehicle Information',
+      groupSettings: {
+        fields: { label: 'Vehicle fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
       fields: [
         { id: 'year', label: 'Year', type: 'number', visible: true },
         { id: 'make', label: 'Make', type: 'text', visible: true },
@@ -61,6 +78,10 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
     },
     business: {
       label: 'Business Information',
+      groupSettings: {
+        fields: { label: 'Business fields', visible: true },
+        customFields: { label: 'Custom fields', visible: true },
+      },
       fields: [
         { id: 'name', label: 'Business Name', type: 'text', visible: true },
         { id: 'type', label: 'Business Type', type: 'select', visible: true },
@@ -78,6 +99,9 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
     },
     additional: {
       label: 'Additional Information',
+      groupSettings: {
+        customFields: { label: 'Custom fields', visible: true },
+      },
       customFields: [],
     },
   },

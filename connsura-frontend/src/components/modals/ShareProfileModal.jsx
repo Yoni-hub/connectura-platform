@@ -7,16 +7,23 @@ import Modal from '../ui/Modal'
 import ShareSummary from '../share/ShareSummary'
 
 const hasText = (value) => typeof value === 'string' && value.trim().length > 0
+const hasDetailValue = (value) => {
+  if (Array.isArray(value)) return value.some(hasDetailValue)
+  if (typeof value === 'string') return hasText(value)
+  return value !== null && value !== undefined
+}
 
 const getHouseholdHasData = (household) => {
   if (!household) return false
   const primary = household.primary
   const primaryHasData =
     primary &&
-    [primary.fullName, primary.dob, primary.gender, primary.licenseNumber].some((value) => hasText(value))
+    ([primary.fullName, primary.dob, primary.gender].some((value) => hasText(value)) ||
+      (Array.isArray(primary.details) && primary.details.some((detail) => hasDetailValue(detail?.value))))
   const additionalHasData = Array.isArray(household.additional)
     ? household.additional.some((person) =>
-        [person.fullName, person.dob, person.gender, person.licenseNumber].some((value) => hasText(value))
+        [person.fullName, person.dob, person.gender].some((value) => hasText(value)) ||
+        (Array.isArray(person.details) && person.details.some((detail) => hasDetailValue(detail?.value)))
       )
     : false
   return primaryHasData || additionalHasData

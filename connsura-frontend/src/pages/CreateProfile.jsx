@@ -182,7 +182,9 @@ const baseContactFields = [
 ]
 
 const baseResidentialFields = [
+  { id: 'addressType', label: 'Address Type', type: 'select' },
   { id: 'address1', label: 'Street Address 1' },
+  { id: 'address2', label: 'Street Address 2' },
   { id: 'city', label: 'City' },
   { id: 'state', label: 'State' },
   { id: 'zip', label: 'Zip Code' },
@@ -190,6 +192,7 @@ const baseResidentialFields = [
 
 const baseMailingFields = [
   { id: 'address1', label: 'Street Address 1' },
+  { id: 'address2', label: 'Street Address 2' },
   { id: 'city', label: 'City' },
   { id: 'state', label: 'State' },
   { id: 'zip', label: 'Zip Code' },
@@ -240,19 +243,23 @@ const buildDefaultSchema = () => ({
 })
 
 const applySchemaFields = (baseFields, schemaFields = [], getId = (field) => field.id) => {
+  const removedIds = new Set(schemaFields.filter((field) => field.removed).map((field) => field.id))
   const schemaMap = new Map(schemaFields.map((field) => [field.id, field]))
-  const mapped = baseFields.map((field) => {
-    const schemaField = schemaMap.get(getId(field))
-    return {
-      ...field,
-      label: schemaField?.label || field.label,
-      visible: schemaField?.visible !== false,
-    }
-  })
+  const mapped = baseFields
+    .filter((field) => !removedIds.has(getId(field)))
+    .map((field) => {
+      const schemaField = schemaMap.get(getId(field))
+      return {
+        ...field,
+        label: schemaField?.label || field.label,
+        visible: schemaField?.visible !== false,
+      }
+    })
   if (!schemaFields.length) {
     return mapped.filter((field) => field.visible)
   }
   const ordered = schemaFields
+    .filter((field) => !field.removed)
     .map((field) => mapped.find((item) => getId(item) === field.id))
     .filter(Boolean)
   const remaining = mapped.filter((field) => !schemaMap.has(getId(field)))
@@ -287,6 +294,74 @@ function FieldRow({ id, label, type = 'text', value, onChange, placeholder, opti
       </label>
       <input id={id} type={type} className={inputClass} placeholder={placeholder} disabled={disabled} {...inputProps} />
     </>
+  )
+}
+
+function MultiSelectDropdown({ id, options, selectedIds, onToggle, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+  const safeSelected = Array.isArray(selectedIds) ? selectedIds : []
+  const selectedLabels = options.filter((option) => safeSelected.includes(option.id)).map((option) => option.label)
+  const isEmpty = !options.length
+  const firstSelectedOption = options.find((option) => safeSelected.includes(option.id))
+  const firstSelectedLabel = firstSelectedOption?.label || ''
+  const firstSelectedName = firstSelectedLabel.split(/\s+/).filter(Boolean)[0] || ''
+  const displayValue =
+    safeSelected.length > 1
+      ? `${firstSelectedName || firstSelectedLabel} ...`
+      : firstSelectedName || firstSelectedLabel || placeholder
+
+  useEffect(() => {
+    if (!open) return undefined
+    const handleClick = (event) => {
+      if (!containerRef.current?.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        id={id}
+        className={`${inputClass} w-full flex items-center justify-between`}
+        onClick={() => setOpen((prev) => !prev)}
+        disabled={isEmpty}
+      >
+        <span className={selectedLabels.length ? 'text-slate-900' : 'text-slate-400'}>
+          {displayValue}
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          className="h-4 w-4 text-slate-500"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      {open && !isEmpty && (
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+          {options.map((option) => (
+            <label key={option.id} className="flex items-center gap-2 px-1 py-1 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={safeSelected.includes(option.id)}
+                onChange={() => onToggle(option.id)}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -446,8 +521,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const createAddressEntry = () => ({
     addressType: '',
     contact: createContact(),
-    residential: { address1: '', city: '', state: '', zip: '' },
-    mailing: { address1: '', city: '', state: '', zip: '' },
+    residential: { addressType: '', address1: '', address2: '', city: '', state: '', zip: '', residents: [] },
+    mailing: { address1: '', address2: '', city: '', state: '', zip: '' },
   })
   const createAdditionalQuestion = () => ({ question: '', input: '' })
   const [activeSection, setActiveSection] = useState(null)
@@ -468,8 +543,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [newHousehold, setNewHousehold] = useState(createHouseholdMember())
   const [showAddHouseholdModal, setShowAddHouseholdModal] = useState(false)
   const [contacts, setContacts] = useState([createContact()])
-  const [residential, setResidential] = useState({ address1: '', city: '', state: '', zip: '' })
-  const [mailing, setMailing] = useState({ address1: '', city: '', state: '', zip: '' })
+  const [residential, setResidential] = useState({
+    addressType: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    zip: '',
+    residents: [],
+  })
+  const [mailing, setMailing] = useState({ address1: '', address2: '', city: '', state: '', zip: '' })
   const [additionalAddresses, setAdditionalAddresses] = useState([])
   const [newAddress, setNewAddress] = useState(createAddressEntry())
   const [showAddAddressModal, setShowAddAddressModal] = useState(false)
@@ -631,17 +714,31 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     'Student (full-time)': ['Student (full-time)'],
     'Retired (full-time)': ['Retired (full-time)'],
     'Homemaker (full-time)': ['Homemaker (full-time)'],
+    'Unemployed': ['Unemployed'],
   }
   const schema = formSchema || buildDefaultSchema()
   const householdSchemaFields = schema.sections?.household?.fields || []
-  const contactSchemaFields = schema.sections?.address?.contactFields || []
   const residentialSchemaFields = schema.sections?.address?.residentialFields || []
-  const mailingSchemaFields = schema.sections?.address?.mailingFields || []
 
   const householdFields = applySchemaFields(baseHouseholdFields, householdSchemaFields, (field) => field.key)
-  const contactFields = applySchemaFields(baseContactFields, contactSchemaFields)
   const residentialFields = applySchemaFields(baseResidentialFields, residentialSchemaFields)
-  const mailingFields = applySchemaFields(baseMailingFields, mailingSchemaFields)
+  const orderedResidentialFields = (() => {
+    const fields = [...residentialFields]
+    const ordered = []
+    const preferredOrder = ['addressType', 'address1', 'address2']
+    const used = new Set()
+    preferredOrder.forEach((fieldId) => {
+      const match = fields.find((field) => field.id === fieldId)
+      if (match) {
+        ordered.push(match)
+        used.add(fieldId)
+      }
+    })
+    fields.forEach((field) => {
+      if (!used.has(field.id)) ordered.push(field)
+    })
+    return ordered
+  })()
   const rawAddressTypeOptions = Array.isArray(schema.sections?.address?.addressTypes)
     ? schema.sections.address.addressTypes
     : baseAddressTypeOptions
@@ -653,7 +750,9 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const additionalSectionLabel = schema.sections?.additional?.label || 'Additional Information'
 
   const customFieldsForSection = (sectionKey) =>
-    schema.sections?.[sectionKey]?.customFields || []
+    (schema.sections?.[sectionKey]?.customFields || []).filter(
+      (field) => field.visible !== false && field.removed !== true
+    )
 
   const setCustomFieldValue = (sectionKey, fieldId, value) => {
     setCustomFieldValues((prev) => ({
@@ -665,27 +764,14 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }))
   }
 
-  const renderCustomFields = (sectionKey) => {
-    const fields = customFieldsForSection(sectionKey).filter((field) => field.visible !== false)
-    if (!fields.length) return null
-    return (
-      <div className="mt-4">
-        <div className="text-sm font-semibold text-slate-900">Additional Fields</div>
-        <div className={`mt-3 ${gridClass}`}>
-          {fields.map((field) => (
-            <FieldRow
-              key={`custom-${sectionKey}-${field.id}`}
-              id={`custom-${sectionKey}-${field.id}`}
-              label={field.label || field.id}
-              type={field.type || 'text'}
-              value={customFieldValues?.[sectionKey]?.[field.id] ?? ''}
-              onChange={(event) => setCustomFieldValue(sectionKey, field.id, event.target.value)}
-            />
-          ))}
-        </div>
-      </div>
-    )
-  }
+  const buildCustomFieldRows = (sectionKey, idPrefix) =>
+    customFieldsForSection(sectionKey).map((field) => ({
+      id: `${idPrefix}-${field.id}`,
+      label: field.label || field.id,
+      type: field.type || 'text',
+      value: customFieldValues?.[sectionKey]?.[field.id] ?? '',
+      onChange: (event) => setCustomFieldValue(sectionKey, field.id, event.target.value),
+    }))
   const buildHouseholdFields = (person, setPerson, idPrefix) => {
     const occupationOptionsForEmployment =
       specialEmploymentOccupations[person.employment] ||
@@ -934,32 +1020,38 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setAdditionalFormError('')
   }, [additionalFormMode])
 
-  const handleSameAsResidential = () => {
-    if (activeAddressIndex === 'primary') {
-      setMailing({
-        address1: residential.address1,
-        city: residential.city,
-        state: residential.state,
-        zip: residential.zip,
-      })
-      return
+  const buildFullName = (person) => {
+    const nameParts = [person['first-name'], person['middle-initial'], person['last-name']].filter(Boolean)
+    const baseName = nameParts.join(' ')
+    if (!person.suffix) {
+      return baseName
     }
-    if (typeof activeAddressIndex !== 'number') {
-      return
-    }
-    updateAdditionalAddress(activeAddressIndex, (prev) => ({
-      ...prev,
-      mailing: {
-        address1: prev.residential?.address1 ?? '',
-        city: prev.residential?.city ?? '',
-        state: prev.residential?.state ?? '',
-        zip: prev.residential?.zip ?? '',
-      },
-    }))
+    return baseName ? `${baseName}, ${person.suffix}` : person.suffix
   }
-
   const namedInsuredLabel = namedInsured.relation ? namedInsured.relation : 'Primary Applicant'
   const getAdditionalHouseholdLabel = (relation) => (relation ? relation : 'Additional Household Member')
+  const getHouseholdOptionLabel = (person, fallbackLabel) => {
+    const name = buildFullName(person || {})
+    if (name) return name
+    if (fallbackLabel) return fallbackLabel
+    return 'Household member'
+  }
+  const householdMemberOptions = [
+    {
+      id: 'primary',
+      label: getHouseholdOptionLabel(namedInsured, namedInsuredLabel || 'Primary Applicant'),
+    },
+    ...additionalHouseholds
+      .map((person, index) => ({ person, index }))
+      .filter(({ person }) => hasNonEmptyValue(person))
+      .map(({ person, index }) => ({
+        id: `additional-${index}`,
+        label: getHouseholdOptionLabel(person, getAdditionalHouseholdLabel(person?.relation)),
+      })),
+  ]
+  const residentLabelMap = new Map(householdMemberOptions.map((option) => [option.id, option.label]))
+  const resolveResidentLabels = (residentIds = []) =>
+    residentIds.map((id) => residentLabelMap.get(id)).filter(Boolean)
   const activeAdditionalIndex = typeof activeHouseholdIndex === 'number' ? activeHouseholdIndex : null
   const activeAdditionalPerson =
     activeAdditionalIndex !== null ? additionalHouseholds[activeAdditionalIndex] : null
@@ -982,10 +1074,13 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     activeHousehold.setPerson,
     activeHousehold.idPrefix
   )
+  const householdCustomFields = buildCustomFieldRows('household', `${activeHousehold.idPrefix}-custom`)
+  const activeHouseholdFieldRows = [...activeHouseholdFields, ...householdCustomFields]
   const primaryContact = contacts[0] || createContact()
   const primaryAddressLabel = 'Primary Address'
   const getAdditionalAddressLabel = (entry, index) => {
-    const type = entry?.addressType ? entry.addressType.trim() : ''
+    const rawType = entry?.addressType || entry?.residential?.addressType || ''
+    const type = rawType ? rawType.trim() : ''
     return type || `Additional Address ${index + 1}`
   }
   const activeAdditionalAddressIndex = typeof activeAddressIndex === 'number' ? activeAddressIndex : null
@@ -996,11 +1091,20 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     activeAdditionalAddressIndex === null
       ? primaryAddressLabel
       : getAdditionalAddressLabel(activeAdditionalAddress, activeAdditionalAddressIndex)
-  const activeAddressContact =
-    activeAdditionalAddressIndex === null ? primaryContact : activeAddressEntry.contact
   const activeAddressResidential =
     activeAdditionalAddressIndex === null ? residential : activeAddressEntry.residential
-  const activeAddressMailing = activeAdditionalAddressIndex === null ? mailing : activeAddressEntry.mailing
+  const activeAddressType =
+    activeAdditionalAddressIndex === null
+      ? residential?.addressType ?? ''
+      : activeAddressEntry.residential?.addressType ?? activeAddressEntry.addressType ?? ''
+  const activeAddressResidents = Array.isArray(activeAddressResidential?.residents)
+    ? activeAddressResidential.residents
+    : []
+  const newAddressResidents = Array.isArray(newAddress.residential?.residents) ? newAddress.residential.residents : []
+  const addressCustomFields = buildCustomFieldRows(
+    'address',
+    `addr-${activeAdditionalAddressIndex === null ? 'primary' : activeAdditionalAddressIndex}-custom`
+  )
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
   const showHouseholdForm =
@@ -1013,9 +1117,9 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const showSummarySection = activeSection === 'summary' && isSectionAllowed('summary')
   const showAdditionalForm = showAdditionalSection && (!hasAdditionalData || additionalEditing)
   const showAdditionalSummary = showAdditionalSection && hasAdditionalData && !additionalEditing
-  const setActiveAddressContactField = (field, value) => {
+  const setActiveAddressType = (value) => {
     if (activeAddressIndex === 'primary') {
-      updateContact(0, (prev) => ({ ...prev, [field]: value }))
+      setResidential((prev) => ({ ...prev, addressType: value }))
       return
     }
     if (typeof activeAddressIndex !== 'number') {
@@ -1023,9 +1127,34 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }
     updateAdditionalAddress(activeAddressIndex, (prev) => ({
       ...prev,
-      contact: { ...(prev.contact ?? createContact()), [field]: value },
+      addressType: value,
+      residential: { ...(prev.residential ?? {}), addressType: value },
     }))
   }
+  const toggleResidentSelection = (current, id) =>
+    current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+  const setActiveAddressResidents = (nextResidents) => {
+    if (activeAddressIndex === 'primary') {
+      setResidential((prev) => ({ ...prev, residents: nextResidents }))
+      return
+    }
+    if (typeof activeAddressIndex !== 'number') {
+      return
+    }
+    updateAdditionalAddress(activeAddressIndex, (prev) => ({
+      ...prev,
+      residential: { ...(prev.residential ?? {}), residents: nextResidents },
+    }))
+  }
+  const toggleActiveAddressResident = (id) =>
+    setActiveAddressResidents(toggleResidentSelection(activeAddressResidents, id))
+  const setNewAddressResidents = (nextResidents) =>
+    setNewAddress((prev) => ({
+      ...prev,
+      residential: { ...(prev.residential ?? {}), residents: nextResidents },
+    }))
+  const toggleNewAddressResident = (id) =>
+    setNewAddressResidents(toggleResidentSelection(newAddressResidents, id))
   const setActiveAddressResidentialField = (field, value) => {
     if (activeAddressIndex === 'primary') {
       setResidential((prev) => ({ ...prev, [field]: value }))
@@ -1036,30 +1165,21 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }
     updateAdditionalAddress(activeAddressIndex, (prev) => ({
       ...prev,
-      residential: { ...(prev.residential ?? { address1: '', city: '', state: '', zip: '' }), [field]: value },
+      residential: {
+        ...(prev.residential ?? {
+          addressType: '',
+          address1: '',
+          address2: '',
+          city: '',
+          state: '',
+          zip: '',
+          residents: [],
+        }),
+        [field]: value,
+      },
     }))
   }
-  const setActiveAddressMailingField = (field, value) => {
-    if (activeAddressIndex === 'primary') {
-      setMailing((prev) => ({ ...prev, [field]: value }))
-      return
-    }
-    if (typeof activeAddressIndex !== 'number') {
-      return
-    }
-    updateAdditionalAddress(activeAddressIndex, (prev) => ({
-      ...prev,
-      mailing: { ...(prev.mailing ?? { address1: '', city: '', state: '', zip: '' }), [field]: value },
-    }))
-  }
-  const buildFullName = (person) => {
-    const nameParts = [person['first-name'], person['middle-initial'], person['last-name']].filter(Boolean)
-    const baseName = nameParts.join(' ')
-    if (!person.suffix) {
-      return baseName
-    }
-    return baseName ? `${baseName}, ${person.suffix}` : person.suffix
-  }
+  const nameFieldKeys = new Set(['first-name', 'middle-initial', 'last-name', 'suffix'])
   const buildHouseholdDetails = (person) => {
     const details = []
     if (hasNonEmptyValue(person?.relation)) {
@@ -1067,6 +1187,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }
     householdFields.forEach((field) => {
       const fieldKey = field.key
+      if (nameFieldKeys.has(fieldKey)) return
       const value = person?.[fieldKey]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
@@ -1074,25 +1195,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
     return details
   }
-  const buildAddressDetails = (contact, residentialEntry, mailingEntry, addressType) => {
+  const buildHouseholdSummaryRows = (fullName) =>
+    fullName ? [{ label: 'Full Name', value: fullName }] : []
+  const buildAddressDetails = (residentialEntry, addressType) => {
     const details = []
     if (hasNonEmptyValue(addressType)) {
       details.push({ label: 'Address Type', value: addressType })
     }
-    contactFields.forEach((field) => {
-      const value = contact?.[field.id]
-      if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
-      }
-    })
     residentialFields.forEach((field) => {
+      if (field.id === 'addressType') return
       const value = residentialEntry?.[field.id]
-      if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
-      }
-    })
-    mailingFields.forEach((field) => {
-      const value = mailingEntry?.[field.id]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
       }
@@ -1101,6 +1213,28 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   }
   const primaryFullName = buildFullName(namedInsured)
   const summaryValue = (value) => (value ? value : '-')
+  const householdFieldKeySet = new Set(householdFields.map((field) => field.key))
+  const hasNameFieldsInSchema = householdFields.some((field) => nameFieldKeys.has(field.key))
+  const primarySummaryRows = [
+    { label: 'Full Name', value: primaryFullName },
+    { label: 'Phone', value: primaryContact?.phone1 || '' },
+    { label: 'Email', value: primaryContact?.email1 || '' },
+  ]
+  const getFirstName = (value) => {
+    const trimmed = (value || '').toString().trim()
+    if (!trimmed) return ''
+    return trimmed.split(/\s+/)[0]
+  }
+  const formatResidentSummary = (residentIds = []) => {
+    if (!Array.isArray(residentIds) || residentIds.length === 0) return '-'
+    const primarySelected = residentIds.includes('primary')
+    const primaryName = buildFullName(namedInsured)
+    const fallbackLabel = residentLabelMap.get(residentIds[0]) || ''
+    const baseLabel = primarySelected ? primaryName : fallbackLabel
+    const firstName = getFirstName(baseLabel) || baseLabel
+    if (!firstName) return '-'
+    return residentIds.length > 1 ? `${firstName} ...` : firstName
+  }
 
   useEffect(() => {
     if (!hydrated) return
@@ -1142,10 +1276,9 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (typeof onShareSnapshotChange !== 'function') return
     const buildSharePerson = (person, label) => ({
       label,
-      fullName: buildFullName(person || {}),
-      dob: person?.dob || '',
-      gender: person?.gender || '',
-      licenseNumber: person?.['license-number'] || '',
+      fullName: hasNameFieldsInSchema ? buildFullName(person || {}) : '',
+      dob: householdFieldKeySet.has('dob') ? person?.dob || '' : '',
+      gender: householdFieldKeySet.has('gender') ? person?.gender || '' : '',
       details: buildHouseholdDetails(person || {}),
     })
     const primarySnapshot = buildSharePerson(
@@ -1161,7 +1294,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       phone1: primaryContactSnapshot?.phone1 || '',
       email1: primaryContactSnapshot?.email1 || '',
       street1: residential?.address1 || '',
-      details: buildAddressDetails(primaryContactSnapshot, residential, mailing, ''),
+      details: buildAddressDetails(residential, residential?.addressType || ''),
     }
     const additionalAddressSnapshots = additionalAddresses
       .filter((entry) => hasNonEmptyValue(entry))
@@ -1170,7 +1303,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         phone1: entry?.contact?.phone1 || '',
         email1: entry?.contact?.email1 || '',
         street1: entry?.residential?.address1 || '',
-        details: buildAddressDetails(entry?.contact, entry?.residential, entry?.mailing, entry?.addressType),
+        details: buildAddressDetails(entry?.residential, entry?.addressType || entry?.residential?.addressType || ''),
       }))
     const snapshot = {
       household: {
@@ -1315,12 +1448,11 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                             activeHousehold.setPerson((prev) => ({ ...prev, relation: event.target.value }))
                           }
                         />
-                        {activeHouseholdFields.map((field) => (
+                        {activeHouseholdFieldRows.map((field) => (
                           <FieldRow key={field.id} {...field} />
                         ))}
                       </div>
                     </div>
-                    {renderCustomFields('household')}
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
@@ -1369,19 +1501,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       </button>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                      <div>
-                        <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(primaryFullName)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(namedInsured.dob)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(namedInsured.gender)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">License Number:</span>{' '}
-                        {summaryValue(namedInsured['license-number'])}
-                      </div>
+                      {primarySummaryRows.length ? (
+                        primarySummaryRows.map((item, index) => (
+                          <div key={`primary-summary-${index}`}>
+                            <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                            {summaryValue(item.value)}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-500">No household details added.</div>
+                      )}
                     </div>
                   </div>
 
@@ -1390,6 +1519,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       ? person.relation
                       : `Additional Household Member ${index + 1}`
                     const fullName = buildFullName(person)
+                    const summaryRows = buildHouseholdSummaryRows(fullName)
                     return (
                       <div
                         key={`household-summary-${index}`}
@@ -1418,19 +1548,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                          <div>
-                            <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(fullName)}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(person.dob)}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(person.gender)}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-slate-900">License Number:</span>{' '}
-                            {summaryValue(person['license-number'])}
-                          </div>
+                          {summaryRows.length ? (
+                            summaryRows.map((item, idx) => (
+                              <div key={`additional-summary-${index}-${idx}`}>
+                                <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                                {summaryValue(item.value)}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-slate-500">No household details added.</div>
+                          )}
                         </div>
                       </div>
                     )
@@ -1471,159 +1598,55 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Address</div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Address Type</div>
-                      <div className={`mt-3 ${gridClass}`}>
-                        <FieldRow
-                          id="new-address-type"
-                          label="Address Type"
-                          value={newAddress.addressType ?? ''}
-                          onChange={(event) =>
-                            setNewAddress((prev) => ({
-                              ...prev,
-                              addressType: event.target.value,
-                            }))
-                          }
-                          options={addressTypeOptions}
-                          placeholder="Select address type"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Contact Information</div>
-                      <div className={`mt-3 ${gridClass}`}>
-                        {contactFields.map((field) => (
+                    <div className={`mt-3 ${gridClass}`}>
+                      {orderedResidentialFields.map((field) => {
+                        const isAddressType = field.id === 'addressType'
+                        const value = isAddressType
+                          ? newAddress.residential?.addressType ?? newAddress.addressType ?? ''
+                          : newAddress.residential?.[field.id] ?? ''
+                        return (
                           <FieldRow
-                            key={`new-address-contact-${field.id}`}
-                            id={`new-address-${field.id}`}
+                            key={`new-res-${field.id}`}
+                            id={`new-res-${field.id}`}
                             label={field.label}
                             type={field.type}
-                            value={newAddress.contact?.[field.id] ?? ''}
+                            options={isAddressType ? addressTypeOptions : undefined}
+                            placeholder={isAddressType ? 'Select address type' : undefined}
+                            value={value}
                             onChange={(event) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                contact: { ...(prev.contact ?? createContact()), [field.id]: event.target.value },
-                              }))
+                              isAddressType
+                                ? setNewAddress((prev) => ({
+                                    ...prev,
+                                    addressType: event.target.value,
+                                    residential: { ...(prev.residential ?? {}), addressType: event.target.value },
+                                  }))
+                                : setNewAddress((prev) => ({
+                                    ...prev,
+                                    residential: { ...(prev.residential ?? {}), [field.id]: event.target.value },
+                                  }))
                             }
                           />
-                        ))}
-                      </div>
+                        )
+                      })}
                     </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Residential Address</div>
-                        <div className={`mt-3 ${gridClass}`}>
-                          <FieldRow
-                            id="new-res-address1"
-                            label="Street Address 1"
-                            value={newAddress.residential?.address1 ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                residential: { ...(prev.residential ?? {}), address1: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-res-city"
-                            label="City"
-                            value={newAddress.residential?.city ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                residential: { ...(prev.residential ?? {}), city: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-res-state"
-                            label="State"
-                            value={newAddress.residential?.state ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                residential: { ...(prev.residential ?? {}), state: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-res-zip"
-                            label="Zip Code"
-                            value={newAddress.residential?.zip ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                residential: { ...(prev.residential ?? {}), zip: e.target.value },
-                              }))
-                            }
-                          />
+                    <div className={`mt-4 ${gridClass}`}>
+                      <label htmlFor="new-address-residents" className={labelClass}>
+                        Who lives in this address
+                      </label>
+                      {householdMemberOptions.length ? (
+                        <MultiSelectDropdown
+                          id="new-address-residents"
+                          options={householdMemberOptions}
+                          selectedIds={newAddressResidents}
+                          onToggle={toggleNewAddressResident}
+                          placeholder="Select household members"
+                        />
+                      ) : (
+                        <div className="text-xs text-slate-500">
+                          Add household members to select who lives here.
                         </div>
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Mailing Address</div>
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                mailing: { ...(prev.residential ?? {}) },
-                              }))
-                            }
-                          >
-                            Same as Residential Address
-                          </button>
-                        </div>
-                        <div className={`mt-3 ${gridClass}`}>
-                          <FieldRow
-                            id="new-mail-address1"
-                            label="Street Address 1"
-                            value={newAddress.mailing?.address1 ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                mailing: { ...(prev.mailing ?? {}), address1: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-mail-city"
-                            label="City"
-                            value={newAddress.mailing?.city ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                mailing: { ...(prev.mailing ?? {}), city: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-mail-state"
-                            label="State"
-                            value={newAddress.mailing?.state ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                mailing: { ...(prev.mailing ?? {}), state: e.target.value },
-                              }))
-                            }
-                          />
-                          <FieldRow
-                            id="new-mail-zip"
-                            label="Zip Code"
-                            value={newAddress.mailing?.zip ?? ''}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({
-                                ...prev,
-                                mailing: { ...(prev.mailing ?? {}), zip: e.target.value },
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-3">
@@ -1664,82 +1687,54 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeAddressLabel}</div>
                     </div>
-                    {activeAdditionalAddressIndex !== null && (
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Address Type</div>
-                        <div className={`mt-3 ${gridClass}`}>
+                    <div className={`mt-3 ${gridClass}`}>
+                      {orderedResidentialFields.map((field) => {
+                        const isAddressType = field.id === 'addressType'
+                        return (
                           <FieldRow
-                            id="active-address-type"
-                            label="Address Type"
-                            value={activeAddressEntry.addressType ?? ''}
-                            onChange={(event) =>
-                              updateAdditionalAddress(activeAdditionalAddressIndex, (prev) => ({
-                                ...prev,
-                                addressType: event.target.value,
-                              }))
-                            }
-                            options={addressTypeOptions}
-                            placeholder="Select address type"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Contact Information</div>
-                      <div className={`mt-3 ${gridClass}`}>
-                        {contactFields.map((field) => (
-                          <FieldRow
-                            key={`contact-0-${field.id}`}
-                            id={`contact-0-${field.id}`}
+                            key={`res-${field.id}`}
+                            id={`res-${field.id}`}
                             label={field.label}
                             type={field.type}
-                            value={activeAddressContact?.[field.id] ?? ''}
-                            onChange={(event) => setActiveAddressContactField(field.id, event.target.value)}
+                            options={isAddressType ? addressTypeOptions : undefined}
+                            placeholder={isAddressType ? 'Select address type' : undefined}
+                            value={isAddressType ? activeAddressType : activeAddressResidential?.[field.id] ?? ''}
+                            onChange={(event) =>
+                              isAddressType
+                                ? setActiveAddressType(event.target.value)
+                                : setActiveAddressResidentialField(field.id, event.target.value)
+                            }
                           />
+                        )
+                      })}
+                    </div>
+
+                    <div className={`mt-4 ${gridClass}`}>
+                      <label htmlFor="address-residents" className={labelClass}>
+                        Who lives in this address
+                      </label>
+                      {householdMemberOptions.length ? (
+                        <MultiSelectDropdown
+                          id="address-residents"
+                          options={householdMemberOptions}
+                          selectedIds={activeAddressResidents}
+                          onToggle={toggleActiveAddressResident}
+                          placeholder="Select household members"
+                        />
+                      ) : (
+                        <div className="text-xs text-slate-500">
+                          Add household members to select who lives here.
+                        </div>
+                      )}
+                    </div>
+
+                    {addressCustomFields.length > 0 && (
+                      <div className={`mt-3 ${gridClass}`}>
+                        {addressCustomFields.map((field) => (
+                          <FieldRow key={field.id} {...field} />
                         ))}
                       </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Residential Address</div>
-                        <div className={`mt-3 ${gridClass}`}>
-                          {residentialFields.map((field) => (
-                            <FieldRow
-                              key={`res-${field.id}`}
-                              id={`res-${field.id}`}
-                              label={field.label}
-                              type={field.type}
-                              value={activeAddressResidential?.[field.id] ?? ''}
-                              onChange={(e) => setActiveAddressResidentialField(field.id, e.target.value)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Mailing Address</div>
-                        <div className="mt-2">
-                          <button type="button" className={miniButton} onClick={handleSameAsResidential}>
-                            Same as Residential Address
-                          </button>
-                        </div>
-                        <div className={`mt-3 ${gridClass}`}>
-                          {mailingFields.map((field) => (
-                            <FieldRow
-                              key={`mail-${field.id}`}
-                              id={`mail-${field.id}`}
-                              label={field.label}
-                              type={field.type}
-                              value={activeAddressMailing?.[field.id] ?? ''}
-                              onChange={(e) => setActiveAddressMailingField(field.id, e.target.value)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {renderCustomFields('address')}
+                    )}
 
                     <div className="flex flex-wrap justify-end gap-3">
                       <button
@@ -1790,16 +1785,29 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
                       <div>
-                        <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
-                        {summaryValue(primaryContact.phone1)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
-                        {summaryValue(primaryContact.email1)}
+                        <span className="font-semibold text-slate-900">Address Type:</span>{' '}
+                        {summaryValue(residential.addressType)}
                       </div>
                       <div>
                         <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
                         {summaryValue(residential.address1)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
+                        {summaryValue(residential.address2)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">State:</span> {summaryValue(residential.state)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Zip Code:</span> {summaryValue(residential.zip)}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
+                        {formatResidentSummary(residential.residents || [])}
                       </div>
                     </div>
                   </div>
@@ -1834,23 +1842,33 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                        {address?.addressType ? (
-                          <div>
-                            <span className="font-semibold text-slate-900">Address Type:</span>{' '}
-                            {summaryValue(address.addressType)}
-                          </div>
-                        ) : null}
                         <div>
-                          <span className="font-semibold text-slate-900">Phone #1:</span>{' '}
-                          {summaryValue(address.contact?.phone1)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
-                          {summaryValue(address.contact?.email1)}
+                          <span className="font-semibold text-slate-900">Address Type:</span>{' '}
+                          {summaryValue(address.residential?.addressType || address.addressType)}
                         </div>
                         <div>
                           <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
                           {summaryValue(address.residential?.address1)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
+                          {summaryValue(address.residential?.address2)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">City:</span>{' '}
+                          {summaryValue(address.residential?.city)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">State:</span>{' '}
+                          {summaryValue(address.residential?.state)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Zip Code:</span>{' '}
+                          {summaryValue(address.residential?.zip)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
+                          {formatResidentSummary(address.residential?.residents || [])}
                         </div>
                       </div>
                     </div>
@@ -2156,19 +2174,16 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                   </button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                  <div>
-                    <span className="font-semibold text-slate-900">Full Name:</span> {summaryValue(primaryFullName)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Birthday:</span> {summaryValue(namedInsured.dob)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Sex:</span> {summaryValue(namedInsured.gender)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">License Number:</span>{' '}
-                    {summaryValue(namedInsured['license-number'])}
-                  </div>
+                  {primarySummaryRows.length ? (
+                    primarySummaryRows.map((item, index) => (
+                      <div key={`summary-primary-${index}`}>
+                        <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                        {summaryValue(item.value)}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500">No household details added.</div>
+                  )}
                 </div>
                 {additionalHouseholds.length ? (
                   <div className="mt-3 text-sm text-slate-700">
@@ -2192,15 +2207,29 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
                   <div>
-                    <span className="font-semibold text-slate-900">Phone #1:</span> {summaryValue(primaryContact.phone1)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
-                    {summaryValue(primaryContact.email1)}
+                    <span className="font-semibold text-slate-900">Address Type:</span>{' '}
+                    {summaryValue(residential.addressType)}
                   </div>
                   <div>
                     <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
                     {summaryValue(residential.address1)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
+                    {summaryValue(residential.address2)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">State:</span> {summaryValue(residential.state)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Zip Code:</span> {summaryValue(residential.zip)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
+                    {formatResidentSummary(residential.residents || [])}
                   </div>
                 </div>
                 {additionalAddresses.length ? (

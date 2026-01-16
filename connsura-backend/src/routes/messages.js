@@ -23,9 +23,32 @@ const ensureConversation = (agentId, customerId) => {
   return messageStore.conversations.get(key)
 }
 
-const deleteConversation = (agentId, customerId) => {
-  const key = conversationKey(agentId, customerId)
-  messageStore.conversations.delete(key)
+const markThreadDeletedForCustomer = (agentId, customerId) => {
+  const conversation = getConversation(agentId, customerId)
+  if (!conversation) return false
+  const now = new Date()
+  let changed = false
+  conversation.forEach((message) => {
+    if (!message.deletedForCustomerAt) {
+      message.deletedForCustomerAt = now
+      changed = true
+    }
+  })
+  return changed
+}
+
+const markThreadDeletedForAgent = (agentId, customerId) => {
+  const conversation = getConversation(agentId, customerId)
+  if (!conversation) return false
+  const now = new Date()
+  let changed = false
+  conversation.forEach((message) => {
+    if (!message.deletedForAgentAt) {
+      message.deletedForAgentAt = now
+      changed = true
+    }
+  })
+  return changed
 }
 
 const addMessage = (agentId, customerId, body, senderRole) => {
@@ -39,24 +62,42 @@ const addMessage = (agentId, customerId, body, senderRole) => {
     createdAt: now,
     readByAgentAt: senderRole === 'AGENT' ? now : null,
     readByCustomerAt: senderRole === 'CUSTOMER' ? now : null,
+    deletedForAgentAt: null,
+    deletedForCustomerAt: null,
   }
   const conversation = ensureConversation(agentId, customerId)
   conversation.push(message)
   return message
 }
 
+const isMessageVisibleForAgent = (message) => !message.deletedForAgentAt
+
+const isMessageVisibleForCustomer = (message) => !message.deletedForCustomerAt
+
 const countUnreadForAgent = (conversation) =>
-  conversation.filter((message) => message.senderRole === 'CUSTOMER' && !message.readByAgentAt).length
+  conversation.filter(
+    (message) => message.senderRole === 'CUSTOMER' && !message.readByAgentAt && isMessageVisibleForAgent(message)
+  ).length
 
 const countUnreadForCustomer = (conversation) =>
-  conversation.filter((message) => message.senderRole === 'AGENT' && !message.readByCustomerAt).length
+  conversation.filter(
+    (message) => message.senderRole === 'AGENT' && !message.readByCustomerAt && isMessageVisibleForCustomer(message)
+  ).length
+
+const getLastVisibleMessage = (conversation, isVisible) => {
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    const message = conversation[index]
+    if (isVisible(message)) return message
+  }
+  return null
+}
 
 const markThreadReadForAgent = (agentId, customerId) => {
   const conversation = getConversation(agentId, customerId)
   if (!conversation) return
   const now = new Date()
   conversation.forEach((message) => {
-    if (message.senderRole === 'CUSTOMER' && !message.readByAgentAt) {
+    if (message.senderRole === 'CUSTOMER' && !message.readByAgentAt && isMessageVisibleForAgent(message)) {
       message.readByAgentAt = now
     }
   })
@@ -67,7 +108,7 @@ const markThreadReadForCustomer = (agentId, customerId) => {
   if (!conversation) return
   const now = new Date()
   conversation.forEach((message) => {
-    if (message.senderRole === 'AGENT' && !message.readByCustomerAt) {
+    if (message.senderRole === 'AGENT' && !message.readByCustomerAt && isMessageVisibleForCustomer(message)) {
       message.readByCustomerAt = now
     }
   })
@@ -79,7 +120,8 @@ const listThreadsForAgent = (agentId) => {
     if (!messages.length) return
     const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
     if (keyAgentId !== agentId) return
-    const lastMessage = messages[messages.length - 1]
+    const lastMessage = getLastVisibleMessage(messages, isMessageVisibleForAgent)
+    if (!lastMessage) return
     threads.push({
       agentId: keyAgentId,
       customerId: keyCustomerId,
@@ -96,7 +138,8 @@ const listThreadsForCustomer = (customerId) => {
     if (!messages.length) return
     const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
     if (keyCustomerId !== customerId) return
-    const lastMessage = messages[messages.length - 1]
+    const lastMessage = getLastVisibleMessage(messages, isMessageVisibleForCustomer)
+    if (!lastMessage) return
     threads.push({
       agentId: keyAgentId,
       customerId: keyCustomerId,
@@ -112,15 +155,16 @@ const listMessagesForAgent = (agentId) => {
   messageStore.conversations.forEach((conversation, key) => {
     const [keyAgentId] = key.split(':').map(Number)
     if (keyAgentId !== agentId) return
-    messages.push(...conversation)
+    messages.push(...conversation.filter(isMessageVisibleForAgent))
   })
   return messages.sort((a, b) => b.createdAt - a.createdAt)
 }
 
-const listMessagesForThread = (agentId, customerId) => {
+const listMessagesForThread = (agentId, customerId, isVisible) => {
   const conversation = getConversation(agentId, customerId)
   if (!conversation) return []
-  return [...conversation].sort((a, b) => a.createdAt - b.createdAt)
+  const filtered = isVisible ? conversation.filter(isVisible) : [...conversation]
+  return filtered.sort((a, b) => a.createdAt - b.createdAt)
 }
 
 const hydrateMessages = async (messages) => {
@@ -290,7 +334,7 @@ router.get('/agent/:id/thread/:customerId', authGuard, async (req, res) => {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
     markThreadReadForAgent(agentId, customerId)
-    const messages = listMessagesForThread(agentId, customerId)
+    const messages = listMessagesForThread(agentId, customerId, isMessageVisibleForAgent)
     const hydrated = await hydrateMessages(messages)
     res.json({ messages: hydrated.map(formatMessage) })
   } catch (err) {
@@ -356,12 +400,33 @@ router.get('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
     markThreadReadForCustomer(agentId, customerId)
-    const messages = listMessagesForThread(agentId, customerId)
+    const messages = listMessagesForThread(agentId, customerId, isMessageVisibleForCustomer)
     const hydrated = await hydrateMessages(messages)
     res.json({ messages: hydrated.map(formatMessage) })
   } catch (err) {
     console.error('message thread error', err)
     res.status(500).json({ error: 'Failed to load messages' })
+  }
+})
+
+router.delete('/agent/:id/thread/:customerId', authGuard, async (req, res) => {
+  const agentId = Number(req.params.id)
+  const customerId = Number(req.params.customerId)
+  if (!agentId || !customerId) return res.status(400).json({ error: 'Agent and customer required' })
+  if (req.user.role !== 'AGENT') {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  try {
+    const agent = await prisma.agent.findUnique({ where: { userId: req.user.id } })
+    if (!agent) return res.status(404).json({ error: 'Agent not found' })
+    if (agent.id !== agentId) {
+      return res.status(403).json({ error: 'Cannot access messages for this agent' })
+    }
+    markThreadDeletedForAgent(agentId, customerId)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('message thread delete error', err)
+    res.status(500).json({ error: 'Failed to delete messages' })
   }
 })
 
@@ -378,7 +443,7 @@ router.delete('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
     if (customer.id !== customerId) {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
-    deleteConversation(agentId, customerId)
+    markThreadDeletedForCustomer(agentId, customerId)
     res.json({ ok: true })
   } catch (err) {
     console.error('message thread delete error', err)
