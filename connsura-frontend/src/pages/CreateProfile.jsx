@@ -7,6 +7,8 @@ import { getStoredToken } from '../utils/authStorage'
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
   'h-7 w-40 justify-self-start border border-slate-700/60 bg-white px-2 text-sm text-slate-900 focus:border-[#006aff] focus:outline-none focus:ring-1 focus:ring-[#006aff]/20'
+const additionalQuestionInputClass =
+  'justify-self-start border-0 bg-transparent px-0 text-sm text-[#006aff] placeholder:text-[#7fb2ff] focus:outline-none focus:ring-0'
 const gridClass = 'grid grid-cols-[150px_1fr] items-center gap-x-4 gap-y-2'
 const sectionTitle = 'text-sm font-semibold text-slate-900'
 const linkButton = 'text-sm font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline'
@@ -365,11 +367,21 @@ function MultiSelectDropdown({ id, options, selectedIds, onToggle, placeholder }
   )
 }
 
-function QuestionAutocomplete({ value, onChange, placeholder, productId, resetKey }) {
+function QuestionAutocomplete({
+  value,
+  onChange,
+  placeholder,
+  productId,
+  resetKey,
+  inputClassName,
+  ariaLabel,
+  multiline = false,
+}) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
   const [allowSuggestions, setAllowSuggestions] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
+  const inputRef = useRef(null)
   const lastUserValueRef = useRef('')
   const lastResetKeyRef = useRef(resetKey)
 
@@ -430,6 +442,14 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId, resetKe
     }
   }, [value, allowSuggestions])
 
+  useEffect(() => {
+    if (!multiline) return
+    const input = inputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${input.scrollHeight}px`
+  }, [value, multiline])
+
   const handleSelect = (text) => {
     lastUserValueRef.current = text
     setAllowSuggestions(false)
@@ -444,11 +464,16 @@ function QuestionAutocomplete({ value, onChange, placeholder, productId, resetKe
     onChange(nextValue)
   }
 
+  const InputTag = multiline ? 'textarea' : 'input'
+
   return (
     <div className="relative">
-      <input
-        className={`${inputClass} w-full`}
+      <InputTag
+        ref={inputRef}
+        rows={multiline ? 2 : undefined}
+        className={`${inputClassName || inputClass} w-full${multiline ? ' h-auto resize-none leading-5 py-1 overflow-hidden' : ''}`}
         placeholder={placeholder}
+        aria-label={ariaLabel || placeholder}
         value={value}
         onChange={handleChange}
         onFocus={() => {
@@ -1980,36 +2005,29 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       {(additionalFormMode === 'existing' && additionalFormProductId) ||
                       (additionalFormMode === 'custom' && additionalFormName.trim()) ? (
                         <>
-                          {additionalQuestions.map((question, index) => (
-                            <div
-                              key={`additional-question-${index}`}
-                              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
-                            >
-                              <div className="space-y-1">
-                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                  Question
-                                </div>
+                          <div className="space-y-2">
+                            {additionalQuestions.map((question, index) => (
+                              <div key={`additional-question-${index}`} className={gridClass}>
                                 <QuestionAutocomplete
                                   value={question.question}
                                   placeholder="Question"
+                                  ariaLabel="Question"
                                   onChange={(value) => updateAdditionalQuestion(index, 'question', value)}
                                   productId={additionalFormProductId}
                                   resetKey={`${additionalFormMode}-${additionalFormProductId || 'custom'}-${activeAdditionalFormIndex ?? 'new'}`}
+                                  inputClassName={additionalQuestionInputClass}
+                                  multiline
                                 />
-                              </div>
-                              <div className="space-y-1">
-                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                  Answer
-                                </div>
                                 <input
-                                  className={`${inputClass} w-full`}
+                                  className={inputClass}
                                   placeholder="Answer"
+                                  aria-label="Answer"
                                   value={question.input}
                                   onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
                                 />
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                           <div className="flex flex-wrap gap-3">
                             <button type="button" className={miniButton} onClick={addAdditionalQuestion}>
                               Add question
@@ -2125,13 +2143,13 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         </div>
                         <div className="mt-3 space-y-3 text-sm text-slate-700">
                           {(form.questions ?? []).length > 0 ? (
-                            <div className="flex flex-nowrap gap-6 overflow-x-auto pb-1">
+                            <div className="flex flex-wrap gap-4">
                               {(form.questions ?? []).slice(0, 3).map((question, questionIndex) => (
                                 <div
                                   key={`additional-summary-${index}-${questionIndex}`}
-                                  className="flex items-center gap-3 text-sm text-slate-700 whitespace-nowrap"
+                                  className="flex flex-wrap gap-2 text-sm text-slate-700"
                                 >
-                                  <span className="font-semibold text-slate-900">
+                                  <span className="font-semibold text-[#006aff] break-words">
                                     {summaryValue(question.question)}:
                                   </span>
                                   <span>{summaryValue(question.input)}</span>
