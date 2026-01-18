@@ -8,7 +8,7 @@ import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 
-const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -523,7 +523,7 @@ export default function AgentDashboard() {
             <div>
               <h1 className="text-2xl font-semibold">Connsura Agent Dashboard</h1>
               <p className="text-slate-500">
-                Welcome back{agent?.name ? `, ${agent.name.split(' ')[0]}` : ''}. Track your leads and appointments.
+                Welcome back{agent?.name ? `, ${agent.name.split(' ')[0]}` : ''}. Track your leads and messages.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -553,7 +553,7 @@ export default function AgentDashboard() {
               <div className="surface p-5">
                 <h2 className="text-xl font-semibold mb-2">Overview</h2>
                 <p className="text-slate-600">
-                  Track your leads, profile status, and upcoming appointments.
+                  Track your leads, profile status, and messages.
                 </p>
                 {totalUnread > 0 && (
                   <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">

@@ -61,42 +61,6 @@ const DEFAULT_CREATE_PROFILE_SCHEMA = {
       ],
       customFields: [],
     },
-    vehicle: {
-      label: 'Vehicle Information',
-      groupSettings: {
-        fields: { label: 'Vehicle fields', visible: true },
-        customFields: { label: 'Custom fields', visible: true },
-      },
-      fields: [
-        { id: 'year', label: 'Year', type: 'number', visible: true },
-        { id: 'make', label: 'Make', type: 'text', visible: true },
-        { id: 'model', label: 'Model', type: 'text', visible: true },
-        { id: 'vin', label: 'VIN', type: 'text', visible: true },
-        { id: 'primaryUse', label: 'Primary Use', type: 'text', visible: true },
-      ],
-      customFields: [],
-    },
-    business: {
-      label: 'Business Information',
-      groupSettings: {
-        fields: { label: 'Business fields', visible: true },
-        customFields: { label: 'Custom fields', visible: true },
-      },
-      fields: [
-        { id: 'name', label: 'Business Name', type: 'text', visible: true },
-        { id: 'type', label: 'Business Type', type: 'select', visible: true },
-        { id: 'industry', label: 'Industry', type: 'text', visible: true },
-        { id: 'years', label: 'Years in Business', type: 'text', visible: true },
-        { id: 'employees', label: 'Number of Employees', type: 'text', visible: true },
-        { id: 'phone', label: 'Business Phone', type: 'tel', visible: true },
-        { id: 'email', label: 'Business Email', type: 'email', visible: true },
-        { id: 'address1', label: 'Street Address 1', type: 'text', visible: true },
-        { id: 'city', label: 'City', type: 'text', visible: true },
-        { id: 'state', label: 'State', type: 'select', visible: true },
-        { id: 'zip', label: 'Zip Code', type: 'text', visible: true },
-      ],
-      customFields: [],
-    },
     additional: {
       label: 'Additional Information',
       groupSettings: {

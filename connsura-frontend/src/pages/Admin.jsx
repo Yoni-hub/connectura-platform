@@ -4,6 +4,17 @@ import { API_URL } from '../services/api'
 import { adminApi, clearAdminToken, setAdminToken } from '../services/adminApi'
 import { renderSiteContent } from '../utils/siteContent'
 
+const CREATE_PROFILE_SECTION_KEYS = ['household', 'address', 'additional']
+
+const filterCreateProfileSchema = (schema) => {
+  if (!schema?.sections) return schema
+  const nextSections = CREATE_PROFILE_SECTION_KEYS.reduce((acc, key) => {
+    if (schema.sections[key]) acc[key] = schema.sections[key]
+    return acc
+  }, {})
+  return { ...schema, sections: nextSections }
+}
+
 export default function Admin() {
   const [admin, setAdmin] = useState(null)
   const [authChecking, setAuthChecking] = useState(true)
@@ -517,9 +528,10 @@ export default function Admin() {
     try {
       const res = await adminApi.get('/admin/form-schema/create-profile')
       const nextSchema = res.data?.schema?.schema || null
-      setFormSchema(nextSchema)
-      if (nextSchema?.sections && !nextSchema.sections?.[activeFormSection]) {
-        const keys = Object.keys(nextSchema.sections)
+      const normalizedSchema = filterCreateProfileSchema(nextSchema)
+      setFormSchema(normalizedSchema)
+      if (normalizedSchema?.sections && !normalizedSchema.sections?.[activeFormSection]) {
+        const keys = Object.keys(normalizedSchema.sections)
         setActiveFormSection(keys[0] || 'household')
       }
     } catch (err) {
@@ -1041,44 +1053,34 @@ export default function Admin() {
 
   const renderFormsManager = () => {
     const schema = formSchema
-    const sections = [
-      { key: 'household', label: 'Household', groups: [{ key: 'fields', label: 'Household fields' }] },
-      {
-        key: 'address',
-        label: 'Address',
-        groups: [
-          { key: 'contactFields', label: 'Contact fields' },
-          { key: 'residentialFields', label: 'Residential address fields' },
-          { key: 'mailingFields', label: 'Mailing address fields' },
-        ],
-      },
-      { key: 'vehicle', label: 'Vehicle', groups: [{ key: 'fields', label: 'Vehicle fields' }] },
-      { key: 'business', label: 'Business', groups: [{ key: 'fields', label: 'Business fields' }] },
-      { key: 'additional', label: 'Additional', groups: [] },
-    ]
-    const groupDefaults = {
-      household: {
-        fields: { label: 'Household fields', visible: true },
+      const sections = [
+        { key: 'household', label: 'Household', groups: [{ key: 'fields', label: 'Household fields' }] },
+        {
+          key: 'address',
+          label: 'Address',
+          groups: [
+            { key: 'contactFields', label: 'Contact fields' },
+            { key: 'residentialFields', label: 'Residential address fields' },
+            { key: 'mailingFields', label: 'Mailing address fields' },
+          ],
+        },
+        { key: 'additional', label: 'Additional', groups: [] },
+      ]
+      const groupDefaults = {
+        household: {
+          fields: { label: 'Household fields', visible: true },
         customFields: { label: 'Custom fields', visible: true },
       },
       address: {
         contactFields: { label: 'Contact fields', visible: true },
         residentialFields: { label: 'Residential address fields', visible: true },
-        mailingFields: { label: 'Mailing address fields', visible: true },
-        customFields: { label: 'Custom fields', visible: true },
-      },
-      vehicle: {
-        fields: { label: 'Vehicle fields', visible: true },
-        customFields: { label: 'Custom fields', visible: true },
-      },
-      business: {
-        fields: { label: 'Business fields', visible: true },
-        customFields: { label: 'Custom fields', visible: true },
-      },
-      additional: {
-        customFields: { label: 'Custom fields', visible: true },
-      },
-    }
+          mailingFields: { label: 'Mailing address fields', visible: true },
+          customFields: { label: 'Custom fields', visible: true },
+        },
+        additional: {
+          customFields: { label: 'Custom fields', visible: true },
+        },
+      }
     const activeSection = sections.find((section) => section.key === activeFormSection) || sections[0]
     const sectionData = schema?.sections?.[activeSection.key]
     const fieldTypes = ['text', 'number', 'date', 'email', 'tel']

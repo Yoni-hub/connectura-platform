@@ -13,7 +13,7 @@ import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Appointments', 'Settings']
+const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -800,7 +800,7 @@ export default function ClientDashboard() {
           {!loading && activeTab === 'Overview' && (
             <div className="surface p-5">
               <h2 className="text-xl font-semibold mb-2">Overview</h2>
-              <p className="text-slate-600">Stay on top of your insurance profile and upcoming appointments.</p>
+              <p className="text-slate-600">Stay on top of your insurance profile and forms.</p>
               {totalUnread > 0 && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <div className="text-sm font-semibold text-rose-800">
@@ -1098,13 +1098,6 @@ export default function ClientDashboard() {
                   )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {!loading && activeTab === 'Appointments' && (
-            <div className="surface p-5">
-              <h2 className="text-xl font-semibold mb-2">Appointments</h2>
-              <p className="text-slate-600">Track your upcoming calls and meetings.</p>
             </div>
           )}
 
