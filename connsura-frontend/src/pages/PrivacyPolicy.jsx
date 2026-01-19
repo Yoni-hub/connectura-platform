@@ -14,6 +14,13 @@ export default function PrivacyPolicy() {
     <main className="page-shell py-10 space-y-6">
       <div className="surface p-6 space-y-2">
         <h1 className="text-3xl font-bold text-slate-900">{content?.title || 'Privacy Policy'}</h1>
+        <p className="text-sm text-slate-600">
+          Privacy questions? Email{' '}
+          <a className="text-slate-900 underline" href="mailto:privacy@connsura.com">
+            privacy@connsura.com
+          </a>
+          .
+        </p>
       </div>
 
       <div className="surface p-6">

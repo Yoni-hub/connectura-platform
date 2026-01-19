@@ -5,7 +5,7 @@ import { useSiteContent } from '../hooks/useSiteContent'
 import { renderSiteContent } from '../utils/siteContent'
 
 export default function Contact() {
-  const [form, setForm] = useState({ email: '', message: '' })
+  const [form, setForm] = useState({ email: '', topic: 'support', message: '' })
   const [sending, setSending] = useState(false)
   const { content } = useSiteContent('contact_intro', {
     title: 'Contact Intro',
@@ -21,7 +21,7 @@ export default function Contact() {
     try {
       await api.post('/contact', form)
       toast.success('Message sent')
-      setForm({ email: '', message: '' })
+      setForm({ email: '', topic: 'support', message: '' })
     } catch {
       toast.error('Failed to send message')
     } finally {
@@ -42,6 +42,23 @@ export default function Contact() {
           dangerouslySetInnerHTML={{ __html: introHtml }}
         />
         <form className="space-y-4" onSubmit={handleSubmit}>
+          <label className="block text-sm">
+            Topic
+            <select
+              required
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+              value={form.topic}
+              onChange={(e) => setForm({ ...form, topic: e.target.value })}
+            >
+              <option value="support">Support</option>
+              <option value="agents">Agents</option>
+              <option value="billing">Billing</option>
+              <option value="legal">Legal</option>
+              <option value="privacy">Privacy</option>
+              <option value="security">Security</option>
+              <option value="info">Info</option>
+            </select>
+          </label>
           <label className="block text-sm">
             Email
             <input
