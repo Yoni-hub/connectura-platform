@@ -4,9 +4,11 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
+    "predev": "prisma generate",
     "start": "node src/server.js",
     "migrate": "prisma db push && prisma generate",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
