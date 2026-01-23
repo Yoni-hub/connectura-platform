@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
@@ -19,11 +19,26 @@ export default function AgentResults() {
   const [messageAgent, setMessageAgent] = useState(null)
   const [rateOpen, setRateOpen] = useState(false)
   const [rateAgent, setRateAgent] = useState(null)
+  const viewLoggedRef = useRef(false)
 
   useEffect(() => {
     const query = Object.fromEntries(params.entries())
     if (Object.keys(query).length) fetchAgents(query)
   }, [params])
+
+  useEffect(() => {
+    if (!user?.customerId) return
+    if (viewLoggedRef.current) return
+    viewLoggedRef.current = true
+    const logView = async () => {
+      try {
+        await api.post(`/customers/${user.customerId}/agent-search/view`)
+      } catch (err) {
+        console.warn('Unable to log agent search view', err)
+      }
+    }
+    logView()
+  }, [user?.customerId])
 
   const handleMessage = (agent) => {
     if (!user) {

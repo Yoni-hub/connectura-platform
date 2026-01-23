@@ -5,6 +5,7 @@ const multer = require('multer')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
+const { logClientAudit } = require('../utils/auditLog')
 
 const router = express.Router()
 
@@ -181,6 +182,155 @@ router.patch('/:id/profile-data', authGuard, async (req, res) => {
     include: { drivers: true, vehicles: true },
   })
   res.json({ profile: formatCustomerProfile(updated) })
+})
+
+router.post('/:id/forms/start', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { drivers: true, vehicles: true },
+  })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+
+  const currentProfileData = parseJson(customer.profileData, {})
+  const updatedProfileData = {
+    ...currentProfileData,
+    profile_status: 'draft',
+    current_section: 'Household Information',
+    forms_started: true,
+  }
+
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: { profileData: JSON.stringify(updatedProfileData) },
+    include: { drivers: true, vehicles: true },
+  })
+
+  await logClientAudit(customerId, 'CLIENT_ONBOARDING_CTA_CLICKED')
+  await logClientAudit(customerId, 'CLIENT_FORMS_FLOW_STARTED', { current_section: 'Household Information' })
+
+  res.json({ profile: formatCustomerProfile(updated) })
+})
+
+router.post('/:id/forms/section-save', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { drivers: true, vehicles: true },
+  })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+
+  const section = req.body?.section || ''
+  const nextSection = req.body?.nextSection || ''
+
+  const logClick = req.body?.logClick !== false
+  if (logClick) {
+    await logClientAudit(customerId, 'CLIENT_FORMS_SAVE_CONTINUE_CLICKED', {
+      section,
+    })
+  }
+
+  const currentProfileData = parseJson(customer.profileData, {})
+  const incomingProfileData = req.body?.profileData || {}
+  const requestedStatus = req.body?.profileStatus || incomingProfileData.profile_status
+  const nextProfileStatus = requestedStatus || currentProfileData.profile_status || 'draft'
+  const updatedProfileData = {
+    ...currentProfileData,
+    ...incomingProfileData,
+    profile_status: nextProfileStatus,
+    current_section: nextSection || currentProfileData.current_section,
+    forms_started: true,
+  }
+
+  try {
+    const updated = await prisma.customer.update({
+      where: { id: customerId },
+      data: { profileData: JSON.stringify(updatedProfileData) },
+      include: { drivers: true, vehicles: true },
+    })
+    await logClientAudit(customerId, 'CLIENT_FORM_SECTION_SAVED', {
+      section,
+      result: 'SUCCESS',
+    })
+    if (nextSection === 'Summary') {
+      await logClientAudit(customerId, 'CLIENT_PROFILE_SUMMARY_VIEWED')
+      if (currentProfileData.profile_status !== 'completed' && nextProfileStatus === 'completed') {
+        await logClientAudit(customerId, 'CLIENT_PROFILE_COMPLETED')
+      }
+    }
+    return res.json({ profile: formatCustomerProfile(updated) })
+  } catch (error) {
+    await logClientAudit(customerId, 'CLIENT_FORM_SECTION_SAVED', {
+      section,
+      result: 'FAILED',
+    })
+    return res.status(500).json({ error: 'Failed to save profile section' })
+  }
+})
+
+router.post('/:id/agent-search/click', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot access this customer' })
+  }
+  await logClientAudit(customerId, 'CLIENT_TALK_TO_AGENT_CLICKED')
+  res.json({ ok: true })
+})
+
+router.post('/:id/agent-search/view', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { drivers: true, vehicles: true },
+  })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot access this customer' })
+  }
+  const currentProfileData = parseJson(customer.profileData, {})
+  const updatedProfileData = {
+    ...currentProfileData,
+    agent_search_viewed: true,
+  }
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: { profileData: JSON.stringify(updatedProfileData) },
+    include: { drivers: true, vehicles: true },
+  })
+  await logClientAudit(customerId, 'CLIENT_AGENT_SEARCH_PAGE_VIEWED')
+  res.json({ profile: formatCustomerProfile(updated) })
+})
+
+router.post('/:id/forms/additional/remove', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot access this customer' })
+  }
+  const formName = req.body?.formName || ''
+  await logClientAudit(customerId, 'CLIENT_ADDITIONAL_FORM_REMOVED', {
+    formName,
+  })
+  res.json({ ok: true })
 })
 
 router.get('/:id/saved-agents', authGuard, async (req, res) => {

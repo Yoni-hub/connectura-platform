@@ -86,6 +86,9 @@ export default function ClientDashboard() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareSnapshot, setShareSnapshot] = useState(null)
   const [formsDraft, setFormsDraft] = useState(null)
+  const [formsStarting, setFormsStarting] = useState(false)
+  const [formsStartSection, setFormsStartSection] = useState(null)
+  const [formsStartKey, setFormsStartKey] = useState(0)
   const [, setFormsSaving] = useState(false)
   const [pendingShares, setPendingShares] = useState([])
   const [activeShares, setActiveShares] = useState([])
@@ -116,10 +119,8 @@ export default function ClientDashboard() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
-  const [verificationCode, setVerificationCode] = useState('')
   const [verificationSent, setVerificationSent] = useState(false)
   const [verificationSending, setVerificationSending] = useState(false)
-  const [verificationVerifying, setVerificationVerifying] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
@@ -440,6 +441,8 @@ export default function ClientDashboard() {
   const isEmailVerified = user?.emailVerified === true
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
+  const formsStarted = Boolean(client?.profileData?.forms_started)
+  const formsCompleted = client?.profileData?.profile_status === 'completed'
   const displayName = client?.name || user?.name || user?.email || 'client'
   const savedAgentIds = useMemo(() => new Set(savedAgents.map((agent) => agent.id)), [savedAgents])
   const totalUnread = useMemo(
@@ -541,7 +544,7 @@ export default function ClientDashboard() {
       }
       const delivery = res.data?.delivery
       setVerificationSent(true)
-      toast.success(delivery === 'log' ? 'Verification code generated. Check the server logs.' : 'Verification code sent.')
+      toast.success(delivery === 'log' ? 'Verification email generated. Check the server logs.' : 'Verification email sent.')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not send verification code')
     } finally {
@@ -549,27 +552,85 @@ export default function ClientDashboard() {
     }
   }
 
-  const confirmEmailVerification = async () => {
-    const code = verificationCode.trim()
-    if (!code) {
-      toast.error('Enter the verification code.')
+  const openFormsFlow = () => {
+    setFormsStartSection('household')
+    setFormsStartKey((prev) => prev + 1)
+    nav('/client/dashboard?tab=forms', { replace: false })
+  }
+
+  const handleStartForms = async () => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
       return
     }
-    setVerificationVerifying(true)
+    if (formsStarting) return
+    setFormsStarting(true)
     try {
-      const res = await api.post('/auth/email-otp/confirm', { code })
-      if (res.data?.user) {
-        setUser(res.data.user)
-      } else {
-        setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+      const res = await api.post(`/customers/${user.customerId}/forms/start`)
+      if (res.data?.profile) {
+        setClient(res.data.profile)
       }
-      setVerificationSent(false)
-      setVerificationCode('')
-      toast.success('Email verified')
+      setFormsStartSection('household')
+      setFormsStartKey((prev) => prev + 1)
+      setTimeout(() => {
+        nav('/client/dashboard?tab=forms', { replace: false })
+        setFormsStarting(false)
+      }, 200)
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Verification failed')
-    } finally {
-      setVerificationVerifying(false)
+      toast.error(err.response?.data?.error || 'Unable to start forms')
+      setFormsStarting(false)
+    }
+  }
+
+  const handleContinueForms = () => {
+    openFormsFlow()
+  }
+
+  const handleCancelForms = () => {
+    const confirmed = window.confirm('Return to Overview? Your progress is saved.')
+    if (!confirmed) return
+    updateTab('Overview')
+  }
+
+  const handleTalkToAgent = async () => {
+    if (user?.customerId) {
+      try {
+        await api.post(`/customers/${user.customerId}/agent-search/click`)
+      } catch (err) {
+        console.warn('Unable to log agent search click', err)
+      }
+    }
+    nav('/agents')
+  }
+
+  const handleSectionSave = async ({ section, nextSection, forms, profileStatus, logClick }) => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return { success: false }
+    }
+    try {
+      const res = await api.post(`/customers/${user.customerId}/forms/section-save`, {
+        section,
+        nextSection,
+        profileStatus,
+        logClick,
+        profileData: {
+          profile_status: profileStatus || 'draft',
+          current_section: nextSection,
+          forms_started: true,
+          forms,
+        },
+      })
+      if (res.data?.profile) {
+        setClient(res.data.profile)
+      }
+      if (forms) {
+        setFormsDraft(forms)
+      }
+      return { success: true }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to save forms section')
+      return { success: false }
     }
   }
 
@@ -676,7 +737,11 @@ export default function ClientDashboard() {
   const resolveShareRecipient = (share) => share?.agent?.name || share?.recipientName || 'Shared link'
 
   return (
-    <main className="page-shell py-8 pb-28 lg:pb-8">
+    <main
+      className={`page-shell py-8 pb-28 lg:pb-8 transition-opacity duration-200 ${
+        formsStarting ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
+    >
       <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
         <aside className="surface fixed bottom-0 left-0 right-0 z-30 rounded-none border-t border-slate-200 border-x-0 border-b-0 bg-white/95 backdrop-blur px-3 py-2 lg:static lg:rounded-2xl lg:border lg:border-transparent lg:bg-white/80 lg:backdrop-blur-0 lg:p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 hidden lg:block">Connsura</div>
@@ -744,22 +809,8 @@ export default function ClientDashboard() {
                 </div>
               )}
               {needsEmailVerification && verificationSent && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                  <span>Enter verification code:</span>
-                  <input
-                    className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                    value={verificationCode}
-                    onChange={(event) => setVerificationCode(event.target.value)}
-                    inputMode="numeric"
-                  />
-                  <button
-                    type="button"
-                    className="pill-btn-primary px-4 py-1.5 text-sm"
-                    onClick={confirmEmailVerification}
-                    disabled={verificationVerifying}
-                  >
-                    {verificationVerifying ? 'Verifying...' : 'Confirm'}
-                  </button>
+                <div className="mt-2 text-sm text-slate-600">
+                  Check your email to finish verification.
                 </div>
               )}
             </div>
@@ -813,6 +864,53 @@ export default function ClientDashboard() {
                   </button>
                 </div>
               )}
+              {needsEmailVerification && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="text-sm font-semibold text-amber-900">Verify your email</div>
+                  <p className="mt-1 text-sm text-amber-700">
+                    Confirm your email to secure your account and share your profile.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={requestEmailVerification}
+                    disabled={verificationSending}
+                  >
+                    {verificationSent ? 'Resend code' : 'Verify email'}
+                  </button>
+                </div>
+              )}
+              {!formsStarted && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-900">Set up your profile</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Start your forms to build your insurance passport.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={handleStartForms}
+                    disabled={formsStarting}
+                  >
+                    Set up now
+                  </button>
+                </div>
+              )}
+              {formsStarted && !formsCompleted && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-900">Continue your forms</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Pick up where you left off in your insurance passport.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={handleContinueForms}
+                  >
+                    Continue
+                  </button>
+                </div>
+              )}
               {needsAuthenticator && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-sm font-semibold text-amber-900">
@@ -826,10 +924,23 @@ export default function ClientDashboard() {
                     className="pill-btn-primary mt-3 px-4"
                     onClick={() => updateTab('Settings')}
                   >
-                    Set up now
+                    Set up authenticator
                   </button>
                 </div>
               )}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-semibold text-slate-900">Need help finishing your profile?</div>
+                <p className="mt-1 text-sm text-slate-600">
+                  Talk to an agent for guidance and next steps.
+                </p>
+                <button
+                  type="button"
+                  className="pill-btn-primary mt-3 px-4"
+                  onClick={handleTalkToAgent}
+                >
+                  Talk to an Agent
+                </button>
+              </div>
             </div>
           )}
 
@@ -888,11 +999,30 @@ export default function ClientDashboard() {
           )}
 
           {!loading && activeTab === 'Forms' && (
-            <CreateProfile
-              onShareSnapshotChange={setShareSnapshot}
-              onFormDataChange={setFormsDraft}
-              initialData={client?.profileData?.forms || null}
-            />
+            <div className="space-y-4">
+              <div className="surface p-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold">Forms</h2>
+                  <p className="text-sm text-slate-500">Complete your insurance profile.</p>
+                </div>
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-4"
+                  onClick={handleCancelForms}
+                >
+                  Cancel
+                </button>
+              </div>
+              <CreateProfile
+                onShareSnapshotChange={setShareSnapshot}
+                onFormDataChange={setFormsDraft}
+                initialData={client?.profileData?.forms || null}
+                startSection={formsStartSection}
+                startKey={formsStartKey}
+                showProgress
+                onSectionSave={handleSectionSave}
+              />
+            </div>
           )}
 
           {!loading && activeTab === 'Agents' && (

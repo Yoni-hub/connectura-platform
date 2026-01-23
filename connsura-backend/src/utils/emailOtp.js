@@ -23,10 +23,41 @@ const hashCode = (code) => crypto.createHash('sha256').update(code).digest('hex'
 
 const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0')
 
-const buildOtpText = (code, expiresMinutes) => `CONNSURA
+const VERIFY_EMAIL_SUBJECT = 'Verify your email'
+const VERIFY_EMAIL_REPLY_TO = 'security@connsura.com'
+
+const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173'
+
+const buildVerifyUrl = (code) => {
+  const base = getFrontendBaseUrl()
+  const url = new URL('/verify-email', base)
+  url.searchParams.set('code', code)
+  return url.toString()
+}
+
+const buildOtpText = ({ code, expiresMinutes, verifyUrl, template }) => {
+  if (template === 'link') {
+    return `CONNSURA
 ================
 
-Verify your Connsura account
+Verify your email
+
+Use the link below to verify your email:
+
+${verifyUrl}
+
+This link expires in ${expiresMinutes} minutes.
+
+For your security, never share this link. If you did not request this, you can ignore this email.
+
+Thanks,
+The Connsura Team`
+  }
+
+  return `CONNSURA
+================
+
+Verify your email
 
 Use this one-time verification code to confirm your email address:
 
@@ -38,14 +69,45 @@ For your security, never share this code. If you did not request this, you can i
 
 Thanks,
 The Connsura Team`
+}
 
-const deliverEmail = async (email, code) => {
+const buildOtpHtml = ({ code, expiresMinutes, verifyUrl, template }) => {
+  if (template === 'link') {
+    return `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+        <h2 style="margin: 0 0 12px 0;">Verify your email</h2>
+        <p style="margin: 0 0 16px 0;">Click the button below to verify your email address.</p>
+        <p style="margin: 0 0 16px 0;">
+          <a href="${verifyUrl}" style="background:#0b3b8c;color:#ffffff;padding:12px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
+            Verify email
+          </a>
+        </p>
+        <p style="margin: 0 0 12px 0; color: #6b7280;">This link expires in ${expiresMinutes} minutes.</p>
+      </div>
+    `
+  }
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+      <h2 style="margin: 0 0 12px 0;">Verify your email</h2>
+      <p style="margin: 0 0 16px 0;">Use this one-time verification code to confirm your email address:</p>
+      <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.2em; margin: 0 0 16px 0;">${code}</p>
+      <p style="margin: 0 0 12px 0; color: #6b7280;">This code expires in ${expiresMinutes} minutes.</p>
+    </div>
+  `
+}
+
+const deliverEmail = async (email, code, { template } = {}) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
-  const text = buildOtpText(code, expiresMinutes)
+  const verifyUrl = buildVerifyUrl(code)
+  const text = buildOtpText({ code, expiresMinutes, verifyUrl, template })
+  const html = buildOtpHtml({ code, expiresMinutes, verifyUrl, template })
   const delivery = await sendEmail({
     to: email,
-    subject: 'Your Connsura verification code',
+    subject: VERIFY_EMAIL_SUBJECT,
     text,
+    html,
+    replyTo: VERIFY_EMAIL_REPLY_TO,
   })
   if (delivery.delivery === 'disabled' && String(process.env.EMAIL_LOG_CODES || '').toLowerCase() === 'true') {
     console.log(`[email-otp] code for ${email}: ${code}`)
@@ -107,7 +169,7 @@ const checkRateLimit = async (email, ip) => {
   prisma.emailOtpRequest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => {})
 }
 
-const sendEmailOtp = async (email, { ip } = {}) => {
+const sendEmailOtp = async (email, { ip, template = 'code' } = {}) => {
   const normalized = normalizeEmail(email)
   await checkRateLimit(normalized, ip)
 
@@ -146,7 +208,7 @@ const sendEmailOtp = async (email, { ip } = {}) => {
     },
   })
 
-  const delivery = await deliverEmail(normalized, code)
+  const delivery = await deliverEmail(normalized, code, { template })
   return { delivery: delivery.delivery }
 }
 

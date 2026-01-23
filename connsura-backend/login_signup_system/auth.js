@@ -4,6 +4,7 @@ const prisma = require('../src/prisma')
 const { generateToken } = require('../src/utils/token')
 const { authGuard } = require('../src/middleware/auth')
 const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
+const { logClientAudit } = require('../src/utils/auditLog')
 const {
   encryptSecret,
   decryptSecret,
@@ -108,11 +109,22 @@ router.post('/register', async (req, res) => {
       zip = '',
       products = [],
     } = req.body
+    const isCustomer = role === 'CUSTOMER'
+    const auditTarget = normalizeEmail(email) || 'unknown'
+    if (isCustomer) {
+      await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_SUBMITTED')
+    }
     if (!email || !password || !name) {
+      if (isCustomer) {
+        await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'missing_fields' })
+      }
       return res.status(400).json({ error: 'Email, password, and name are required' })
     }
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
+      if (isCustomer) {
+        await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'email_exists' })
+      }
       return res.status(400).json({ error: 'Email already registered' })
     }
     const hashed = await bcrypt.hash(password, 10)
@@ -158,10 +170,25 @@ router.post('/register', async (req, res) => {
       },
       include: { agent: true, customer: true },
     })
+    if (isCustomer) {
+      try {
+        const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'link' })
+        await logClientAudit(user.customer?.id || user.id, 'EMAIL_VERIFY_SENT', { delivery: result.delivery })
+        await logClientAudit(user.customer?.id || user.id, 'CLIENT_SIGN_UP_SUCCESS')
+      } catch (err) {
+        await logClientAudit(user.customer?.id || user.id, 'CLIENT_SIGN_UP_FAILED', { reason: 'email_send_failed' })
+        await prisma.user.delete({ where: { id: user.id } }).catch(() => {})
+        return handleOtpSendError(err, res)
+      }
+    }
     const token = generateToken({ id: user.id, role: user.role })
     return res.status(201).json({ token, user: sanitizeUser(user) })
   } catch (err) {
     console.error('register error', err)
+    const auditTarget = normalizeEmail(req.body?.email || '') || 'unknown'
+    if ((req.body?.role || 'CUSTOMER') === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'server_error' })
+    }
     res.status(500).json({ error: 'Failed to register' })
   }
 })
@@ -176,7 +203,7 @@ router.post('/email-otp', async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: 'Email already registered. Please sign in.' })
     }
-    const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
+    const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'code' })
     res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
     return handleOtpSendError(err, res)
@@ -210,7 +237,10 @@ router.post('/email-otp/request', authGuard, async (req, res) => {
     return res.json({ verified: true, user: sanitizeUser(req.user) })
   }
   try {
-    const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
+    const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'link' })
+    if (req.user?.role === 'CUSTOMER') {
+      await logClientAudit(req.user.customer?.id || req.user.id, 'EMAIL_VERIFY_SENT', { delivery: result.delivery })
+    }
     return res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
     return handleOtpSendError(err, res)

@@ -90,6 +90,9 @@ export function AuthProvider({ children }) {
         localStorage.setItem('connsura_agent_onboarding_pending', 'true')
         localStorage.removeItem('connsura_agent_onboarding_submitted')
       }
+      if (res.data.user.role === 'CUSTOMER') {
+        sessionStorage.setItem('connsura_force_dashboard', 'true')
+      }
       toast.success('Account created')
       return res.data.user
     } catch (err) {
@@ -107,6 +110,7 @@ export function AuthProvider({ children }) {
     clearStoredToken()
     localStorage.removeItem('connsura_agent_onboarding_pending')
     localStorage.removeItem('connsura_agent_onboarding_submitted')
+    sessionStorage.removeItem('connsura_force_dashboard')
   }
 
   return (

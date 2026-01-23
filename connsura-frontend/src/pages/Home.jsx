@@ -6,13 +6,21 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import AgentCard from '../components/agents/AgentCard'
 import Skeleton from '../components/ui/Skeleton'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function Home() {
   const { agents, loading, fetchAgents } = useAgents()
   const { user } = useAuth()
   const nav = useNavigate()
   const [hasFilters, setHasFilters] = useState(false)
+
+  useEffect(() => {
+    if (user?.role !== 'CUSTOMER') return
+    const shouldRedirect = sessionStorage.getItem('connsura_force_dashboard') === 'true'
+    if (!shouldRedirect) return
+    sessionStorage.removeItem('connsura_force_dashboard')
+    nav('/client/dashboard', { replace: true })
+  }, [user?.role, nav])
 
   const handleCreateProfile = () => {
     if (user?.role === 'CUSTOMER') {

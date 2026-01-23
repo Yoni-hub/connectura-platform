@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { allOccupations, occupationMap } from '../data/occupationMap'
 import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
@@ -534,7 +534,16 @@ const parseSignupName = (fullName = '') => {
   return { firstName, middleInitial, lastName }
 }
 
-export default function CreateProfile({ onShareSnapshotChange, onFormDataChange, initialData, allowedSections }) {
+export default function CreateProfile({
+  onShareSnapshotChange,
+  onFormDataChange,
+  onSectionSave,
+  initialData,
+  allowedSections,
+  startSection,
+  startKey = 0,
+  showProgress = false,
+}) {
   const { user } = useAuth()
   const [formSchema, setFormSchema] = useState(() => buildDefaultSchema())
   const [products, setProducts] = useState([])
@@ -549,8 +558,15 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const createAdditionalQuestion = () => ({ question: '', input: '' })
   const [activeSection, setActiveSection] = useState(null)
   const [householdComplete, setHouseholdComplete] = useState(false)
+  const [householdErrors, setHouseholdErrors] = useState({})
+  const [householdSaving, setHouseholdSaving] = useState(false)
   const [addressComplete, setAddressComplete] = useState(false)
+  const [addressErrors, setAddressErrors] = useState({})
+  const [addressSaving, setAddressSaving] = useState(false)
   const [additionalComplete, setAdditionalComplete] = useState(false)
+  const [additionalErrors, setAdditionalErrors] = useState({})
+  const [additionalSaving, setAdditionalSaving] = useState(false)
+  const [additionalSummarySaving, setAdditionalSummarySaving] = useState(false)
   const [householdEditing, setHouseholdEditing] = useState(false)
   const [addressEditing, setAddressEditing] = useState(false)
   const [additionalEditing, setAdditionalEditing] = useState(false)
@@ -593,6 +609,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   })
   const [hydrated, setHydrated] = useState(false)
   const prefillKeyRef = useRef('')
+  const formsPayloadRef = useRef(null)
+  const lastSavedSerializedRef = useRef(null)
+  const notificationTimerRef = useRef(null)
+  const [notification, setNotification] = useState(null)
   const baseAdditionalQuestionKeysRef = useRef([])
   const suppressProductSyncRef = useRef(false)
   const suppressModeResetRef = useRef(false)
@@ -769,6 +789,157 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const householdSectionLabel = schema.sections?.household?.label || 'Household Information'
   const addressSectionLabel = schema.sections?.address?.label || 'Address Information'
   const additionalSectionLabel = schema.sections?.additional?.label || 'Additional Information'
+  const householdSectionName = 'Household Information'
+  const addressSectionName = 'Address Information'
+  const additionalSectionName = 'Additional Information'
+
+  const validateHousehold = () => {
+    return {}
+  }
+
+  const validateAddress = () => {
+    return {}
+  }
+
+  const validateAdditional = () => {
+    return {}
+  }
+
+  const handleHouseholdSaveContinue = async () => {
+    if (householdSaving) return
+    setHouseholdSaving(true)
+    const wasComplete = householdComplete
+    const errors = validateHousehold()
+    setHouseholdErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setHouseholdSaving(false)
+      return
+    }
+    let saveResult = { success: true }
+    try {
+      if (typeof onSectionSave === 'function') {
+        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        saveResult = await onSectionSave({
+          section: householdSectionName,
+          nextSection: addressSectionName,
+          forms: formsPayload,
+        })
+      }
+    } catch (error) {
+      saveResult = { success: false }
+    }
+    if (!saveResult?.success) {
+      setHouseholdSaving(false)
+      return
+    }
+    if (formsPayloadRef.current) {
+      notifySaveIfChanged(formsPayloadRef.current)
+    }
+    setHouseholdComplete(true)
+    setHouseholdEditing(false)
+    if (!wasComplete) {
+      openSection('address')
+      setAddressEditing(true)
+    }
+    setHouseholdSaving(false)
+  }
+
+  const handleAddressSaveContinue = async () => {
+    if (addressSaving) return
+    setAddressSaving(true)
+    const errors = validateAddress()
+    setAddressErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setAddressSaving(false)
+      return
+    }
+    let saveResult = { success: true }
+    try {
+      if (typeof onSectionSave === 'function') {
+        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        saveResult = await onSectionSave({
+          section: addressSectionName,
+          nextSection: additionalSectionName,
+          forms: formsPayload,
+        })
+      }
+    } catch (error) {
+      saveResult = { success: false }
+    }
+    if (!saveResult?.success) {
+      setAddressSaving(false)
+      return
+    }
+    if (formsPayloadRef.current) {
+      notifySaveIfChanged(formsPayloadRef.current)
+    }
+    setAddressComplete(true)
+    setAddressEditing(false)
+    setAddressSaving(false)
+  }
+
+  const handleAdditionalSaveContinue = async (formsOverride, options = {}) => {
+    if (additionalSaving && !options.skipSaving) return
+    if (!options.skipSaving) {
+      setAdditionalSaving(true)
+    }
+    const errors = validateAdditional()
+    setAdditionalErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setAdditionalSaving(false)
+      return
+    }
+    let saveResult = { success: true }
+    try {
+      if (typeof onSectionSave === 'function') {
+        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+        saveResult = await onSectionSave({
+          section: additionalSectionName,
+          nextSection: additionalSectionName,
+          forms: formsPayload,
+        })
+      }
+    } catch (error) {
+      saveResult = { success: false }
+    }
+    if (!saveResult?.success) {
+      setAdditionalSaving(false)
+      return
+    }
+    const payloadForNotification = formsOverride || formsPayloadRef.current
+    if (payloadForNotification) {
+      notifySaveIfChanged(payloadForNotification)
+    }
+    setAdditionalComplete(true)
+    setAdditionalEditing(false)
+    setAdditionalSaving(false)
+  }
+
+  const handleAdditionalSummaryContinue = async () => {
+    if (additionalSummarySaving) return
+    setAdditionalSummarySaving(true)
+    let saveResult = { success: true }
+    try {
+      if (typeof onSectionSave === 'function') {
+        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        saveResult = await onSectionSave({
+          section: additionalSectionName,
+          nextSection: 'Summary',
+          forms: formsPayload,
+          profileStatus: 'completed',
+          logClick: false,
+        })
+      }
+    } catch (error) {
+      saveResult = { success: false }
+    }
+    if (!saveResult?.success) {
+      setAdditionalSummarySaving(false)
+      return
+    }
+    openSection('summary')
+    setAdditionalSummarySaving(false)
+  }
 
   const customFieldsForSection = (sectionKey) =>
     (schema.sections?.[sectionKey]?.customFields || []).filter(
@@ -867,7 +1038,21 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   }
 
   const removeAdditionalForm = (index) => {
+    const removedForm = additionalForms[index]
     setAdditionalForms((prev) => prev.filter((_, idx) => idx !== index))
+    showNotification('Additional form removed.')
+    const formName = removedForm?.name || removedForm?.productName || ''
+    if (user?.customerId) {
+      const token = getStoredToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      fetch(`${API_URL}/customers/${user.customerId}/forms/additional/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ formName, index }),
+      }).catch((error) => {
+        console.warn('Failed to log additional form removal', error)
+      })
+    }
   }
 
   const addAdditionalQuestion = () => {
@@ -946,11 +1131,26 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setAdditionalEditing(true)
   }
 
-  const isSectionAllowed = (section) => {
+  const isSectionAllowed = useCallback((section) => {
     if (!allowedSections) return true
     if (allowedSections[section] === undefined) return true
     return Boolean(allowedSections[section])
-  }
+  }, [allowedSections])
+
+  const sectionHistoryRef = useRef(null)
+
+  const pushSectionHistory = useCallback((section) => {
+    if (typeof window === 'undefined') return
+    const currentSection = window.history.state?.clientFormSection
+    if (!sectionHistoryRef.current && !currentSection) {
+      window.history.replaceState({ clientFormSection: section }, '')
+      sectionHistoryRef.current = section
+      return
+    }
+    if (sectionHistoryRef.current === section) return
+    window.history.pushState({ clientFormSection: section }, '')
+    sectionHistoryRef.current = section
+  }, [])
 
   const syncProductQuestions = async (productId) => {
     if (!productId) {
@@ -980,25 +1180,52 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     }
   }
 
-  const openSection = (section) => {
-    if (!isSectionAllowed(section)) return
-    setActiveSection(section)
-    setShowAddHouseholdModal(false)
-    setShowAddAddressModal(false)
-    setHouseholdEditing(false)
-    setAddressEditing(false)
-    if (section === 'household') {
-      setActiveHouseholdIndex('primary')
-      setHouseholdEditing(!hasHouseholdData)
+  const openSection = useCallback(
+    (section, options = {}) => {
+      if (!isSectionAllowed(section)) return
+      const { pushHistory = true } = options
+      setActiveSection(section)
+      setShowAddHouseholdModal(false)
+      setShowAddAddressModal(false)
+      setHouseholdEditing(false)
+      setAddressEditing(false)
+      if (section === 'household') {
+        setActiveHouseholdIndex('primary')
+        setHouseholdEditing(!hasHouseholdData)
+      }
+      if (section === 'address') {
+        setActiveAddressIndex('primary')
+        setAddressEditing(!hasAddressData)
+      }
+      if (section === 'additional') {
+        setAdditionalEditing(!hasAdditionalData)
+      }
+      if (pushHistory) {
+        pushSectionHistory(section)
+      }
+      sectionHistoryRef.current = section
+    },
+    [hasHouseholdData, hasAddressData, hasAdditionalData, isSectionAllowed, pushSectionHistory]
+  )
+
+  const startKeyRef = useRef(null)
+
+  useEffect(() => {
+    if (!startSection) return
+    if (startKeyRef.current === startKey) return
+    startKeyRef.current = startKey
+    openSection(startSection)
+  }, [startSection, startKey, openSection])
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const section = event.state?.clientFormSection
+      if (!section) return
+      openSection(section, { pushHistory: false })
     }
-    if (section === 'address') {
-      setActiveAddressIndex('primary')
-      setAddressEditing(!hasAddressData)
-    }
-    if (section === 'additional') {
-      setAdditionalEditing(!hasAdditionalData)
-    }
-  }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [openSection])
 
   useEffect(() => {
     if (!additionalEditing) return
@@ -1122,6 +1349,15 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const showSummarySection = activeSection === 'summary' && isSectionAllowed('summary')
   const showAdditionalForm = showAdditionalSection && (!hasAdditionalData || additionalEditing)
   const showAdditionalSummary = showAdditionalSection && hasAdditionalData && !additionalEditing
+  const progressSteps = [
+    { id: 'household', label: householdSectionLabel, complete: householdComplete, allowed: isSectionAllowed('household') },
+    { id: 'address', label: addressSectionLabel, complete: addressComplete, allowed: isSectionAllowed('address') },
+    { id: 'additional', label: additionalSectionLabel, complete: additionalComplete, allowed: isSectionAllowed('additional') },
+  ].filter((step) => step.allowed)
+  const progressCompletedCount = progressSteps.filter((step) => step.complete).length
+  const progressTotal = progressSteps.length
+  const progressPercent = progressTotal ? Math.round((progressCompletedCount / progressTotal) * 100) : 0
+  const progressSummary = progressTotal ? `${progressCompletedCount} of ${progressTotal} sections` : 'No sections available'
   const setActiveAddressType = (value) => {
     if (activeAddressIndex === 'primary') {
       setResidential((prev) => ({ ...prev, addressType: value }))
@@ -1241,8 +1477,8 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     return residentIds.length > 1 ? `${firstName} ...` : firstName
   }
 
-  useEffect(() => {
-    if (!hydrated) return
+  const buildFormsPayload = useCallback((overrides = {}) => {
+    const nextAdditionalForms = overrides.additionalForms ?? additionalForms
     const availableProducts = products.length
       ? products
       : additionalFormProductOptions.map((name) => ({ id: name, name }))
@@ -1251,7 +1487,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       const parsed = Number(value)
       return Number.isNaN(parsed) ? null : parsed
     }
-    const formsPayload = {
+    return {
       household: {
         namedInsured,
         additionalHouseholds,
@@ -1263,7 +1499,7 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         additionalAddresses,
       },
       additional: {
-        additionalForms: additionalForms.map((form) => {
+        additionalForms: nextAdditionalForms.map((form) => {
           const productId = parseProductId(form.productId)
           const productName = availableProducts.find((product) => String(product.id) === String(productId))?.name
           return {
@@ -1274,6 +1510,50 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         }),
       },
       customFields: customFieldValues,
+    }
+  }, [
+    additionalAddresses,
+    additionalForms,
+    additionalHouseholds,
+    contacts,
+    customFieldValues,
+    mailing,
+    namedInsured,
+    products,
+    residential,
+  ])
+
+  const serializeForms = useCallback((payload) => JSON.stringify(payload ?? {}), [])
+
+  const showNotification = useCallback((message) => {
+    setNotification({ message })
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current)
+    }
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null)
+    }, 4000)
+  }, [])
+
+  const notifySaveIfChanged = useCallback(
+    (payload) => {
+      const serialized = serializeForms(payload)
+      const lastSaved = lastSavedSerializedRef.current
+      if (lastSaved !== null && serialized !== lastSaved) {
+        showNotification('Changes saved.')
+      }
+      lastSavedSerializedRef.current = serialized
+      return serialized
+    },
+    [serializeForms, showNotification]
+  )
+
+  useEffect(() => {
+    if (!hydrated) return
+    const formsPayload = buildFormsPayload()
+    formsPayloadRef.current = formsPayload
+    if (lastSavedSerializedRef.current === null) {
+      lastSavedSerializedRef.current = serializeForms(formsPayload)
     }
     if (typeof onFormDataChange === 'function') {
       onFormDataChange(formsPayload)
@@ -1347,7 +1627,17 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     additionalForms,
     products,
     customFieldValues,
+    buildFormsPayload,
+    serializeForms,
   ])
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current)
+      }
+    }
+  }, [])
 
   return (
     <main className="min-h-full">
@@ -1355,6 +1645,42 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-800">
           Create your insurance passport
         </div>
+        {notification && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <div className="font-semibold">{notification.message}</div>
+          </div>
+        )}
+        {showProgress && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <span>Progress</span>
+              <span>{progressSummary}</span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
+              <div
+                className="h-2 rounded-full bg-[#0b3b8c]"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+              {progressSteps.map((step) => {
+                const isActive = activeSection === step.id
+                const dotTone = step.complete
+                  ? 'bg-emerald-500'
+                  : isActive
+                    ? 'bg-[#0b3b8c]'
+                    : 'bg-slate-300'
+                const labelTone = step.complete ? 'text-slate-800' : isActive ? 'text-slate-900' : 'text-slate-500'
+                return (
+                  <div key={step.id} className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${dotTone}`} />
+                    <span className={labelTone}>{step.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
         <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {isSectionAllowed('household') && (
             <button
@@ -1444,18 +1770,33 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeHousehold.label}</div>
                       <div className={`mt-3 ${gridClass}`}>
-                        <FieldRow
-                          id={`${activeHousehold.idPrefix}-relation`}
-                          label="Relation To Applicant"
-                          options={relationToApplicantOptions}
-                          value={activeHousehold.person.relation}
-                          onChange={(event) =>
-                            activeHousehold.setPerson((prev) => ({ ...prev, relation: event.target.value }))
-                          }
-                        />
-                        {activeHouseholdFieldRows.map((field) => (
-                          <FieldRow key={field.id} {...field} />
-                        ))}
+                        <div className="contents">
+                          <FieldRow
+                            id={`${activeHousehold.idPrefix}-relation`}
+                            label="Relation To Applicant"
+                            options={relationToApplicantOptions}
+                            value={activeHousehold.person.relation}
+                            onChange={(event) =>
+                              activeHousehold.setPerson((prev) => ({ ...prev, relation: event.target.value }))
+                            }
+                          />
+                          {householdErrors.relation && (
+                            <div className="col-span-2 text-xs text-rose-600">{householdErrors.relation}</div>
+                          )}
+                        </div>
+                        {activeHouseholdFieldRows.map((field) => {
+                          const errorKey = field.key || field.id
+                          return (
+                            <div key={field.id} className="contents">
+                              <FieldRow {...field} />
+                              {householdErrors[errorKey] && (
+                                <div className="col-span-2 text-xs text-rose-600">
+                                  {householdErrors[errorKey]}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                     <div className="flex flex-wrap justify-end gap-3">
@@ -1475,12 +1816,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       <button
                         type="button"
                         className={nextButton}
-                        onClick={() => {
-                          setHouseholdComplete(true)
-                          setHouseholdEditing(false)
-                        }}
+                        onClick={handleHouseholdSaveContinue}
+                        disabled={householdSaving}
                       >
-                        Save &amp; Continue
+                        {householdSaving ? 'Saving...' : 'Save & Continue'}
                       </button>
                     </div>
                   </div>
@@ -1583,9 +1922,13 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       type="button"
                       className={nextButton}
                       onClick={() => {
-                        setActiveSection('address')
+                        openSection('address')
                         setActiveAddressIndex('primary')
-                        setAddressEditing(true)
+                        if (hasAddressData && addressComplete) {
+                          setAddressEditing(false)
+                        } else {
+                          setAddressEditing(true)
+                        }
                       }}
                     >
                       Continue
@@ -1695,21 +2038,28 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     <div className={`mt-3 ${gridClass}`}>
                       {orderedResidentialFields.map((field) => {
                         const isAddressType = field.id === 'addressType'
+                        const errorKey = field.id
                         return (
-                          <FieldRow
-                            key={`res-${field.id}`}
-                            id={`res-${field.id}`}
-                            label={field.label}
-                            type={field.type}
-                            options={isAddressType ? addressTypeOptions : undefined}
-                            placeholder={isAddressType ? 'Select address type' : undefined}
-                            value={isAddressType ? activeAddressType : activeAddressResidential?.[field.id] ?? ''}
-                            onChange={(event) =>
-                              isAddressType
-                                ? setActiveAddressType(event.target.value)
-                                : setActiveAddressResidentialField(field.id, event.target.value)
-                            }
-                          />
+                          <div key={`res-${field.id}`} className="contents">
+                            <FieldRow
+                              id={`res-${field.id}`}
+                              label={field.label}
+                              type={field.type}
+                              options={isAddressType ? addressTypeOptions : undefined}
+                              placeholder={isAddressType ? 'Select address type' : undefined}
+                              value={isAddressType ? activeAddressType : activeAddressResidential?.[field.id] ?? ''}
+                              onChange={(event) =>
+                                isAddressType
+                                  ? setActiveAddressType(event.target.value)
+                                  : setActiveAddressResidentialField(field.id, event.target.value)
+                              }
+                            />
+                            {addressErrors[errorKey] && (
+                              <div className="col-span-2 text-xs text-rose-600">
+                                {addressErrors[errorKey]}
+                              </div>
+                            )}
+                          </div>
                         )
                       })}
                     </div>
@@ -1731,12 +2081,22 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                           Add household members to select who lives here.
                         </div>
                       )}
+                      {addressErrors.residents && (
+                        <div className="col-span-2 text-xs text-rose-600">{addressErrors.residents}</div>
+                      )}
                     </div>
 
                     {addressCustomFields.length > 0 && (
                       <div className={`mt-3 ${gridClass}`}>
                         {addressCustomFields.map((field) => (
-                          <FieldRow key={field.id} {...field} />
+                          <div key={field.id} className="contents">
+                            <FieldRow {...field} />
+                            {addressErrors[field.id] && (
+                              <div className="col-span-2 text-xs text-rose-600">
+                                {addressErrors[field.id]}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1758,12 +2118,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                       <button
                         type="button"
                         className={nextButton}
-                        onClick={() => {
-                          setAddressComplete(true)
-                          setAddressEditing(false)
-                        }}
+                        onClick={handleAddressSaveContinue}
+                        disabled={addressSaving}
                       >
-                        Save &amp; Continue
+                        {addressSaving ? 'Saving...' : 'Save & Continue'}
                       </button>
                     </div>
                   </div>
@@ -1913,6 +2271,11 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">{additionalSectionLabel}</div>
+                    {Object.keys(additionalErrors).length > 0 && (
+                      <div className="text-xs text-rose-600">
+                        Fix the highlighted fields before continuing.
+                      </div>
+                    )}
                     <div className="space-y-3">
                       <div className="text-sm text-slate-600">
                         You can create your own forms or choose from existing products.
@@ -2048,50 +2411,66 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                         type="button"
                         className={nextButton}
                         onClick={async () => {
-                          const productId = additionalFormProductId ? Number(additionalFormProductId) : null
-                          const selectedProduct = products.find((product) => product.id === productId) || null
-                          const resolvedName =
-                            additionalFormMode === 'existing'
-                              ? selectedProduct?.name || ''
-                              : additionalFormName.trim()
-                          if (!additionalFormMode) {
-                            setAdditionalFormError('Please choose existing or custom first.')
-                            return
+                          if (additionalSaving) return
+                          setAdditionalSaving(true)
+                          try {
+                            const productId = additionalFormProductId ? Number(additionalFormProductId) : null
+                            const selectedProduct = products.find((product) => product.id === productId) || null
+                            const resolvedName =
+                              additionalFormMode === 'existing'
+                                ? selectedProduct?.name || ''
+                                : additionalFormName.trim()
+                            if (!additionalFormMode) {
+                              setAdditionalFormError('Please choose existing or custom first.')
+                              setAdditionalSaving(false)
+                              return
+                            }
+                            if (additionalFormMode === 'existing' && !productId) {
+                              setAdditionalFormError('Please select a product.')
+                              setAdditionalSaving(false)
+                              return
+                            }
+                            if (additionalFormMode === 'custom' && !resolvedName) {
+                              setAdditionalFormError('Please enter a custom form name.')
+                              setAdditionalSaving(false)
+                              return
+                            }
+                            await saveCustomerQuestions(
+                              additionalQuestions.map((question) => question.question),
+                              productId || null,
+                              resolvedName
+                            )
+                            const nextForm = {
+                              name: resolvedName,
+                              questions: additionalQuestions,
+                              productId: productId || null,
+                              productName: selectedProduct?.name || '',
+                            }
+                            const buildNextForms = (prev) => {
+                              if (typeof activeAdditionalFormIndex === 'number') {
+                                const next = [...prev]
+                                next[activeAdditionalFormIndex] = nextForm
+                                return next
+                              }
+                              return [...prev, nextForm]
+                            }
+                            const nextAdditionalForms = buildNextForms(additionalForms)
+                            if (typeof activeAdditionalFormIndex === 'number') {
+                              setAdditionalForms((prev) => buildNextForms(prev))
+                            } else {
+                              setAdditionalForms((prev) => buildNextForms(prev))
+                            }
+                            setActiveAdditionalFormIndex(null)
+                            const nextFormsPayload = buildFormsPayload({ additionalForms: nextAdditionalForms })
+                            await handleAdditionalSaveContinue(nextFormsPayload, { skipSaving: true })
+                          } catch (error) {
+                            console.warn('Failed to save additional form', error)
+                            setAdditionalSaving(false)
                           }
-                          if (additionalFormMode === 'existing' && !productId) {
-                            setAdditionalFormError('Please select a product.')
-                            return
-                          }
-                          if (additionalFormMode === 'custom' && !resolvedName) {
-                            setAdditionalFormError('Please enter a custom form name.')
-                            return
-                          }
-                          await saveCustomerQuestions(
-                            additionalQuestions.map((question) => question.question),
-                            productId || null,
-                            resolvedName
-                          )
-                          const nextForm = {
-                            name: resolvedName,
-                            questions: additionalQuestions,
-                            productId: productId || null,
-                            productName: selectedProduct?.name || '',
-                          }
-                          if (typeof activeAdditionalFormIndex === 'number') {
-                            setAdditionalForms((prev) => {
-                              const next = [...prev]
-                              next[activeAdditionalFormIndex] = nextForm
-                              return next
-                            })
-                          } else {
-                            setAdditionalForms((prev) => [...prev, nextForm])
-                          }
-                          setActiveAdditionalFormIndex(null)
-                          setAdditionalComplete(true)
-                          setAdditionalEditing(false)
                         }}
+                        disabled={additionalSaving}
                       >
-                        Save &amp; Continue
+                        {additionalSaving ? 'Saving...' : 'Save & Continue'}
                       </button>
                     </div>
                   </div>
@@ -2102,6 +2481,11 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
             {showAdditionalSummary && (
               <section className="mt-6">
                 <div className="space-y-4">
+                  {Object.keys(additionalErrors).length > 0 && (
+                    <div className="text-xs text-rose-600">
+                      Fix the highlighted fields before continuing.
+                    </div>
+                  )}
                   {additionalForms.length > 0 ? (
                     additionalForms.map((form, index) => (
                       <div
@@ -2149,7 +2533,12 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
                     <button type="button" className={miniButton} onClick={startNewAdditionalForm}>
                       Add more forms
                     </button>
-                    <button type="button" className={nextButton} onClick={() => openSection('summary')}>
+                    <button
+                      type="button"
+                      className={nextButton}
+                      onClick={handleAdditionalSummaryContinue}
+                      disabled={additionalSummarySaving}
+                    >
                       Continue
                     </button>
                   </div>
