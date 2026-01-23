@@ -13,7 +13,6 @@ export default function AgentProfile() {
   const { id } = useParams()
   const { getAgent } = useAgents()
   const [agent, setAgent] = useState(null)
-  const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [messageOpen, setMessageOpen] = useState(false)
   const [rateOpen, setRateOpen] = useState(false)
@@ -28,13 +27,6 @@ export default function AgentProfile() {
       setLoading(false)
     }
     load()
-  }, [id])
-
-  useEffect(() => {
-    api
-      .get(`/agents/${id}/summary`)
-      .then((res) => setSummary(res.data.summary))
-      .catch(() => {})
   }, [id])
 
   const handleMessageOpen = () => {

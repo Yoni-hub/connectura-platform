@@ -5,7 +5,6 @@ import AgentProfile from '../pages/AgentProfile'
 import ClientDashboard from '../pages/ClientDashboard'
 import AgentDashboard from '../pages/AgentDashboard'
 import AgentOnboarding from '../pages/AgentOnboarding'
-import ClientForms from '../pages/ClientForms'
 import CreateProfile from '../pages/CreateProfile'
 import Contact from '../pages/Contact'
 import About from '../pages/About'
@@ -81,14 +80,6 @@ function Layout() {
             element={
               <CustomerOnly>
                 <ClientDashboard />
-              </CustomerOnly>
-            }
-          />
-          <Route
-            path="/client_forms"
-            element={
-              <CustomerOnly>
-                <ClientForms />
               </CustomerOnly>
             }
           />

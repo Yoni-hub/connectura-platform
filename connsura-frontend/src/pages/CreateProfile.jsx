@@ -10,9 +10,6 @@ const inputClass =
 const additionalQuestionInputClass =
   'justify-self-start border-0 bg-transparent px-0 text-sm text-[#006aff] placeholder:text-[#7fb2ff] focus:outline-none focus:ring-0'
 const gridClass = 'grid grid-cols-[150px_1fr] items-center gap-x-4 gap-y-2'
-const sectionTitle = 'text-sm font-semibold text-slate-900'
-const linkButton = 'text-sm font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline'
-const backButton = 'pill-btn-ghost px-5 py-2 text-sm'
 const nextButton = 'pill-btn-primary px-5 py-2 text-sm'
 const miniButton = 'pill-btn-ghost px-3 py-1.5 text-xs'
 const tabButton = 'pill-btn-ghost px-2 py-1 text-sm'
@@ -588,7 +585,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
   const [additionalFormMode, setAdditionalFormMode] = useState('')
   const [additionalQuestions, setAdditionalQuestions] = useState([])
   const [baseAdditionalQuestionKeys, setBaseAdditionalQuestionKeys] = useState([])
-  const [productQuestionBank, setProductQuestionBank] = useState([])
   const [additionalFormError, setAdditionalFormError] = useState('')
   const [customFieldValues, setCustomFieldValues] = useState({
     household: {},
@@ -852,16 +848,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     })
   }
 
-  const updateContact = (index, updater) => {
-    setContacts((prev) => {
-      const next = [...prev]
-      const current = next[index] ?? createContact()
-      const nextContact = typeof updater === 'function' ? updater(current) : updater
-      next[index] = nextContact
-      return next
-    })
-  }
-
   const updateAdditionalAddress = (index, updater) => {
     setAdditionalAddresses((prev) => {
       const next = [...prev]
@@ -970,12 +956,10 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     if (!productId) {
       setAdditionalQuestions([])
       setBaseAdditionalQuestionKeys([])
-      setProductQuestionBank([])
       return
     }
     setAdditionalQuestions([])
     setBaseAdditionalQuestionKeys([])
-    setProductQuestionBank([])
     try {
       const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
@@ -983,7 +967,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       if (!res.ok) return
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
-      setProductQuestionBank(bankQuestions)
       const baseList = bankQuestions
         .map((question) => ({
           text: question?.text || '',
@@ -1041,7 +1024,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
     setAdditionalFormName('')
     setAdditionalQuestions([])
     setBaseAdditionalQuestionKeys([])
-    setProductQuestionBank([])
     setAdditionalFormError('')
   }, [additionalFormMode])
 
@@ -1075,8 +1057,6 @@ export default function CreateProfile({ onShareSnapshotChange, onFormDataChange,
       })),
   ]
   const residentLabelMap = new Map(householdMemberOptions.map((option) => [option.id, option.label]))
-  const resolveResidentLabels = (residentIds = []) =>
-    residentIds.map((id) => residentLabelMap.get(id)).filter(Boolean)
   const activeAdditionalIndex = typeof activeHouseholdIndex === 'number' ? activeHouseholdIndex : null
   const activeAdditionalPerson =
     activeAdditionalIndex !== null ? additionalHouseholds[activeAdditionalIndex] : null

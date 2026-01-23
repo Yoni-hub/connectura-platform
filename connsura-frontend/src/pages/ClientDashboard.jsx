@@ -86,7 +86,7 @@ export default function ClientDashboard() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareSnapshot, setShareSnapshot] = useState(null)
   const [formsDraft, setFormsDraft] = useState(null)
-  const [formsSaving, setFormsSaving] = useState(false)
+  const [, setFormsSaving] = useState(false)
   const [pendingShares, setPendingShares] = useState([])
   const [activeShares, setActiveShares] = useState([])
   const [revokingShare, setRevokingShare] = useState('')
@@ -166,8 +166,6 @@ export default function ClientDashboard() {
       })
     } catch {
       setClient(null)
-      setPhotoPreview('')
-      setPhotoFile(null)
     } finally {
       setLoading(false)
     }

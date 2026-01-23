@@ -60,7 +60,7 @@ export default function Admin() {
         const res = await adminApi.get('/admin/me')
         if (!active) return
         setAdmin(res.data.admin)
-      } catch (err) {
+      } catch {
         if (!active) return
         setAdmin(null)
       } finally {

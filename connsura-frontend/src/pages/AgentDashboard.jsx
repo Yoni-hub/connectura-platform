@@ -420,13 +420,6 @@ export default function AgentDashboard() {
           ? [form.state]
           : ['Virginia'],
   }
-  const previewStatusTone =
-    previewAgent.availability === 'online'
-      ? 'green'
-      : previewAgent.availability === 'busy'
-        ? 'amber'
-        : 'gray'
-  const previewPhoto = photoPreview || resolvePhotoUrl(agent?.photo)
   const previewProducerNumber = agent?.producerNumber || '—'
   const previewProducts =
     Array.isArray(agent?.products) && agent.products.length ? agent.products.join(', ') : '—'

@@ -17,8 +17,6 @@ export default function AuthenticatorPanel() {
   const [disableOpen, setDisableOpen] = useState(false)
 
   const enabled = Boolean(user?.totpEnabled)
-  const recoveryId = user?.recoveryId || setupData?.recoveryId || ''
-
   const startSetup = async () => {
     setSetupLoading(true)
     try {
