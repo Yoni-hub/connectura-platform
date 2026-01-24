@@ -16,6 +16,10 @@ model User {
   password  String
   role      String    @default("CUSTOMER")
   emailVerified Boolean @default(false)
+  passwordChangedAt DateTime?
+  emailPending String?
+  emailPendingRequestedAt DateTime?
+  sessionsRevokedAt DateTime?
   totpEnabled Boolean @default(false)
   totpSecret String?
   totpRecoveryId String? @unique
@@ -107,6 +111,10 @@ model Message {
   body       String
   senderRole String   @default("CUSTOMER")
   createdAt  DateTime @default(now())
+  readByAgentAt DateTime?
+  readByCustomerAt DateTime?
+  deletedForAgentAt DateTime?
+  deletedForCustomerAt DateTime?
 
   agent    Agent    @relation("AgentMessages", fields: [agentId], references: [id], onDelete: Cascade)
   customer Customer @relation("CustomerMessages", fields: [customerId], references: [id], onDelete: Cascade)

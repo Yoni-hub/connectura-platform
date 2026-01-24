@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAgents } from '../context/AgentContext'
 import Badge from '../components/ui/Badge'
@@ -6,7 +6,6 @@ import Skeleton from '../components/ui/Skeleton'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
-import MessageAgentModal from '../components/modals/MessageAgentModal'
 import RateAgentModal from '../components/modals/RateAgentModal'
 
 export default function AgentProfile() {
@@ -14,8 +13,10 @@ export default function AgentProfile() {
   const { getAgent } = useAgents()
   const [agent, setAgent] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [messageOpen, setMessageOpen] = useState(false)
   const [rateOpen, setRateOpen] = useState(false)
+  const [agentSaved, setAgentSaved] = useState(false)
+  const [savingAgent, setSavingAgent] = useState(false)
+  const profileViewRef = useRef('')
   const { user } = useAuth()
   const nav = useNavigate()
 
@@ -29,6 +30,41 @@ export default function AgentProfile() {
     load()
   }, [id])
 
+  useEffect(() => {
+    if (!user?.customerId || !agent?.id) {
+      setAgentSaved(false)
+      return
+    }
+    let isActive = true
+    const loadSaved = async () => {
+      try {
+        const res = await api.get(`/customers/${user.customerId}/saved-agents`)
+        if (!isActive) return
+        const ids = (res.data.agents || []).map((item) => item.id)
+        setAgentSaved(ids.includes(agent.id))
+      } catch {
+        if (!isActive) return
+        setAgentSaved(false)
+      }
+    }
+    loadSaved()
+    return () => {
+      isActive = false
+    }
+  }, [user?.customerId, agent?.id])
+
+  useEffect(() => {
+    if (!user?.customerId || !agent?.id) return
+    const key = `${user.customerId}:${agent.id}`
+    if (profileViewRef.current === key) return
+    profileViewRef.current = key
+    api.post(`/customers/${user.customerId}/agent-profile/view`, {
+      agentId: agent.id,
+      source: 'profile',
+    }).catch(() => {})
+  }, [user?.customerId, agent?.id])
+
+
   const handleMessageOpen = () => {
     if (!user) {
       toast.error('Login to send a message')
@@ -38,7 +74,7 @@ export default function AgentProfile() {
       toast.error('Only customers can message agents')
       return
     }
-    setMessageOpen(true)
+    nav(`/client/dashboard?tab=messages&agent=${agent.id}`)
   }
 
   const handleSaveAgent = async () => {
@@ -54,12 +90,48 @@ export default function AgentProfile() {
       toast.error('Customer profile not found')
       return
     }
+    if (agentSaved || savingAgent) {
+      return
+    }
+    setAgentSaved(true)
+    setSavingAgent(true)
     try {
       await api.post(`/customers/${user.customerId}/saved-agents`, { agentId: agent.id })
       toast.success('Agent saved')
-      nav(`/client/dashboard?tab=agents`)
     } catch (err) {
+      setAgentSaved(false)
       toast.error(err.response?.data?.error || 'Failed to save agent')
+    } finally {
+      setSavingAgent(false)
+    }
+  }
+
+  const handleRemoveAgent = async () => {
+    if (!user) {
+      toast.error('Login to remove an agent')
+      return
+    }
+    if (user.role !== 'CUSTOMER') {
+      toast.error('Only customers can remove agents')
+      return
+    }
+    if (!user.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    if (!agentSaved || savingAgent) {
+      return
+    }
+    setAgentSaved(false)
+    setSavingAgent(true)
+    try {
+      await api.delete(`/customers/${user.customerId}/saved-agents/${agent.id}`)
+      toast.success('Agent removed')
+    } catch (err) {
+      setAgentSaved(true)
+      toast.error(err.response?.data?.error || 'Failed to remove agent')
+    } finally {
+      setSavingAgent(false)
     }
   }
 
@@ -110,9 +182,23 @@ export default function AgentProfile() {
               <button onClick={handleRateOpen} className="pill-btn-ghost">
                 Rate Agent
               </button>
-              <button onClick={handleSaveAgent} className="pill-btn-ghost">
-                Save Agent
-              </button>
+              {agentSaved ? (
+                <button
+                  onClick={handleRemoveAgent}
+                  className={`pill-btn-ghost ${savingAgent ? 'opacity-60 cursor-default' : ''}`}
+                  disabled={savingAgent}
+                >
+                  Remove Agent
+                </button>
+              ) : (
+                <button
+                  onClick={handleSaveAgent}
+                  className={`pill-btn-ghost ${savingAgent ? 'opacity-60 cursor-default' : ''}`}
+                  disabled={savingAgent}
+                >
+                  Save Agent
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -130,12 +216,6 @@ export default function AgentProfile() {
           ))}
         </div>
       </div>
-      <MessageAgentModal
-        open={messageOpen}
-        agent={agent}
-        onClose={() => setMessageOpen(false)}
-        onSent={(sentAgent) => nav(`/client/dashboard?tab=messages&agent=${sentAgent.id}`)}
-      />
       <RateAgentModal
         open={rateOpen}
         agent={agent}

@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { api } from '../services/api'
+import { API_URL, api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import AgentCard from '../components/agents/AgentCard'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
-import MessageAgentModal from '../components/modals/MessageAgentModal'
 import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
+import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Settings']
@@ -43,6 +43,12 @@ const getInitials = (name = '', fallback = 'AG') => {
     .toUpperCase()
 }
 
+const resolvePhotoUrl = (value = '') => {
+  if (!value) return ''
+  if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) return value
+  return `${API_URL}${value}`
+}
+
 const hasNonEmptyValue = (value) => {
   if (value === null || value === undefined) return false
   if (typeof value === 'string') return value.trim().length > 0
@@ -71,8 +77,55 @@ const resolveDetail = (detail, hasData, emptyText, filledText) => {
   return detail || filledText
 }
 
+const resolveFormsSectionKey = (value = '') => {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized.includes('summary')) return 'summary'
+  if (normalized.includes('additional')) return 'additional'
+  if (normalized.includes('address')) return 'address'
+  if (normalized.includes('household')) return 'household'
+  return ''
+}
+
+const DEFAULT_NOTIFICATION_PREFS = {
+  email: 'all',
+  inapp: true,
+  loginAlerts: true,
+  groups: {
+    messages: true,
+    passport: true,
+    system: true,
+  },
+}
+
+const normalizeNotificationPrefs = (value = {}) => {
+  const prefs = value && typeof value === 'object' ? value : {}
+  const groups = prefs.groups && typeof prefs.groups === 'object' ? prefs.groups : {}
+  const email = ['all', 'important', 'none'].includes(prefs.email) ? prefs.email : 'all'
+  return {
+    email,
+    inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
+    loginAlerts: true,
+    groups: {
+      messages: typeof groups.messages === 'boolean' ? groups.messages : true,
+      passport: typeof groups.passport === 'boolean' ? groups.passport : true,
+      system: typeof groups.system === 'boolean' ? groups.system : true,
+    },
+  }
+}
+
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server'
+  const key = 'connsura_session_id'
+  let value = sessionStorage.getItem(key)
+  if (!value) {
+    value = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    sessionStorage.setItem(key, value)
+  }
+  return value
+}
+
 export default function ClientDashboard() {
-  const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
+  const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
   const focusAgentId = useMemo(() => {
@@ -96,29 +149,69 @@ export default function ClientDashboard() {
   const [reviewShare, setReviewShare] = useState(null)
   const formsSaveRef = useRef(null)
   const autoReviewRef = useRef('')
+  const tabLogRef = useRef('')
   const [threads, setThreads] = useState([])
   const [threadsLoading, setThreadsLoading] = useState(false)
   const [savedAgents, setSavedAgents] = useState([])
   const [savedAgentsLoading, setSavedAgentsLoading] = useState(false)
+  const [savedAgentIdOverrides, setSavedAgentIdOverrides] = useState([])
+  const [focusAgent, setFocusAgent] = useState(null)
+  const [focusAgentLoading, setFocusAgentLoading] = useState(false)
   const [activeThread, setActiveThread] = useState(null)
   const [threadMessages, setThreadMessages] = useState([])
   const [threadLoading, setThreadLoading] = useState(false)
   const [replyBody, setReplyBody] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
-  const [messageOpen, setMessageOpen] = useState(false)
-  const [messageAgent, setMessageAgent] = useState(null)
   const [rateOpen, setRateOpen] = useState(false)
   const [rateAgent, setRateAgent] = useState(null)
+  const [settingsModal, setSettingsModal] = useState(null)
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState('')
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordUpdating, setPasswordUpdating] = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameMessage, setNameMessage] = useState(null)
+  const [emailEditing, setEmailEditing] = useState(false)
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [emailMessage, setEmailMessage] = useState(null)
+  const [emailDraft, setEmailDraft] = useState(user?.email || '')
+  const [languageDraft, setLanguageDraft] = useState('')
+  const [timezoneDraft, setTimezoneDraft] = useState('')
+  const [preferencesSaving, setPreferencesSaving] = useState(false)
+  const [preferencesMessage, setPreferencesMessage] = useState('')
+  const [loginActivity, setLoginActivity] = useState([])
+  const [loginActivityLoading, setLoginActivityLoading] = useState(false)
+  const [sessions, setSessions] = useState([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [sessionsMessage, setSessionsMessage] = useState(null)
+  const [sharedActivity, setSharedActivity] = useState([])
+  const [sharedActivityLoading, setSharedActivityLoading] = useState(false)
+  const [consentHistory, setConsentHistory] = useState([])
+  const [consentLoading, setConsentLoading] = useState(false)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const [deactivatePassword, setDeactivatePassword] = useState('')
+  const [deactivating, setDeactivating] = useState(false)
+  const [deactivateMessage, setDeactivateMessage] = useState(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [deleteMessage, setDeleteMessage] = useState(null)
+  const [notificationPrefs, setNotificationPrefs] = useState(null)
+  const [notificationLoading, setNotificationLoading] = useState(false)
+  const [notificationSaving, setNotificationSaving] = useState(false)
+  const [notificationMessage, setNotificationMessage] = useState('')
+  const notificationSaveRef = useRef(0)
+  const [cookiePref, setCookiePref] = useState('all')
+  const [cookieSaving, setCookieSaving] = useState(false)
+  const [cookieMessage, setCookieMessage] = useState('')
   const [verificationSent, setVerificationSent] = useState(false)
   const [verificationSending, setVerificationSending] = useState(false)
   const [form, setForm] = useState({
@@ -127,23 +220,47 @@ export default function ClientDashboard() {
     lastName: '',
     email: user?.email || '',
   })
+  const sessionId = useMemo(() => getSessionId(), [])
 
   useEffect(() => {
     const nextTab = resolveTabFromSearch(location.search)
     setActiveTab(nextTab)
   }, [location.search])
 
+  useEffect(() => {
+    if (user?.email) {
+      setEmailDraft(user.email)
+    }
+  }, [user?.email])
+
+  useEffect(() => {
+    if (!user?.email) return
+    setForm((prev) => ({ ...prev, email: user.email }))
+  }, [user?.email])
+
+  useEffect(() => {
+    if (!client?.profileData) return
+    setLanguageDraft(client.profileData.language || '')
+    setTimezoneDraft(client.profileData.timezone || '')
+    if (client.profileData.cookie_preference) {
+      setCookiePref(client.profileData.cookie_preference)
+    }
+  }, [
+    client?.profileData?.language,
+    client?.profileData?.timezone,
+    client?.profileData?.cookie_preference,
+  ])
+
+  useEffect(() => {
+    if (emailEditing) return
+    setEmailDraft(user?.emailPending || user?.email || '')
+  }, [user?.emailPending, user?.email, emailEditing])
+
+
   const updateTab = (nextTab) => {
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
-    nav(`/client/dashboard?${params.toString()}`, { replace: true })
-  }
-
-  const clearAgentFocus = () => {
-    const params = new URLSearchParams(location.search)
-    if (!params.has('agent')) return
-    params.delete('agent')
     nav(`/client/dashboard?${params.toString()}`, { replace: true })
   }
 
@@ -159,12 +276,18 @@ export default function ClientDashboard() {
       setClient(profile)
       const nameParts = parseFullName(profile?.name || '')
       const details = profile?.profileData || {}
+      const photoValue = details.photo || ''
+      setPhotoPreview(resolvePhotoUrl(photoValue))
+      setPhotoFile(null)
       setForm({
         firstName: details.firstName || nameParts.firstName,
         middleName: details.middleName || nameParts.middleName,
         lastName: details.lastName || nameParts.lastName,
         email: details.email || user?.email || '',
       })
+      setEmailDraft(details.email || user?.email || '')
+      setLanguageDraft(details.language || '')
+      setTimezoneDraft(details.timezone || '')
     } catch {
       setClient(null)
     } finally {
@@ -195,6 +318,7 @@ export default function ClientDashboard() {
     try {
       const res = await api.get(`/customers/${user.customerId}/saved-agents`)
       setSavedAgents(res.data.agents || [])
+      setSavedAgentIdOverrides([])
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not load saved agents')
     } finally {
@@ -289,6 +413,30 @@ export default function ClientDashboard() {
     }
   }
 
+  const handleSaveAgent = async (agent) => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    const agentId = agent?.id
+    if (!agentId) {
+      toast.error('Agent not found')
+      return
+    }
+    if (savedAgentIds.has(agentId)) {
+      return
+    }
+    setSavedAgentIdOverrides((prev) => (prev.includes(agentId) ? prev : [...prev, agentId]))
+    try {
+      await api.post(`/customers/${user.customerId}/saved-agents`, { agentId })
+      toast.success('Agent saved')
+      await loadSavedAgents()
+    } catch (err) {
+      setSavedAgentIdOverrides((prev) => prev.filter((id) => id !== agentId))
+      toast.error(err.response?.data?.error || 'Failed to save agent')
+    }
+  }
+
   const handleMessageAgent = (agent) => {
     if (!user) {
       toast.error('Login to send a message')
@@ -298,8 +446,7 @@ export default function ClientDashboard() {
       toast.error('Only customers can message agents')
       return
     }
-    setMessageAgent(agent)
-    setMessageOpen(true)
+    nav(`/client/dashboard?tab=messages&agent=${agent.id}`)
   }
 
   const handleRateAgent = (agent) => {
@@ -319,11 +466,141 @@ export default function ClientDashboard() {
     handleRemoveAgent(agent.id)
   }
 
+  const handleViewProfile = (agent) => {
+    if (!agent?.id) return
+    nav(`/agents/${agent.id}`)
+  }
+
+  const handlePhotoChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB.')
+      return
+    }
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview)
+    }
+    const previewUrl = URL.createObjectURL(file)
+    setPhotoFile(file)
+    setPhotoPreview(previewUrl)
+    handlePhotoUpload(file, previewUrl)
+  }
+
+  const handlePhotoReset = () => {
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview)
+    }
+    setPhotoFile(null)
+    const existing = client?.profileData?.photo || ''
+    setPhotoPreview(resolvePhotoUrl(existing))
+  }
+
+  const handlePhotoUpload = async (fileOverride, previewOverride) => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    const uploadFile = fileOverride || photoFile
+    if (!uploadFile) {
+      toast.error('Select a photo to upload')
+      return
+    }
+    if (photoUploading) return
+    setPhotoUploading(true)
+    try {
+      const data = new FormData()
+      data.append('photo', uploadFile)
+      data.append('sessionId', sessionId)
+      const res = await api.post(`/customers/${user.customerId}/photo`, data)
+      const updatedProfile = res.data?.profile
+      if (updatedProfile) {
+        setClient(updatedProfile)
+      }
+      const updatedPhoto = updatedProfile?.profileData?.photo || res.data?.photo || ''
+      setPhotoPreview(resolvePhotoUrl(updatedPhoto))
+      setPhotoFile(null)
+      toast.success('Profile photo updated')
+    } catch (err) {
+      if (previewOverride && previewOverride.startsWith('blob:')) {
+        URL.revokeObjectURL(previewOverride)
+      }
+      handlePhotoReset()
+      toast.error(err.response?.data?.error || 'Photo upload failed')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  const handlePhotoRemove = async () => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    if (photoUploading) return
+    setPhotoUploading(true)
+    try {
+      const res = await api.post(`/customers/${user.customerId}/photo/remove`, { sessionId })
+      if (res.data?.profile) {
+        setClient(res.data.profile)
+      }
+      setPhotoPreview('')
+      setPhotoFile(null)
+      toast.success('Profile photo removed')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to remove photo')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
   useEffect(() => {
     if (activeTab !== 'Messages') return
     loadThreads()
     loadSavedAgents()
   }, [activeTab, user?.customerId])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    if (!focusAgentId) {
+      setFocusAgent(null)
+      setFocusAgentLoading(false)
+      return
+    }
+    if (focusAgent?.id === focusAgentId) return
+    if (threads.some((thread) => thread.agent?.id === focusAgentId)) {
+      setFocusAgent(null)
+      return
+    }
+    if (savedAgents.some((agent) => agent.id === focusAgentId)) {
+      setFocusAgent(null)
+      return
+    }
+    let isActive = true
+    const loadFocusAgent = async () => {
+      setFocusAgentLoading(true)
+      try {
+        const res = await api.get(`/agents/${focusAgentId}`)
+        if (!isActive) return
+        setFocusAgent(res.data?.agent || null)
+      } catch {
+        if (!isActive) return
+        setFocusAgent(null)
+      } finally {
+        if (isActive) {
+          setFocusAgentLoading(false)
+        }
+      }
+    }
+    loadFocusAgent()
+    return () => {
+      isActive = false
+    }
+  }, [activeTab, focusAgentId, focusAgent?.id, threads, savedAgents])
 
   useEffect(() => {
     if (!user?.customerId) return
@@ -367,6 +644,33 @@ export default function ClientDashboard() {
   }, [pendingShares, reviewShare])
 
   useEffect(() => {
+    if (activeTab !== 'Settings') return
+    if (!user?.customerId) return
+    let isActive = true
+    setNotificationMessage('')
+    setNotificationLoading(true)
+    api
+      .get(`/customers/${user.customerId}/notification-preferences`, {
+        params: { sessionId },
+      })
+      .then((res) => {
+        if (!isActive) return
+        setNotificationPrefs(normalizeNotificationPrefs(res.data?.preferences || {}))
+      })
+      .catch((err) => {
+        if (!isActive) return
+        toast.error(err.response?.data?.error || 'Could not load notification preferences')
+        setNotificationPrefs(DEFAULT_NOTIFICATION_PREFS)
+      })
+      .finally(() => {
+        if (isActive) setNotificationLoading(false)
+      })
+    return () => {
+      isActive = false
+    }
+  }, [activeTab, user?.customerId, sessionId])
+
+  useEffect(() => {
     if (activeTab !== 'Messages') return
     if (!threads.length) {
       if (!focusAgentId) {
@@ -381,10 +685,15 @@ export default function ClientDashboard() {
       if (match) {
         setActiveThread(match)
       }
-      return
     }
-    setActiveThread(threads[0])
   }, [threads, activeTab, activeThread, focusAgentId])
+
+  useEffect(() => {
+    if (activeTab !== 'Messages') return
+    if (focusAgentId) return
+    setActiveThread(null)
+    setThreadMessages([])
+  }, [activeTab, focusAgentId])
 
   useEffect(() => {
     if (activeTab !== 'Messages') return
@@ -398,8 +707,13 @@ export default function ClientDashboard() {
     if (savedMatch) {
       setActiveThread({ agent: savedMatch, lastMessage: null, unreadCount: 0 })
       setThreadMessages([])
+      return
     }
-  }, [activeTab, focusAgentId, threads, savedAgents])
+    if (focusAgent) {
+      setActiveThread({ agent: focusAgent, lastMessage: null, unreadCount: 0 })
+      setThreadMessages([])
+    }
+  }, [activeTab, focusAgentId, threads, savedAgents, focusAgent])
 
   useEffect(() => {
     if (activeTab !== 'Messages') return
@@ -411,6 +725,14 @@ export default function ClientDashboard() {
   useEffect(() => {
     setReplyBody('')
   }, [activeThread?.agent?.id])
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview && photoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreview)
+      }
+    }
+  }, [photoPreview])
 
   useEffect(() => {
     if (!user?.customerId || !formsDraft) return
@@ -439,16 +761,65 @@ export default function ClientDashboard() {
   }, [formsDraft, user?.customerId])
 
   const isEmailVerified = user?.emailVerified === true
+  const hasPendingEmail = Boolean(user?.emailPending)
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
   const formsStarted = Boolean(client?.profileData?.forms_started)
   const formsCompleted = client?.profileData?.profile_status === 'completed'
+  const formsCurrentSection = useMemo(
+    () => (activeTab === 'Forms' ? client?.profileData?.current_section || '' : ''),
+    [activeTab, client?.profileData?.current_section]
+  )
+  const formsSectionKey = useMemo(
+    () => resolveFormsSectionKey(client?.profileData?.current_section),
+    [client?.profileData?.current_section]
+  )
+  useEffect(() => {
+    if (!user?.customerId || !activeTab) return
+    if (activeTab === 'Agents' && savedAgentsLoading) return
+    if (tabLogRef.current === activeTab) return
+    tabLogRef.current = activeTab
+    const profileStatus = formsCompleted ? 'completed' : formsStarted ? 'draft' : 'none'
+    api.post(`/customers/${user.customerId}/tab-view`, {
+      tabName: activeTab,
+      sessionId,
+      profileStatus,
+      currentSection: activeTab === 'Forms' ? formsCurrentSection || null : null,
+      savedAgentsCount: activeTab === 'Agents' ? savedAgents.length : null,
+    }).catch(() => {})
+  }, [
+    activeTab,
+    user?.customerId,
+    formsCompleted,
+    formsStarted,
+    sessionId,
+    formsCurrentSection,
+    savedAgents.length,
+    savedAgentsLoading,
+  ])
   const displayName = client?.name || user?.name || user?.email || 'client'
-  const savedAgentIds = useMemo(() => new Set(savedAgents.map((agent) => agent.id)), [savedAgents])
+  const savedAgentIds = useMemo(() => {
+    const ids = new Set(savedAgents.map((agent) => agent.id))
+    savedAgentIdOverrides.forEach((id) => ids.add(id))
+    return ids
+  }, [savedAgents, savedAgentIdOverrides])
   const totalUnread = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
     [threads]
   )
+  const hasAgentReply = useMemo(
+    () => threads.some((thread) => thread.lastMessage?.senderRole === 'AGENT'),
+    [threads]
+  )
+  const waitingOnAgentReply = useMemo(
+    () => threads.some((thread) => thread.lastMessage?.senderRole === 'CUSTOMER'),
+    [threads]
+  )
+  const displayThreads = useMemo(() => {
+    if (!focusAgent) return threads
+    if (threads.some((thread) => thread.agent?.id === focusAgent.id)) return threads
+    return [{ agent: focusAgent, lastMessage: null, unreadCount: 0 }, ...threads]
+  }, [threads, focusAgent])
   const passportForms = formsDraft || client?.profileData?.forms || {}
   const householdForms = passportForms.household || {}
   const namedInsured = householdForms.namedInsured || {}
@@ -528,6 +899,35 @@ export default function ClientDashboard() {
   ]
   const passportCompletedCount = passportSections.filter((section) => section.count > 0).length
   const passportHasData = passportCompletedCount > 0
+  const passportStatus = !passportHasData ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
+  const formsOverviewStatus = !formsStarted ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
+  const formsSectionOverview = [
+    {
+      id: 'household',
+      label: 'Household Information',
+      status: householdCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
+    },
+    {
+      id: 'address',
+      label: 'Address Information',
+      status: addressCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
+    },
+    {
+      id: 'additional',
+      label: 'Additional Information',
+      status: additionalCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
+    },
+    {
+      id: 'summary',
+      label: 'Summary',
+      status: formsCompleted ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
+    },
+  ]
+  const resolveSectionTone = (status) => {
+    if (status === 'Completed') return 'green'
+    if (status === 'In progress') return 'amber'
+    return 'gray'
+  }
 
   const requestEmailVerification = async () => {
     if (!user?.email) {
@@ -536,7 +936,7 @@ export default function ClientDashboard() {
     }
     setVerificationSending(true)
     try {
-      const res = await api.post('/auth/email-otp/request')
+      const res = await api.post('/auth/email-otp/request', { sessionId })
       if (res.data?.verified) {
         setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
         toast.success('Email already verified')
@@ -556,6 +956,12 @@ export default function ClientDashboard() {
     setFormsStartSection('household')
     setFormsStartKey((prev) => prev + 1)
     nav('/client/dashboard?tab=forms', { replace: false })
+  }
+
+  const openFormsSection = (sectionId) => {
+    if (!sectionId) return
+    setFormsStartSection(sectionId)
+    setFormsStartKey((prev) => prev + 1)
   }
 
   const handleStartForms = async () => {
@@ -583,7 +989,10 @@ export default function ClientDashboard() {
   }
 
   const handleContinueForms = () => {
-    openFormsFlow()
+    const nextSection = formsSectionKey || 'household'
+    setFormsStartSection(nextSection)
+    setFormsStartKey((prev) => prev + 1)
+    nav('/client/dashboard?tab=forms', { replace: false })
   }
 
   const handleCancelForms = () => {
@@ -678,16 +1087,17 @@ export default function ClientDashboard() {
 
   const handlePasswordSubmit = async (e) => {
     e?.preventDefault()
+    setPasswordMessage(null)
     if (!currentPassword) {
-      toast.error('Enter your current password')
+      setPasswordMessage({ type: 'error', text: 'Enter your current password.' })
       return
     }
     if (!newPassword || !confirmPassword) {
-      toast.error('Enter and confirm your new password')
+      setPasswordMessage({ type: 'error', text: 'Enter and confirm your new password.' })
       return
     }
     if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match')
+      setPasswordMessage({ type: 'error', text: 'Passwords do not match.' })
       return
     }
     setPasswordUpdating(true)
@@ -695,46 +1105,381 @@ export default function ClientDashboard() {
       const res = await api.post('/auth/password', {
         currentPassword,
         newPassword,
+        sessionId,
       })
-      if (res.data?.user) {
-        setUser(res.data.user)
+      if (res.data?.token && completeAuth) {
+        const persist = typeof window !== 'undefined' && localStorage.getItem('connsura_token')
+        completeAuth(res.data.token, res.data.user || user, newPassword, { persist: Boolean(persist) })
+      } else {
+        if (res.data?.user) {
+          setUser(res.data.user)
+        }
+        setLastPassword(newPassword)
       }
-      setLastPassword(newPassword)
-      setChangingPassword(false)
       setShowPassword(false)
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      toast.success('Password updated')
+      setPasswordMessage({
+        type: 'success',
+        text: "Password updated. If you didn't do this, contact us immediately.",
+      })
+      await logInappNotice('password_changed')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update password')
+      setPasswordMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to update password.',
+      })
     } finally {
       setPasswordUpdating(false)
     }
   }
 
+  const handleNameSave = async () => {
+    if (!user?.customerId) {
+      setNameMessage({ type: 'error', text: 'Customer profile not found.' })
+      return
+    }
+    if (nameSaving) return
+    const payload = {
+      firstName: form.firstName.trim(),
+      middleName: form.middleName.trim(),
+      lastName: form.lastName.trim(),
+      sessionId,
+    }
+    if (!payload.firstName || !payload.lastName) {
+      setNameMessage({ type: 'error', text: 'First and last name are required.' })
+      return
+    }
+    setNameSaving(true)
+    setNameMessage(null)
+    try {
+      const res = await api.patch(`/customers/${user.customerId}/name`, payload)
+      if (res.data?.profile) {
+        setClient(res.data.profile)
+      }
+      setUser((prev) => (prev ? { ...prev, name: res.data?.profile?.name || prev.name } : prev))
+      setNameEditing(false)
+      setNameMessage({ type: 'success', text: 'Saved' })
+    } catch (err) {
+      setNameMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to update name.',
+      })
+    } finally {
+      setNameSaving(false)
+    }
+  }
+
+  const resetNameForm = () => {
+    const nameParts = parseFullName(client?.name || '')
+    const details = client?.profileData || {}
+    setForm((prev) => ({
+      ...prev,
+      firstName: details.firstName || nameParts.firstName,
+      middleName: details.middleName || nameParts.middleName,
+      lastName: details.lastName || nameParts.lastName,
+    }))
+  }
+
+  const handleEmailSave = async () => {
+    const trimmed = emailDraft.trim().toLowerCase()
+    if (!trimmed) {
+      setEmailMessage({ type: 'error', text: 'Email is required.' })
+      return
+    }
+    if (trimmed === String(user?.email || '').trim().toLowerCase()) {
+      setEmailMessage({ type: 'error', text: 'Email is unchanged.' })
+      return
+    }
+    if (emailSaving) return
+    setEmailSaving(true)
+    setEmailMessage(null)
+    try {
+      const res = await api.post('/auth/email-change/request', { email: trimmed, sessionId })
+      if (res.data?.user) {
+        setUser(res.data.user)
+      }
+      setEmailEditing(false)
+      setVerificationSent(true)
+      setEmailMessage({
+        type: 'success',
+        text: 'Email updated. Please verify your new email to keep your account secure.',
+      })
+      await logInappNotice('email_change')
+    } catch (err) {
+      setEmailMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to update email.',
+      })
+    } finally {
+      setEmailSaving(false)
+    }
+  }
+
+  const handlePreferencesSave = async (nextLanguage, nextTimezone) => {
+    if (!user?.customerId) return
+    if (preferencesSaving) return
+    setPreferencesSaving(true)
+    setPreferencesMessage('')
+    try {
+      const res = await api.patch(`/customers/${user.customerId}/preferences`, {
+        language: nextLanguage,
+        timezone: nextTimezone,
+        sessionId,
+      })
+      if (res.data?.profile) {
+        setClient(res.data.profile)
+      }
+      setPreferencesMessage('Saved')
+    } catch (err) {
+      setPreferencesMessage(err.response?.data?.error || 'Unable to save preferences')
+    } finally {
+      setPreferencesSaving(false)
+    }
+  }
+
+  const loadLoginActivity = async () => {
+    if (!user?.customerId) return
+    setLoginActivityLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/login-activity`, {
+        params: { sessionId },
+      })
+      setLoginActivity(res.data?.activity || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to load login activity')
+    } finally {
+      setLoginActivityLoading(false)
+    }
+  }
+
+  const loadSessions = async () => {
+    if (!user?.customerId) return
+    setSessionsLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/active-sessions`, {
+        params: { sessionId },
+      })
+      setSessions(res.data?.sessions || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to load sessions')
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  const handleLogoutOtherSessions = async () => {
+    if (!user) return
+    const confirmed = window.confirm('Log out all other sessions? Your current session stays active.')
+    if (!confirmed) return
+    setSessionsMessage(null)
+    try {
+      const res = await api.post('/auth/sessions/revoke-others', { sessionId })
+      if (res.data?.token && completeAuth) {
+        const persist = typeof window !== 'undefined' && localStorage.getItem('connsura_token')
+        completeAuth(res.data.token, res.data.user || user, null, { persist: Boolean(persist) })
+      }
+      setSessionsMessage({ type: 'success', text: 'Other sessions logged out.' })
+      await loadSessions()
+    } catch (err) {
+      setSessionsMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to log out other sessions',
+      })
+    }
+  }
+
+  const loadSharedActivity = async () => {
+    if (!user?.customerId) return
+    setSharedActivityLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/shared-profile-activity`, {
+        params: { sessionId },
+      })
+      setSharedActivity(res.data?.activity || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to load shared activity')
+    } finally {
+      setSharedActivityLoading(false)
+    }
+  }
+
+  const loadConsentHistory = async () => {
+    if (!user?.customerId) return
+    setConsentLoading(true)
+    try {
+      const res = await api.get(`/customers/${user.customerId}/consent-history`, {
+        params: { sessionId },
+      })
+      setConsentHistory(res.data?.consents || [])
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to load consent history')
+    } finally {
+      setConsentLoading(false)
+    }
+  }
+
+  const logInappNotice = async (type) => {
+    if (!user?.customerId) return
+    try {
+      await api.post(`/customers/${user.customerId}/inapp-notice`, {
+        sessionId,
+        type,
+      })
+    } catch (err) {
+      console.warn('Unable to log in-app notice', err)
+    }
+  }
+
+  const handleCookiePreferenceChange = async (nextPref) => {
+    if (!user?.customerId) return
+    setCookieSaving(true)
+    setCookieMessage('')
+    setCookiePref(nextPref)
+    try {
+      await api.put(`/customers/${user.customerId}/cookie-preferences`, {
+        preference: nextPref,
+        sessionId,
+      })
+      toast.success(
+        'Cookies preference updated. Some features that rely on cookies may not work as expected.'
+      )
+      setCookieMessage('Saved')
+      await logInappNotice('cookie_change')
+    } catch (err) {
+      setCookieMessage(err.response?.data?.error || 'Unable to save cookie preference')
+    } finally {
+      setCookieSaving(false)
+    }
+  }
+
+  const handleLoginAlertsView = async () => {
+    if (!user?.customerId) return
+    try {
+      await api.post(`/customers/${user.customerId}/login-alerts/view`, { sessionId })
+    } catch (err) {
+      console.warn('Unable to log login alerts view', err)
+    }
+  }
+
+  const handleDeactivateAccount = async () => {
+    if (!deactivatePassword) {
+      setDeactivateMessage({ type: 'error', text: 'Enter your password to continue.' })
+      return
+    }
+    setDeactivating(true)
+    setDeactivateMessage(null)
+    try {
+      await api.post('/auth/account/deactivate', { password: deactivatePassword, sessionId })
+      toast.success("Account deactivated. You've been signed out.")
+      await logInappNotice('account_deactivated')
+      logout()
+      nav('/', { replace: true })
+    } catch (err) {
+      setDeactivateMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to deactivate account.',
+      })
+    } finally {
+      setDeactivating(false)
+    }
+  }
+
+  const handleDeleteAccountClick = async () => {
+    if (!user?.customerId) return
+    try {
+      await api.post(`/customers/${user.customerId}/delete-account/click`, { sessionId })
+    } catch (err) {
+      console.warn('Unable to log delete account click', err)
+    }
+  }
+
   const handleDeleteAccount = async () => {
+    setDeleteMessage(null)
     if (!deletePassword) {
-      toast.error('Enter your password to continue')
+      setDeleteMessage({ type: 'error', text: 'Enter your password to continue.' })
       return
     }
     if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
-      toast.error('Type DELETE to confirm')
+      setDeleteMessage({ type: 'error', text: 'Type DELETE to confirm.' })
       return
     }
     setDeleting(true)
     try {
-      await api.post('/auth/account/delete', { password: deletePassword })
+      await api.post('/auth/account/delete', { password: deletePassword, sessionId })
+      toast.success('Account deleted. Your Connsura account has been permanently removed.')
+      logout()
       nav('/account-deleted', { replace: true })
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to delete account')
+      setDeleteMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to delete account.',
+      })
     } finally {
       setDeleting(false)
     }
   }
 
+  const saveNotificationPreferences = async (nextPrefs) => {
+    if (!user?.customerId) return
+    const saveId = notificationSaveRef.current + 1
+    notificationSaveRef.current = saveId
+    setNotificationSaving(true)
+    setNotificationMessage('')
+    try {
+      const res = await api.put(`/customers/${user.customerId}/notification-preferences`, {
+        preferences: nextPrefs,
+        sessionId,
+      })
+      if (notificationSaveRef.current !== saveId) return
+      setNotificationPrefs(normalizeNotificationPrefs(res.data?.preferences || nextPrefs))
+      setNotificationMessage('Saved')
+    } catch (err) {
+      if (notificationSaveRef.current !== saveId) return
+      setNotificationMessage(err.response?.data?.error || 'Unable to save changes')
+    } finally {
+      if (notificationSaveRef.current === saveId) {
+        setNotificationSaving(false)
+      }
+    }
+  }
+
   const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
   const resolveShareRecipient = (share) => share?.agent?.name || share?.recipientName || 'Shared link'
+  const accountName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+  const emailValue = form.email || user?.email || ''
+  const fallbackLanguage =
+    typeof navigator !== 'undefined' && navigator.language ? navigator.language : ''
+  const fallbackTimeZone =
+    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
+  const languageLabel = languageDraft || client?.profileData?.language || fallbackLanguage || 'Not set'
+  const timeZoneLabel = timezoneDraft || client?.profileData?.timezone || fallbackTimeZone || 'Not set'
+  const languageOptions = [
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Spanish' },
+    { value: 'fr', label: 'French' },
+  ]
+  const timeZoneOptions = [
+    { value: 'America/New_York', label: 'Eastern (America/New_York)' },
+    { value: 'America/Chicago', label: 'Central (America/Chicago)' },
+    { value: 'America/Denver', label: 'Mountain (America/Denver)' },
+    { value: 'America/Los_Angeles', label: 'Pacific (America/Los_Angeles)' },
+    { value: 'UTC', label: 'UTC' },
+  ]
+  const termsVersion = client?.profileData?.terms_version || client?.profileData?.termsVersion || ''
+  const termsAcceptedAt =
+    client?.profileData?.terms_accepted_at || client?.profileData?.termsAcceptedAt || ''
+  const privacyVersion = client?.profileData?.privacy_version || client?.profileData?.privacyVersion || ''
+  const privacyAcceptedAt =
+    client?.profileData?.privacy_accepted_at || client?.profileData?.privacyAcceptedAt || ''
+  const formatAcceptance = (version, date) => {
+    if (!version && !date) return 'Not recorded yet'
+    if (version && date) return `Version ${version} on ${formatTimestamp(date)}`
+    if (version) return `Version ${version}`
+    return `Accepted ${formatTimestamp(date)}`
+  }
+  const currentNotificationPrefs = notificationPrefs || DEFAULT_NOTIFICATION_PREFS
 
   return (
     <main
@@ -773,7 +1518,9 @@ export default function ClientDashboard() {
                 Welcome back{displayName ? `, ${displayName}` : ''}. Manage your profile.
                 {needsEmailVerification && (
                   <span className="ml-3 text-amber-600">
-                    Email not verified. Verify your email to share your profile.
+                    {hasPendingEmail
+                      ? 'Verify your new email to finish the update.'
+                      : 'Email not verified. Verify your email to share your profile.'}
                     <button
                       type="button"
                       className="ml-2 font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline"
@@ -853,7 +1600,7 @@ export default function ClientDashboard() {
               {totalUnread > 0 && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <div className="text-sm font-semibold text-rose-800">
-                    You have {totalUnread} new {totalUnread === 1 ? 'message' : 'messages'}.
+                    You have {totalUnread} unread {totalUnread === 1 ? 'message' : 'messages'}.
                   </div>
                   <button
                     type="button"
@@ -861,6 +1608,51 @@ export default function ClientDashboard() {
                     onClick={() => updateTab('Messages')}
                   >
                     View messages
+                  </button>
+                </div>
+              )}
+              {!threadsLoading && threads.length === 0 && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-900">Talk to an agent</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Browse agents and start a conversation when you are ready.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={() => nav('/agents')}
+                  >
+                    Find agents
+                  </button>
+                </div>
+              )}
+              {(hasAgentReply || waitingOnAgentReply) && (
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <div className="text-sm font-semibold text-rose-800">Continue your conversation</div>
+                  <p className="mt-1 text-sm text-rose-700">
+                    {hasAgentReply ? 'Agent replied - continue conversation.' : 'Waiting for agent reply.'}
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={() => updateTab('Messages')}
+                  >
+                    View messages
+                  </button>
+                </div>
+              )}
+              {savedAgentIds.size > 0 && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-900">You have a saved agent</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    View your saved agents to keep the relationship active.
+                  </p>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={() => updateTab('Agents')}
+                  >
+                    View saved agents
                   </button>
                 </div>
               )}
@@ -954,12 +1746,29 @@ export default function ClientDashboard() {
                       Summary of the information you have saved in your forms.
                     </p>
                   </div>
-                  <button type="button" className="pill-btn-primary px-4" onClick={() => updateTab('Forms')}>
-                    Edit in Forms
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {passportHasData && (
+                      <button
+                        type="button"
+                        className="pill-btn-ghost px-4"
+                        onClick={() => {
+                          if (!isEmailVerified) {
+                            toast.error('Verify your email to share your profile')
+                            return
+                          }
+                          setShareOpen(true)
+                        }}
+                      >
+                        Share
+                      </button>
+                    )}
+                    <button type="button" className="pill-btn-primary px-4" onClick={() => updateTab('Forms')}>
+                      Edit in Forms
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 text-sm text-slate-600">
-                  {passportCompletedCount} of {passportSections.length} sections filled
+                  {passportCompletedCount} of {passportSections.length} sections filled • Status: {passportStatus}
                 </div>
               </div>
 
@@ -1013,6 +1822,67 @@ export default function ClientDashboard() {
                   Cancel
                 </button>
               </div>
+              <div className="surface p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Forms status</div>
+                    <div className="text-sm text-slate-600">Status: {formsOverviewStatus}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!formsStarted && (
+                      <button
+                        type="button"
+                        className="pill-btn-primary px-4"
+                        onClick={handleStartForms}
+                        disabled={formsStarting}
+                      >
+                        {formsStarting ? 'Starting...' : 'Start Forms'}
+                      </button>
+                    )}
+                    {formsStarted && !formsCompleted && (
+                      <button type="button" className="pill-btn-primary px-4" onClick={handleContinueForms}>
+                        Continue
+                      </button>
+                    )}
+                    {formsStarted && formsCompleted && (
+                      <>
+                        <button
+                          type="button"
+                          className="pill-btn-primary px-4"
+                          onClick={() => openFormsSection('summary')}
+                        >
+                          Continue to Summary
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-4"
+                          onClick={() => openFormsSection('household')}
+                        >
+                          Edit
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {formsSectionOverview.map((section) => (
+                    <div key={section.id} className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-700">{section.label}</div>
+                        <Badge label={section.status} tone={resolveSectionTone(section.status)} />
+                      </div>
+                      <button
+                        type="button"
+                        className="pill-btn-ghost px-3 text-xs"
+                        onClick={() => openFormsSection(section.id)}
+                        disabled={!formsStarted}
+                      >
+                        Open section
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <CreateProfile
                 onShareSnapshotChange={setShareSnapshot}
                 onFormDataChange={setFormsDraft}
@@ -1051,7 +1921,14 @@ export default function ClientDashboard() {
               )}
               {!savedAgentsLoading && savedAgents.length === 0 && (
                 <div className="surface p-5 text-sm text-slate-500">
-                  No saved agents yet.
+                  <div>No saved agents yet.</div>
+                  <button
+                    type="button"
+                    className="pill-btn-primary mt-3 px-4"
+                    onClick={handleTalkToAgent}
+                  >
+                    Talk to an Agent
+                  </button>
                 </div>
               )}
               {!savedAgentsLoading && savedAgents.length > 0 && (
@@ -1061,7 +1938,6 @@ export default function ClientDashboard() {
                       key={agent.id}
                       agent={agent}
                       onMessage={handleMessageAgent}
-                      onRate={handleRateAgent}
                       onRemove={handleRemoveAgentCard}
                     />
                   ))}
@@ -1087,12 +1963,15 @@ export default function ClientDashboard() {
                 <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agents</div>
                   {threadsLoading && <Skeleton className="h-20" />}
-                  {!threadsLoading && threads.length === 0 && (
+                  {!threadsLoading && focusAgentLoading && displayThreads.length === 0 && (
+                    <div className="text-sm text-slate-500">Loading agent...</div>
+                  )}
+                  {!threadsLoading && displayThreads.length === 0 && (
                     <div className="text-sm text-slate-500">No messages yet.</div>
                   )}
-                  {!threadsLoading && threads.length > 0 && (
+                  {!threadsLoading && displayThreads.length > 0 && (
                     <div className="space-y-2">
-                      {threads.map((thread) => {
+                      {displayThreads.map((thread) => {
                         const agentLabel = thread.agent?.name || thread.agent?.email || 'Agent'
                         const previewPrefix = thread.lastMessage?.senderRole === 'CUSTOMER' ? 'You: ' : ''
                         const preview = `${previewPrefix}${thread.lastMessage?.body || ''}`.trim()
@@ -1105,7 +1984,12 @@ export default function ClientDashboard() {
                             onClick={() => {
                               setActiveThread(thread)
                               setThreadMessages([])
-                              clearAgentFocus()
+                              if (thread.agent?.id && focusAgentId !== thread.agent.id) {
+                                const params = new URLSearchParams(location.search)
+                                params.set('tab', 'messages')
+                                params.set('agent', String(thread.agent.id))
+                                nav(`/client/dashboard?${params.toString()}`)
+                              }
                             }}
                             className={`w-full rounded-xl border px-3 py-2 text-left transition ${
                               isActive
@@ -1130,6 +2014,11 @@ export default function ClientDashboard() {
                                 </div>
                               </div>
                               <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                                {thread.unreadCount > 0 && (
+                                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                                    {thread.unreadCount}
+                                  </span>
+                                )}
                                 {showRemove && (
                                   <button
                                     type="button"
@@ -1158,7 +2047,7 @@ export default function ClientDashboard() {
                   )}
                   {activeThread && (
                     <>
-                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                         <div>
                           <div className="font-semibold text-slate-900">
                             {activeThread.agent?.name || activeThread.agent?.email || 'Agent'}
@@ -1167,15 +2056,40 @@ export default function ClientDashboard() {
                             <div className="text-xs text-slate-500">{activeThread.agent.email}</div>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400">
-                          {formatTimestamp(activeThread.lastMessage?.createdAt)}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                          {activeThread.agent?.id && (
+                            <button
+                              type="button"
+                              className="pill-btn-ghost px-3 text-xs"
+                              onClick={() => handleViewProfile(activeThread.agent)}
+                            >
+                              View profile
+                            </button>
+                          )}
+                          {activeThread.agent?.id && (
+                            <button
+                              type="button"
+                              className={`pill-btn-ghost px-3 text-xs ${
+                                savedAgentIds.has(activeThread.agent.id) ? 'opacity-60 cursor-default' : ''
+                              }`}
+                              onClick={() => handleSaveAgent(activeThread.agent)}
+                              disabled={savedAgentIds.has(activeThread.agent.id)}
+                            >
+                              {savedAgentIds.has(activeThread.agent.id) ? 'Saved' : 'Save agent'}
+                            </button>
+                          )}
+                          <div>{formatTimestamp(activeThread.lastMessage?.createdAt)}</div>
                         </div>
                       </div>
 
                       <div className="flex-1 space-y-3 overflow-y-auto py-4">
                         {threadLoading && <Skeleton className="h-24" />}
                         {!threadLoading && threadMessages.length === 0 && (
-                          <div className="text-sm text-slate-500">No messages in this conversation.</div>
+                          <div className="text-sm text-slate-500">
+                            {activeThread.lastMessage
+                              ? 'No messages in this conversation.'
+                              : 'Introduce yourself to start the conversation.'}
+                          </div>
                         )}
                         {!threadLoading &&
                           threadMessages.map((message) => {
@@ -1230,176 +2144,930 @@ export default function ClientDashboard() {
           )}
 
           {!loading && activeTab === 'Settings' && (
-            <div className="surface p-4 space-y-2 max-w-md w-full">
-              <h2 className="text-xl font-semibold">Settings</h2>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                  <div className="text-sm text-slate-500">Email</div>
-                  <div className="font-semibold">{form.email || 'Not set'}</div>
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="space-y-3">
+                  {[
+                    { id: 'account', label: 'Account' },
+                    { id: 'security', label: 'Security' },
+                    { id: 'privacy', label: 'Privacy' },
+                    { id: 'notifications', label: 'Notifications' },
+                    { id: 'terms', label: 'Terms and conditions' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                      onClick={() => setSettingsModal(item.id)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                  <div className="text-sm text-slate-500">Name</div>
-                  <div className="font-semibold">
-                    {[form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ') || 'Not set'}
-                  </div>
-                </div>
-              </div>
-              <div className="text-sm text-slate-500">
-                Manage notifications and account preferences (coming soon).
               </div>
 
-              <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <span>Password</span>
+              <Modal
+                title="Account"
+                open={settingsModal === 'account'}
+                onClose={() => setSettingsModal(null)}
+                panelClassName="max-w-4xl"
+              >
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-semibold">{getInitials(accountName || displayName, 'CL')}</span>
+                      )}
+                    </div>
+                    <div className="min-w-[180px] flex-1 space-y-1">
+                      <div className="text-sm font-semibold text-slate-900">Profile picture</div>
+                      <div className="text-xs text-slate-500">Upload a square image under 2MB.</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <label
+                        className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
+                          photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handlePhotoChange}
+                          disabled={photoUploading}
+                        />
+                        Upload photo
+                      </label>
+                      {photoPreview && (
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-4"
+                          onClick={handlePhotoRemove}
+                          disabled={photoUploading}
+                        >
+                          {photoUploading ? 'Saving...' : 'Remove'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Name</div>
                       <button
                         type="button"
-                        className="text-slate-500 hover:text-slate-800"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        onClick={() => setShowPassword((v) => !v)}
+                        className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                        onClick={() => {
+                          setNameMessage(null)
+                          if (nameEditing) {
+                            setNameEditing(false)
+                            resetNameForm()
+                          } else {
+                            setNameEditing(true)
+                          }
+                        }}
                       >
-                        {showPassword ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18m-4.5-4.5A7 7 0 017 12m7 7a7 7 0 01-7-7m0 0a7 7 0 0111.667-5M12 9a3 3 0 013 3" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
+                        {nameEditing ? 'Cancel' : 'Edit'}
                       </button>
                     </div>
-                    <div className="font-semibold">{passwordDisplay}</div>
+                    {!nameEditing && <div className="font-semibold text-slate-900">{accountName || 'Not set'}</div>}
+                    {nameEditing && (
+                      <div className="space-y-2">
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <input
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                            placeholder="First"
+                            value={form.firstName}
+                            onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                          />
+                          <input
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                            placeholder="Middle"
+                            value={form.middleName}
+                            onChange={(e) => setForm((prev) => ({ ...prev, middleName: e.target.value }))}
+                          />
+                          <input
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                            placeholder="Last"
+                            value={form.lastName}
+                            onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="pill-btn-primary px-4"
+                            onClick={handleNameSave}
+                            disabled={nameSaving}
+                          >
+                            {nameSaving ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {nameMessage && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          nameMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {nameMessage.text}
+                      </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    className="pill-btn-ghost text-sm px-4"
-                    onClick={() => setChangingPassword((v) => !v)}
-                  >
-                    {changingPassword ? 'Cancel' : 'Change password'}
-                  </button>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</div>
+                        <div className="font-semibold text-slate-900">{emailValue || 'Not set'}</div>
+                        {user?.emailPending && (
+                          <div className="text-xs text-amber-700">
+                            Pending: {user.emailPending} (old email stays active until verified)
+                          </div>
+                        )}
+                      </div>
+                      <Badge label={isEmailVerified ? 'Verified' : 'Unverified'} tone={isEmailVerified ? 'green' : 'amber'} />
+                    </div>
+                    {emailEditing ? (
+                      <div className="space-y-2">
+                        <input
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                          value={emailDraft}
+                          onChange={(e) => setEmailDraft(e.target.value)}
+                          placeholder="you@example.com"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-3 text-xs"
+                          onClick={() => {
+                            setEmailEditing(false)
+                            setEmailMessage(null)
+                            setEmailDraft(user?.emailPending || user?.email || '')
+                          }}
+                        >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn-primary px-4 text-xs"
+                            onClick={handleEmailSave}
+                            disabled={emailSaving}
+                          >
+                            {emailSaving ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-3 text-xs"
+                          onClick={() => {
+                            setEmailEditing(true)
+                            setEmailMessage(null)
+                            setEmailDraft(user?.emailPending || user?.email || '')
+                          }}
+                        >
+                          Change email
+                        </button>
+                        {needsEmailVerification && (
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-3 text-xs"
+                            onClick={requestEmailVerification}
+                            disabled={verificationSending}
+                          >
+                            {verificationSent ? 'Resend code' : 'Verify email'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {emailMessage && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          emailMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {emailMessage.text}
+                      </div>
+                    )}
+                    {needsEmailVerification && verificationSent && (
+                      <div className="text-xs text-amber-600">Check your email to verify your address.</div>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Language</div>
+                    <select
+                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      value={languageLabel === 'Not set' ? '' : languageLabel}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setLanguageDraft(next)
+                        handlePreferencesSave(next, timeZoneLabel === 'Not set' ? '' : timeZoneLabel)
+                      }}
+                      disabled={preferencesSaving}
+                    >
+                      <option value="">Select language</option>
+                      {languageOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                      {fallbackLanguage &&
+                        !languageOptions.some((option) => option.value === fallbackLanguage) && (
+                          <option value={fallbackLanguage}>{fallbackLanguage}</option>
+                        )}
+                    </select>
+                    {preferencesMessage && (
+                      <div
+                        className={`mt-2 text-xs font-semibold ${
+                          preferencesMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {preferencesMessage}
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time zone</div>
+                    <select
+                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      value={timeZoneLabel === 'Not set' ? '' : timeZoneLabel}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setTimezoneDraft(next)
+                        handlePreferencesSave(languageLabel === 'Not set' ? '' : languageLabel, next)
+                      }}
+                      disabled={preferencesSaving}
+                    >
+                      <option value="">Select time zone</option>
+                      {timeZoneOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                      {fallbackTimeZone &&
+                        !timeZoneOptions.some((option) => option.value === fallbackTimeZone) && (
+                          <option value={fallbackTimeZone}>{fallbackTimeZone}</option>
+                        )}
+                    </select>
+                    {preferencesMessage && (
+                      <div
+                        className={`mt-2 text-xs font-semibold ${
+                          preferencesMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {preferencesMessage}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              </Modal>
+
+              <Modal
+                title="Security"
+                open={settingsModal === 'security'}
+                onClose={() => setSettingsModal(null)}
+                panelClassName="max-w-4xl"
+              >
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Security</h3>
+                  <p className="text-xs text-slate-500">Password, sessions, and sharing activity.</p>
                 </div>
 
-                {changingPassword && (
-                  <div className="space-y-2">
-                    <label className="block text-sm">
-                      Current password
-                      <input
-                        type="password"
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                      />
-                    </label>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="block text-sm">
-                        New password
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                        />
-                      </label>
-                      <label className="block text-sm">
-                        Confirm password
-                        <input
-                          type="password"
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                      </label>
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>Password</span>
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-800"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowPassword((v) => !v)}
+                        >
+                          {showPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18m-4.5-4.5A7 7 0 017 12m7 7a7 7 0 01-7-7m0 0a7 7 0 0111.667-5M12 9a3 3 0 013 3" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      <div className="font-semibold">{passwordDisplay}</div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="pill-btn-ghost"
-                        onClick={() => {
-                          setChangingPassword(false)
+                    <button
+                      type="button"
+                      className="pill-btn-ghost text-sm px-4"
+                      onClick={() => {
+                        setPasswordMessage(null)
+                        if (changingPassword) {
                           setCurrentPassword('')
                           setNewPassword('')
                           setConfirmPassword('')
-                        }}
-                      >
-                        Cancel
-                      </button>
+                        }
+                        setChangingPassword((v) => !v)
+                      }}
+                    >
+                      {changingPassword ? 'Cancel' : 'Change password'}
+                    </button>
+                  </div>
+
+                  {passwordMessage && (
+                    <div
+                      className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                        passwordMessage.type === 'success'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-rose-50 text-rose-700'
+                      }`}
+                    >
+                      {passwordMessage.text}
+                    </div>
+                  )}
+
+                  {changingPassword && (
+                    <div className="space-y-2">
+                      <label className="block text-sm">
+                        Current password
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                        />
+                      </label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="block text-sm">
+                          New password
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          Confirm password
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="pill-btn-ghost"
+                          onClick={() => {
+                            setChangingPassword(false)
+                            setCurrentPassword('')
+                            setNewPassword('')
+                            setConfirmPassword('')
+                            setPasswordMessage(null)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-primary px-5"
+                          onClick={handlePasswordSubmit}
+                          disabled={passwordUpdating}
+                        >
+                          {passwordUpdating ? 'Saving...' : 'Save password'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <AuthenticatorPanel />
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm text-slate-500">Login activity</div>
                       <button
                         type="button"
-                        className="pill-btn-primary px-5"
-                        onClick={handlePasswordSubmit}
-                        disabled={passwordUpdating}
+                        className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                        onClick={loadLoginActivity}
+                        disabled={loginActivityLoading}
                       >
-                        {passwordUpdating ? 'Saving...' : 'Save password'}
+                        {loginActivityLoading ? 'Loading...' : 'View'}
                       </button>
                     </div>
+                    {loginActivity.length === 0 && !loginActivityLoading && (
+                      <div className="text-sm text-slate-700">No recent login activity.</div>
+                    )}
+                    {loginActivity.length > 0 && (
+                      <div className="space-y-2">
+                        {loginActivity.map((entry) => (
+                          <div key={entry.id} className="text-xs text-slate-600">
+                            <div className="font-semibold text-slate-800">{entry.ip || 'Unknown IP'}</div>
+                            <div className="truncate">{entry.userAgent || 'Unknown device'}</div>
+                            <div className="text-slate-400">{formatTimestamp(entry.timestamp)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="pt-2">
-                <AuthenticatorPanel />
-              </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
-                <div className="text-sm font-semibold text-rose-700">Delete account</div>
-                <p className="text-xs text-rose-700">
-                  This permanently deletes your account, profile, and messages. This cannot be undone.
-                </p>
-                {!deleteOpen ? (
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm text-slate-500">Active sessions</div>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                        onClick={loadSessions}
+                        disabled={sessionsLoading}
+                      >
+                        {sessionsLoading ? 'Loading...' : 'Refresh'}
+                      </button>
+                    </div>
+                    {sessions.length === 0 && !sessionsLoading && (
+                      <div className="text-sm text-slate-700">No active sessions found.</div>
+                    )}
+                    {sessions.length > 0 && (
+                      <div className="space-y-2">
+                        {sessions.map((session) => (
+                          <div key={session.id} className="text-xs text-slate-600">
+                            <div className="font-semibold text-slate-800">
+                              {session.current ? 'Current session' : 'Session'}
+                            </div>
+                            <div className="text-slate-500">{session.ip || 'Unknown IP'}</div>
+                            <div className="truncate">{session.userAgent || 'Unknown device'}</div>
+                            <div className="text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {sessionsMessage && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          sessionsMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {sessionsMessage.text}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-3 text-xs"
+                      onClick={handleLogoutOtherSessions}
+                      disabled={sessionsLoading}
+                    >
+                      Log out all other sessions
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-slate-500">Shared profile activity</div>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                      onClick={loadSharedActivity}
+                      disabled={sharedActivityLoading}
+                    >
+                      {sharedActivityLoading ? 'Loading...' : 'View'}
+                    </button>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Active shares: {activeShares.length} | Pending edits: {pendingShares.length}
+                  </div>
+                  {sharedActivity.length === 0 && !sharedActivityLoading && (
+                    <div className="text-sm text-slate-700">No share activity yet.</div>
+                  )}
+                  {sharedActivity.length > 0 && (
+                    <div className="space-y-2">
+                      {sharedActivity.map((entry) => (
+                        <div key={entry.id} className="text-xs text-slate-600">
+                          <div className="font-semibold text-slate-800">{entry.recipient}</div>
+                          <div className="text-slate-500">Status: {entry.status}</div>
+                          {entry.lastAccessedAt && (
+                            <div className="text-slate-400">{formatTimestamp(entry.lastAccessedAt)}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <button
                     type="button"
-                    className="pill-btn-ghost text-rose-700 border-rose-200 hover:border-rose-300"
-                    onClick={() => setDeleteOpen(true)}
+                    className="pill-btn-ghost px-3 text-xs"
+                    onClick={() => updateTab('My Insurance Passport')}
                   >
-                    Delete account
+                    Manage sharing
                   </button>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="block text-sm text-rose-800">
-                      Password
-                      <input
-                        type="password"
-                        className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5"
-                        value={deletePassword}
-                        onChange={(e) => setDeletePassword(e.target.value)}
-                        placeholder="Enter your password"
-                      />
-                    </label>
-                    <label className="block text-sm text-rose-800">
-                      Type DELETE to confirm
-                      <input
-                        type="text"
-                        className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5 uppercase tracking-widest"
-                        value={deleteConfirm}
-                        onChange={(e) => setDeleteConfirm(e.target.value)}
-                        placeholder="DELETE"
-                      />
-                    </label>
-                    <div className="flex justify-end gap-2">
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                  <div className="text-sm font-semibold text-slate-700">Deactivate account</div>
+                  <p className="text-xs text-slate-500">
+                    Temporarily disable your account and revoke active shares.
+                  </p>
+                  {!deactivateOpen ? (
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-4"
+                      onClick={() => {
+                        setDeactivateMessage(null)
+                        setDeactivateOpen(true)
+                      }}
+                    >
+                      Deactivate account
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {deactivateMessage && (
+                        <div className="text-xs font-semibold text-rose-600">{deactivateMessage.text}</div>
+                      )}
+                      <label className="block text-sm">
+                        Password
+                        <input
+                          type="password"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={deactivatePassword}
+                          onChange={(e) => setDeactivatePassword(e.target.value)}
+                          placeholder="Enter your password"
+                        />
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="pill-btn-ghost"
+                          onClick={() => {
+                            setDeactivateOpen(false)
+                            setDeactivatePassword('')
+                            setDeactivateMessage(null)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-primary px-5"
+                          onClick={handleDeactivateAccount}
+                          disabled={deactivating}
+                        >
+                          {deactivating ? 'Deactivating...' : 'Deactivate'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
+                  <div className="text-sm font-semibold text-rose-700">Delete account</div>
+                  <p className="text-xs text-rose-700">
+                    This permanently deletes your account, profile, and messages. This cannot be undone.
+                  </p>
+                  {!deleteOpen ? (
+                    <button
+                      type="button"
+                      className="pill-btn-ghost text-rose-700 border-rose-200 hover:border-rose-300"
+                      onClick={() => {
+                        handleDeleteAccountClick()
+                        setDeleteMessage(null)
+                        setDeleteOpen(true)
+                      }}
+                    >
+                      Delete account
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {deleteMessage && (
+                        <div
+                          className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                            deleteMessage.type === 'success'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          {deleteMessage.text}
+                        </div>
+                      )}
+                      <label className="block text-sm text-rose-800">
+                        Password
+                        <input
+                          type="password"
+                          className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5"
+                          value={deletePassword}
+                          onChange={(e) => setDeletePassword(e.target.value)}
+                          placeholder="Enter your password"
+                        />
+                      </label>
+                      <label className="block text-sm text-rose-800">
+                        Type DELETE to confirm
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5 uppercase tracking-widest"
+                          value={deleteConfirm}
+                          onChange={(e) => setDeleteConfirm(e.target.value)}
+                          placeholder="DELETE"
+                        />
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="pill-btn-ghost"
+                          onClick={() => {
+                            setDeleteOpen(false)
+                            setDeletePassword('')
+                            setDeleteConfirm('')
+                            setDeleteMessage(null)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-primary px-5"
+                          onClick={handleDeleteAccount}
+                          disabled={deleting}
+                        >
+                          {deleting ? 'Deleting...' : 'Delete account'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              </Modal>
+
+              <Modal
+                title="Privacy"
+                open={settingsModal === 'privacy'}
+                onClose={() => setSettingsModal(null)}
+                panelClassName="max-w-4xl"
+              >
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Privacy</h3>
+                  <p className="text-xs text-slate-500">Consent history and policy details.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm text-slate-500">Consent history</div>
                       <button
                         type="button"
-                        className="pill-btn-ghost"
-                        onClick={() => {
-                          setDeleteOpen(false)
-                          setDeletePassword('')
-                          setDeleteConfirm('')
-                        }}
+                        className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                        onClick={loadConsentHistory}
+                        disabled={consentLoading}
                       >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="pill-btn-primary px-5"
-                        onClick={handleDeleteAccount}
-                        disabled={deleting}
-                      >
-                        {deleting ? 'Deleting...' : 'Delete account'}
+                        {consentLoading ? 'Loading...' : 'View'}
                       </button>
                     </div>
+                    {consentHistory.length === 0 && !consentLoading && (
+                      <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                    )}
+                    {consentHistory.length > 0 && (
+                      <div className="space-y-2 text-xs text-slate-600">
+                        {consentHistory.map((entry, index) => (
+                          <div key={`${entry.type || 'consent'}-${index}`} className="rounded-lg border border-slate-100 px-2 py-1.5">
+                            <div className="font-semibold text-slate-800">{entry.type || 'Consent'}</div>
+                            {entry.version && <div className="text-slate-500">Version {entry.version}</div>}
+                            {entry.acceptedAt && <div className="text-slate-400">{formatTimestamp(entry.acceptedAt)}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="text-sm text-slate-500">Cookies preferences</div>
+                    <div className="text-xs text-slate-500">Choose how Connsura uses cookies.</div>
+                    <select
+                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      value={cookiePref}
+                      onChange={(event) => handleCookiePreferenceChange(event.target.value)}
+                      disabled={cookieSaving}
+                    >
+                      <option value="all">All cookies</option>
+                      <option value="essential">Essential only</option>
+                      <option value="none">No cookies</option>
+                    </select>
+                    {cookieMessage && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          cookieMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {cookieMessage}
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:col-span-2">
+                    <div className="text-sm text-slate-500">Privacy policy</div>
+                    <Link to="/privacy-policy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                      Read privacy policy
+                    </Link>
+                  </div>
+                </div>
               </div>
+
+              </Modal>
+
+              <Modal
+                title="Notifications"
+                open={settingsModal === 'notifications'}
+                onClose={() => setSettingsModal(null)}
+                panelClassName="max-w-4xl"
+              >
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Notifications</h3>
+                  <p className="text-xs text-slate-500">Control how we keep you updated.</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">Changes save automatically.</div>
+                    {notificationSaving && <div className="text-xs text-slate-500">Saving...</div>}
+                    {!notificationSaving && notificationMessage && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          notificationMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {notificationMessage}
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Email notifications</div>
+                      <div className="text-xs text-slate-500">Updates about messages and forms.</div>
+                    </div>
+                    <select
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      value={currentNotificationPrefs.email}
+                      onChange={(event) => {
+                        const next = normalizeNotificationPrefs({
+                          ...currentNotificationPrefs,
+                          email: event.target.value,
+                        })
+                        setNotificationPrefs(next)
+                        saveNotificationPreferences(next)
+                      }}
+                      disabled={notificationLoading}
+                    >
+                      <option value="all">All</option>
+                      <option value="important">Important only</option>
+                      <option value="none">None</option>
+                    </select>
+                  </label>
+
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">In-app notifications</div>
+                      <div className="text-xs text-slate-500">Badges and reminders in your dashboard.</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={currentNotificationPrefs.inapp}
+                      onChange={(event) => {
+                        const next = normalizeNotificationPrefs({
+                          ...currentNotificationPrefs,
+                          inapp: event.target.checked,
+                        })
+                        setNotificationPrefs(next)
+                        saveNotificationPreferences(next)
+                      }}
+                      disabled={notificationLoading}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-left"
+                    onClick={handleLoginAlertsView}
+                    disabled={notificationLoading}
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Login alerts</div>
+                      <div className="text-xs text-slate-500">
+                        Enabled (required for security)
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked
+                      readOnly
+                      disabled
+                    />
+                  </button>
+
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="text-sm font-semibold text-slate-900">Notification groups</div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Messages
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={currentNotificationPrefs.groups.messages}
+                          onChange={(event) => {
+                            const next = normalizeNotificationPrefs({
+                              ...currentNotificationPrefs,
+                              groups: {
+                                ...currentNotificationPrefs.groups,
+                                messages: event.target.checked,
+                              },
+                            })
+                            setNotificationPrefs(next)
+                            saveNotificationPreferences(next)
+                          }}
+                          disabled={notificationLoading}
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Passport activity
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={currentNotificationPrefs.groups.passport}
+                          onChange={(event) => {
+                            const next = normalizeNotificationPrefs({
+                              ...currentNotificationPrefs,
+                              groups: {
+                                ...currentNotificationPrefs.groups,
+                                passport: event.target.checked,
+                              },
+                            })
+                            setNotificationPrefs(next)
+                            saveNotificationPreferences(next)
+                          }}
+                          disabled={notificationLoading}
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                        System
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={currentNotificationPrefs.groups.system}
+                          onChange={(event) => {
+                            const next = normalizeNotificationPrefs({
+                              ...currentNotificationPrefs,
+                              groups: {
+                                ...currentNotificationPrefs.groups,
+                                system: event.target.checked,
+                              },
+                            })
+                            setNotificationPrefs(next)
+                            saveNotificationPreferences(next)
+                          }}
+                          disabled={notificationLoading}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              </Modal>
+
+              <Modal
+                title="Terms and conditions"
+                open={settingsModal === 'terms'}
+                onClose={() => setSettingsModal(null)}
+                panelClassName="max-w-4xl"
+              >
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Terms & Conditions</h3>
+                  <p className="text-xs text-slate-500">Accepted policy versions for your account.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Terms accepted</div>
+                    <div className="text-sm text-slate-700">{formatAcceptance(termsVersion, termsAcceptedAt)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Privacy policy accepted</div>
+                    <div className="text-sm text-slate-700">{formatAcceptance(privacyVersion, privacyAcceptedAt)}</div>
+                  </div>
+                </div>
+              </div>
+              </Modal>
             </div>
           )}
         </section>
@@ -1408,12 +3076,6 @@ export default function ClientDashboard() {
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         snapshot={shareSnapshot}
-      />
-      <MessageAgentModal
-        open={messageOpen}
-        agent={messageAgent}
-        onClose={() => setMessageOpen(false)}
-        onSent={(sentAgent) => nav(`/client/dashboard?tab=messages&agent=${sentAgent.id}`)}
       />
       <RateAgentModal
         open={rateOpen}

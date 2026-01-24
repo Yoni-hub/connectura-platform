@@ -12,7 +12,7 @@ const getInitials = (name = '', fallback = 'AG') => {
     .toUpperCase()
 }
 
-export default function AgentCard({ agent, onMessage, onRate, onSave, onRemove }) {
+export default function AgentCard({ agent, onMessage, onRate, onSave, onRemove, onViewProfile, saved = false }) {
   const statusTone = agent.availability === 'online' ? 'green' : agent.availability === 'busy' ? 'amber' : 'gray'
   const [photoError, setPhotoError] = useState(false)
   const initials = getInitials(agent.name)
@@ -45,11 +45,20 @@ export default function AgentCard({ agent, onMessage, onRate, onSave, onRemove }
         <div className="text-sm text-slate-600">
           {agent.specialty} • {agent.languages.join(', ')}
         </div>
+        {Array.isArray(agent.products) && agent.products.length > 0 && (
+          <div className="text-sm text-slate-600">Products: {agent.products.join(', ')}</div>
+        )}
         <div className="text-xs text-slate-500">Licensed in: {agent.states.join(', ')}</div>
         <div className="mt-3 flex gap-2 flex-wrap">
-          <Link to={`/agents/${agent.id}`} className="pill-btn-ghost">
-            View profile
-          </Link>
+          {onViewProfile ? (
+            <button onClick={() => onViewProfile(agent)} className="pill-btn-ghost">
+              View profile
+            </button>
+          ) : (
+            <Link to={`/agents/${agent.id}`} className="pill-btn-ghost">
+              View profile
+            </Link>
+          )}
           {onMessage && (
             <button onClick={() => onMessage(agent)} className="pill-btn-ghost">
               Message
@@ -61,8 +70,12 @@ export default function AgentCard({ agent, onMessage, onRate, onSave, onRemove }
             </button>
           )}
           {onSave && (
-            <button onClick={() => onSave(agent)} className="pill-btn-ghost">
-              Save Agent
+            <button
+              onClick={() => onSave(agent)}
+              className={`pill-btn-ghost ${saved ? 'opacity-60 cursor-default' : ''}`}
+              disabled={saved}
+            >
+              {saved ? 'Saved' : 'Save Agent'}
             </button>
           )}
           {onRemove && (

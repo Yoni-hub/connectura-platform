@@ -1,188 +1,11 @@
 const express = require('express')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
+const { logClientAudit } = require('../utils/auditLog')
 
 const router = express.Router()
 
-// In-memory message store to keep chat non-persistent.
-const messageStore = {
-  nextId: 1,
-  conversations: new Map(),
-}
-
-const conversationKey = (agentId, customerId) => `${agentId}:${customerId}`
-
-const getConversation = (agentId, customerId) =>
-  messageStore.conversations.get(conversationKey(agentId, customerId)) || null
-
-const ensureConversation = (agentId, customerId) => {
-  const key = conversationKey(agentId, customerId)
-  if (!messageStore.conversations.has(key)) {
-    messageStore.conversations.set(key, [])
-  }
-  return messageStore.conversations.get(key)
-}
-
-const markThreadDeletedForCustomer = (agentId, customerId) => {
-  const conversation = getConversation(agentId, customerId)
-  if (!conversation) return false
-  const now = new Date()
-  let changed = false
-  conversation.forEach((message) => {
-    if (!message.deletedForCustomerAt) {
-      message.deletedForCustomerAt = now
-      changed = true
-    }
-  })
-  return changed
-}
-
-const markThreadDeletedForAgent = (agentId, customerId) => {
-  const conversation = getConversation(agentId, customerId)
-  if (!conversation) return false
-  const now = new Date()
-  let changed = false
-  conversation.forEach((message) => {
-    if (!message.deletedForAgentAt) {
-      message.deletedForAgentAt = now
-      changed = true
-    }
-  })
-  return changed
-}
-
-const addMessage = (agentId, customerId, body, senderRole) => {
-  const now = new Date()
-  const message = {
-    id: messageStore.nextId++,
-    agentId,
-    customerId,
-    body,
-    senderRole,
-    createdAt: now,
-    readByAgentAt: senderRole === 'AGENT' ? now : null,
-    readByCustomerAt: senderRole === 'CUSTOMER' ? now : null,
-    deletedForAgentAt: null,
-    deletedForCustomerAt: null,
-  }
-  const conversation = ensureConversation(agentId, customerId)
-  conversation.push(message)
-  return message
-}
-
-const isMessageVisibleForAgent = (message) => !message.deletedForAgentAt
-
-const isMessageVisibleForCustomer = (message) => !message.deletedForCustomerAt
-
-const countUnreadForAgent = (conversation) =>
-  conversation.filter(
-    (message) => message.senderRole === 'CUSTOMER' && !message.readByAgentAt && isMessageVisibleForAgent(message)
-  ).length
-
-const countUnreadForCustomer = (conversation) =>
-  conversation.filter(
-    (message) => message.senderRole === 'AGENT' && !message.readByCustomerAt && isMessageVisibleForCustomer(message)
-  ).length
-
-const getLastVisibleMessage = (conversation, isVisible) => {
-  for (let index = conversation.length - 1; index >= 0; index -= 1) {
-    const message = conversation[index]
-    if (isVisible(message)) return message
-  }
-  return null
-}
-
-const markThreadReadForAgent = (agentId, customerId) => {
-  const conversation = getConversation(agentId, customerId)
-  if (!conversation) return
-  const now = new Date()
-  conversation.forEach((message) => {
-    if (message.senderRole === 'CUSTOMER' && !message.readByAgentAt && isMessageVisibleForAgent(message)) {
-      message.readByAgentAt = now
-    }
-  })
-}
-
-const markThreadReadForCustomer = (agentId, customerId) => {
-  const conversation = getConversation(agentId, customerId)
-  if (!conversation) return
-  const now = new Date()
-  conversation.forEach((message) => {
-    if (message.senderRole === 'AGENT' && !message.readByCustomerAt && isMessageVisibleForCustomer(message)) {
-      message.readByCustomerAt = now
-    }
-  })
-}
-
-const listThreadsForAgent = (agentId) => {
-  const threads = []
-  messageStore.conversations.forEach((messages, key) => {
-    if (!messages.length) return
-    const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
-    if (keyAgentId !== agentId) return
-    const lastMessage = getLastVisibleMessage(messages, isMessageVisibleForAgent)
-    if (!lastMessage) return
-    threads.push({
-      agentId: keyAgentId,
-      customerId: keyCustomerId,
-      lastMessage,
-      unreadCount: countUnreadForAgent(messages),
-    })
-  })
-  return threads.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt)
-}
-
-const listThreadsForCustomer = (customerId) => {
-  const threads = []
-  messageStore.conversations.forEach((messages, key) => {
-    if (!messages.length) return
-    const [keyAgentId, keyCustomerId] = key.split(':').map(Number)
-    if (keyCustomerId !== customerId) return
-    const lastMessage = getLastVisibleMessage(messages, isMessageVisibleForCustomer)
-    if (!lastMessage) return
-    threads.push({
-      agentId: keyAgentId,
-      customerId: keyCustomerId,
-      lastMessage,
-      unreadCount: countUnreadForCustomer(messages),
-    })
-  })
-  return threads.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt)
-}
-
-const listMessagesForAgent = (agentId) => {
-  const messages = []
-  messageStore.conversations.forEach((conversation, key) => {
-    const [keyAgentId] = key.split(':').map(Number)
-    if (keyAgentId !== agentId) return
-    messages.push(...conversation.filter(isMessageVisibleForAgent))
-  })
-  return messages.sort((a, b) => b.createdAt - a.createdAt)
-}
-
-const listMessagesForThread = (agentId, customerId, isVisible) => {
-  const conversation = getConversation(agentId, customerId)
-  if (!conversation) return []
-  const filtered = isVisible ? conversation.filter(isVisible) : [...conversation]
-  return filtered.sort((a, b) => a.createdAt - b.createdAt)
-}
-
-const hydrateMessages = async (messages) => {
-  if (!messages.length) return []
-  const agentIds = [...new Set(messages.map((message) => message.agentId))]
-  const customerIds = [...new Set(messages.map((message) => message.customerId))]
-  const [agents, customers] = await Promise.all([
-    prisma.agent.findMany({ where: { id: { in: agentIds } }, include: { user: true } }),
-    prisma.customer.findMany({ where: { id: { in: customerIds } }, include: { user: true } }),
-  ])
-  const agentMap = new Map(agents.map((agent) => [agent.id, agent]))
-  const customerMap = new Map(customers.map((customer) => [customer.id, customer]))
-  return messages.map((message) => ({
-    ...message,
-    agent: agentMap.get(message.agentId) || null,
-    customer: customerMap.get(message.customerId) || null,
-  }))
-}
+const buildConversationId = (agentId, customerId) => `${agentId}:${customerId}`
 
 const formatCustomer = (customer) => ({
   id: customer.id,
@@ -205,6 +28,31 @@ const formatMessage = (message) => ({
   customer: message.customer ? formatCustomer(message.customer) : null,
   agent: message.agent ? formatAgent(message.agent) : null,
 })
+
+const includeProfiles = {
+  agent: { include: { user: true } },
+  customer: { include: { user: true } },
+}
+
+const buildUnreadMapForAgent = (messages) => {
+  const unreadMap = new Map()
+  messages.forEach((message) => {
+    if (message.senderRole !== 'CUSTOMER') return
+    if (message.readByAgentAt) return
+    unreadMap.set(message.customerId, (unreadMap.get(message.customerId) || 0) + 1)
+  })
+  return unreadMap
+}
+
+const buildUnreadMapForCustomer = (messages) => {
+  const unreadMap = new Map()
+  messages.forEach((message) => {
+    if (message.senderRole !== 'AGENT') return
+    if (message.readByCustomerAt) return
+    unreadMap.set(message.agentId, (unreadMap.get(message.agentId) || 0) + 1)
+  })
+  return unreadMap
+}
 
 const buildCustomerThreads = (messages, unreadMap = new Map()) => {
   const seen = new Set()
@@ -238,6 +86,45 @@ const buildAgentThreads = (messages, unreadMap = new Map()) => {
   return threads
 }
 
+const markThreadReadForAgent = async (agentId, customerId) => {
+  const now = new Date()
+  await prisma.message.updateMany({
+    where: {
+      agentId,
+      customerId,
+      senderRole: 'CUSTOMER',
+      readByAgentAt: null,
+      deletedForAgentAt: null,
+    },
+    data: { readByAgentAt: now },
+  })
+}
+
+const markThreadReadForCustomer = async (agentId, customerId) => {
+  const now = new Date()
+  await prisma.message.updateMany({
+    where: {
+      agentId,
+      customerId,
+      senderRole: 'AGENT',
+      readByCustomerAt: null,
+      deletedForCustomerAt: null,
+    },
+    data: { readByCustomerAt: now },
+  })
+}
+
+const countUnreadForCustomerThread = (agentId, customerId) =>
+  prisma.message.count({
+    where: {
+      agentId,
+      customerId,
+      senderRole: 'AGENT',
+      readByCustomerAt: null,
+      deletedForCustomerAt: null,
+    },
+  })
+
 router.post('/', authGuard, async (req, res) => {
   try {
     const { agentId, customerId, body } = req.body || {}
@@ -262,8 +149,37 @@ router.post('/', authGuard, async (req, res) => {
       })
       if (!agent) return res.status(404).json({ error: 'Agent not found' })
 
-      const message = addMessage(Number(agentId), customer.id, trimmed, 'CUSTOMER')
-      return res.status(201).json({ message: formatMessage({ ...message, customer, agent }) })
+      const existingCount = await prisma.message.count({
+        where: { agentId: agent.id, customerId: customer.id },
+      })
+      const now = new Date()
+      const message = await prisma.message.create({
+        data: {
+          agentId: agent.id,
+          customerId: customer.id,
+          body: trimmed,
+          senderRole: 'CUSTOMER',
+          createdAt: now,
+          readByCustomerAt: now,
+          readByAgentAt: null,
+          deletedForAgentAt: null,
+          deletedForCustomerAt: null,
+        },
+        include: includeProfiles,
+      })
+
+      const conversationId = buildConversationId(agent.id, customer.id)
+      if (existingCount === 0) {
+        await logClientAudit(customer.id, 'CLIENT_CONVERSATION_CREATED', {
+          conversation_id: conversationId,
+        })
+      }
+      await logClientAudit(customer.id, 'CLIENT_MESSAGE_SENT', {
+        conversation_id: conversationId,
+        message_id: message.id,
+      })
+
+      return res.status(201).json({ message: formatMessage(message) })
     }
 
     if (req.user.role === 'AGENT') {
@@ -282,13 +198,30 @@ router.post('/', authGuard, async (req, res) => {
       })
       if (!customer) return res.status(404).json({ error: 'Customer not found' })
 
-      const existing = getConversation(agent.id, customer.id)
-      if (!existing || existing.length === 0) {
+      const existingCount = await prisma.message.count({
+        where: { agentId: agent.id, customerId: customer.id },
+      })
+      if (existingCount === 0) {
         return res.status(400).json({ error: 'Conversation not found' })
       }
 
-      const message = addMessage(agent.id, customer.id, trimmed, 'AGENT')
-      return res.status(201).json({ message: formatMessage({ ...message, customer, agent }) })
+      const now = new Date()
+      const message = await prisma.message.create({
+        data: {
+          agentId: agent.id,
+          customerId: customer.id,
+          body: trimmed,
+          senderRole: 'AGENT',
+          createdAt: now,
+          readByAgentAt: now,
+          readByCustomerAt: null,
+          deletedForAgentAt: null,
+          deletedForCustomerAt: null,
+        },
+        include: includeProfiles,
+      })
+
+      return res.status(201).json({ message: formatMessage(message) })
     }
 
     return res.status(403).json({ error: 'Only customers or agents can send messages' })
@@ -310,10 +243,13 @@ router.get('/agent/:id/threads', authGuard, async (req, res) => {
     if (agent.id !== agentId) {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
-    const threads = listThreadsForAgent(agentId)
-    const hydrated = await hydrateMessages(threads.map((thread) => thread.lastMessage))
-    const unreadMap = new Map(threads.map((thread) => [thread.customerId, thread.unreadCount]))
-    res.json({ threads: buildCustomerThreads(hydrated, unreadMap) })
+    const messages = await prisma.message.findMany({
+      where: { agentId, deletedForAgentAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: includeProfiles,
+    })
+    const unreadMap = buildUnreadMapForAgent(messages)
+    res.json({ threads: buildCustomerThreads(messages, unreadMap) })
   } catch (err) {
     console.error('message threads error', err)
     res.status(500).json({ error: 'Failed to load message threads' })
@@ -333,10 +269,13 @@ router.get('/agent/:id/thread/:customerId', authGuard, async (req, res) => {
     if (agent.id !== agentId) {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
-    markThreadReadForAgent(agentId, customerId)
-    const messages = listMessagesForThread(agentId, customerId, isMessageVisibleForAgent)
-    const hydrated = await hydrateMessages(messages)
-    res.json({ messages: hydrated.map(formatMessage) })
+    await markThreadReadForAgent(agentId, customerId)
+    const messages = await prisma.message.findMany({
+      where: { agentId, customerId, deletedForAgentAt: null },
+      orderBy: { createdAt: 'asc' },
+      include: includeProfiles,
+    })
+    res.json({ messages: messages.map(formatMessage) })
   } catch (err) {
     console.error('message thread error', err)
     res.status(500).json({ error: 'Failed to load messages' })
@@ -355,9 +294,12 @@ router.get('/agent/:id', authGuard, async (req, res) => {
     if (agent.id !== agentId) {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
-    const messages = listMessagesForAgent(agentId)
-    const hydrated = await hydrateMessages(messages)
-    res.json({ messages: hydrated.map(formatMessage) })
+    const messages = await prisma.message.findMany({
+      where: { agentId, deletedForAgentAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: includeProfiles,
+    })
+    res.json({ messages: messages.map(formatMessage) })
   } catch (err) {
     console.error('message fetch error', err)
     res.status(500).json({ error: 'Failed to load messages' })
@@ -376,10 +318,13 @@ router.get('/customer/:id/threads', authGuard, async (req, res) => {
     if (customer.id !== customerId) {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
-    const threads = listThreadsForCustomer(customerId)
-    const hydrated = await hydrateMessages(threads.map((thread) => thread.lastMessage))
-    const unreadMap = new Map(threads.map((thread) => [thread.agentId, thread.unreadCount]))
-    res.json({ threads: buildAgentThreads(hydrated, unreadMap) })
+    const messages = await prisma.message.findMany({
+      where: { customerId, deletedForCustomerAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: includeProfiles,
+    })
+    const unreadMap = buildUnreadMapForCustomer(messages)
+    res.json({ threads: buildAgentThreads(messages, unreadMap) })
   } catch (err) {
     console.error('message threads error', err)
     res.status(500).json({ error: 'Failed to load message threads' })
@@ -399,10 +344,31 @@ router.get('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
     if (customer.id !== customerId) {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
-    markThreadReadForCustomer(agentId, customerId)
-    const messages = listMessagesForThread(agentId, customerId, isMessageVisibleForCustomer)
-    const hydrated = await hydrateMessages(messages)
-    res.json({ messages: hydrated.map(formatMessage) })
+    const conversationId = buildConversationId(agentId, customerId)
+    const unreadBefore = await countUnreadForCustomerThread(agentId, customerId)
+    await markThreadReadForCustomer(agentId, customerId)
+    const unreadAfter = await countUnreadForCustomerThread(agentId, customerId)
+    await logClientAudit(customer.id, 'CLIENT_CONVERSATION_OPENED', {
+      conversation_id: conversationId,
+      unread_count_before: unreadBefore,
+      unread_count_after: unreadAfter,
+    })
+    await logClientAudit(customer.id, 'CLIENT_MESSAGE_THREAD_OPENED', {
+      conversation_id: conversationId,
+    })
+    if (unreadBefore > 0) {
+      await logClientAudit(customer.id, 'CLIENT_MESSAGES_MARKED_READ', {
+        conversation_id: conversationId,
+        unread_count_before: unreadBefore,
+        unread_count_after: unreadAfter,
+      })
+    }
+    const messages = await prisma.message.findMany({
+      where: { agentId, customerId, deletedForCustomerAt: null },
+      orderBy: { createdAt: 'asc' },
+      include: includeProfiles,
+    })
+    res.json({ messages: messages.map(formatMessage) })
   } catch (err) {
     console.error('message thread error', err)
     res.status(500).json({ error: 'Failed to load messages' })
@@ -422,7 +388,11 @@ router.delete('/agent/:id/thread/:customerId', authGuard, async (req, res) => {
     if (agent.id !== agentId) {
       return res.status(403).json({ error: 'Cannot access messages for this agent' })
     }
-    markThreadDeletedForAgent(agentId, customerId)
+    const now = new Date()
+    await prisma.message.updateMany({
+      where: { agentId, customerId, deletedForAgentAt: null },
+      data: { deletedForAgentAt: now },
+    })
     res.json({ ok: true })
   } catch (err) {
     console.error('message thread delete error', err)
@@ -443,7 +413,11 @@ router.delete('/customer/:id/thread/:agentId', authGuard, async (req, res) => {
     if (customer.id !== customerId) {
       return res.status(403).json({ error: 'Cannot access messages for this customer' })
     }
-    markThreadDeletedForCustomer(agentId, customerId)
+    const now = new Date()
+    await prisma.message.updateMany({
+      where: { agentId, customerId, deletedForCustomerAt: null },
+      data: { deletedForCustomerAt: now },
+    })
     res.json({ ok: true })
   } catch (err) {
     console.error('message thread delete error', err)

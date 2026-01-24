@@ -5,6 +5,17 @@ import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
 
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server'
+  const key = 'connsura_session_id'
+  let value = sessionStorage.getItem(key)
+  if (!value) {
+    value = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    sessionStorage.setItem(key, value)
+  }
+  return value
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(getStoredToken())
@@ -68,7 +79,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password, options = {}) => {
     setLoading(true)
     try {
-      const res = await api.post('/auth/login', { email, password })
+      const res = await api.post('/auth/login', { email, password, sessionId: getSessionId() })
       const remember = options.remember !== false
       applyAuth(res.data.token, res.data.user, password, { persist: remember })
       toast.success('Logged in')

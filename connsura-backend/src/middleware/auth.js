@@ -33,6 +33,18 @@ async function authGuard(req, res, next) {
     if (!user) {
       return res.status(401).json({ error: 'Invalid token' })
     }
+    if (user.passwordChangedAt && decoded.iat) {
+      const issuedAt = new Date(decoded.iat * 1000)
+      if (issuedAt < user.passwordChangedAt) {
+        return res.status(401).json({ error: 'Session expired' })
+      }
+    }
+    if (user.sessionsRevokedAt && decoded.iat) {
+      const issuedAt = new Date(decoded.iat * 1000)
+      if (issuedAt < user.sessionsRevokedAt) {
+        return res.status(401).json({ error: 'Session expired' })
+      }
+    }
     req.user = user
     next()
   } catch (err) {

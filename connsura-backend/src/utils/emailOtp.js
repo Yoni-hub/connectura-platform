@@ -97,14 +97,14 @@ const buildOtpHtml = ({ code, expiresMinutes, verifyUrl, template }) => {
   `
 }
 
-const deliverEmail = async (email, code, { template } = {}) => {
+const deliverEmail = async (email, code, { template, subject } = {}) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
   const verifyUrl = buildVerifyUrl(code)
   const text = buildOtpText({ code, expiresMinutes, verifyUrl, template })
   const html = buildOtpHtml({ code, expiresMinutes, verifyUrl, template })
   const delivery = await sendEmail({
     to: email,
-    subject: VERIFY_EMAIL_SUBJECT,
+    subject: subject || VERIFY_EMAIL_SUBJECT,
     text,
     html,
     replyTo: VERIFY_EMAIL_REPLY_TO,
@@ -169,7 +169,7 @@ const checkRateLimit = async (email, ip) => {
   prisma.emailOtpRequest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => {})
 }
 
-const sendEmailOtp = async (email, { ip, template = 'code' } = {}) => {
+const sendEmailOtp = async (email, { ip, template = 'code', subject } = {}) => {
   const normalized = normalizeEmail(email)
   await checkRateLimit(normalized, ip)
 
@@ -208,7 +208,7 @@ const sendEmailOtp = async (email, { ip, template = 'code' } = {}) => {
     },
   })
 
-  const delivery = await deliverEmail(normalized, code, { template })
+  const delivery = await deliverEmail(normalized, code, { template, subject })
   return { delivery: delivery.delivery }
 }
 

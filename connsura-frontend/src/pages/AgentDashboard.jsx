@@ -64,7 +64,7 @@ const parseShareLink = (line = '') => {
 }
 
 export default function AgentDashboard() {
-  const { user, lastPassword, setLastPassword, logout, setUser } = useAuth()
+  const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
   const [loading, setLoading] = useState(true)
@@ -367,10 +367,15 @@ export default function AgentDashboard() {
         currentPassword,
         newPassword,
       })
-      if (res.data?.user) {
-        setUser(res.data.user)
+      if (res.data?.token && completeAuth) {
+        const persist = typeof window !== 'undefined' && localStorage.getItem('connsura_token')
+        completeAuth(res.data.token, res.data.user || user, newPassword, { persist: Boolean(persist) })
+      } else {
+        if (res.data?.user) {
+          setUser(res.data.user)
+        }
+        setLastPassword(newPassword)
       }
-      setLastPassword(newPassword)
       setChangingPassword(false)
       setShowPassword(false)
       setCurrentPassword('')

@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server'
+  const key = 'connsura_session_id'
+  let value = sessionStorage.getItem(key)
+  if (!value) {
+    value = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    sessionStorage.setItem(key, value)
+  }
+  return value
+}
 
 export default function VerifyEmail() {
   const { user, setUser } = useAuth()
@@ -12,6 +23,7 @@ export default function VerifyEmail() {
   const [resending, setResending] = useState(false)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const sessionId = useMemo(() => getSessionId(), [])
 
   useEffect(() => {
     setCode(params.get('code') || '')
@@ -26,7 +38,7 @@ export default function VerifyEmail() {
     setConfirming(true)
     setError('')
     try {
-      const res = await api.post('/auth/email-otp/confirm', { code: trimmed })
+      const res = await api.post('/auth/email-otp/confirm', { code: trimmed, sessionId })
       if (res.data?.user) {
         setUser(res.data.user)
       } else {
@@ -48,7 +60,7 @@ export default function VerifyEmail() {
     setResending(true)
     setError('')
     try {
-      const res = await api.post('/auth/email-otp/request')
+      const res = await api.post('/auth/email-otp/request', { sessionId })
       const delivery = res.data?.delivery
       toast.success(delivery === 'log' ? 'Verification email generated. Check the server logs.' : 'Verification email sent.')
     } catch (err) {

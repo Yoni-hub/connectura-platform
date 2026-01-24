@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import AgentCard from '../components/agents/AgentCard'
 import SearchBar from '../components/search/SearchBar'
@@ -7,7 +7,6 @@ import Skeleton from '../components/ui/Skeleton'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import toast from 'react-hot-toast'
-import MessageAgentModal from '../components/modals/MessageAgentModal'
 import RateAgentModal from '../components/modals/RateAgentModal'
 
 export default function AgentResults() {
@@ -15,10 +14,9 @@ export default function AgentResults() {
   const { user } = useAuth()
   const nav = useNavigate()
   const [params] = useSearchParams()
-  const [messageOpen, setMessageOpen] = useState(false)
-  const [messageAgent, setMessageAgent] = useState(null)
   const [rateOpen, setRateOpen] = useState(false)
   const [rateAgent, setRateAgent] = useState(null)
+  const [savedAgentIds, setSavedAgentIds] = useState([])
   const viewLoggedRef = useRef(false)
 
   useEffect(() => {
@@ -40,6 +38,31 @@ export default function AgentResults() {
     logView()
   }, [user?.customerId])
 
+  useEffect(() => {
+    if (!user?.customerId) {
+      setSavedAgentIds([])
+      return
+    }
+    let isActive = true
+    const loadSavedAgents = async () => {
+      try {
+        const res = await api.get(`/customers/${user.customerId}/saved-agents`)
+        if (!isActive) return
+        const ids = (res.data.agents || []).map((agent) => agent.id)
+        setSavedAgentIds(ids)
+      } catch {
+        if (!isActive) return
+        setSavedAgentIds([])
+      }
+    }
+    loadSavedAgents()
+    return () => {
+      isActive = false
+    }
+  }, [user?.customerId])
+
+  const savedAgentIdSet = useMemo(() => new Set(savedAgentIds), [savedAgentIds])
+
   const handleMessage = (agent) => {
     if (!user) {
       toast.error('Login to send a message')
@@ -49,8 +72,11 @@ export default function AgentResults() {
       toast.error('Only customers can message agents')
       return
     }
-    setMessageAgent(agent)
-    setMessageOpen(true)
+    nav(`/client/dashboard?tab=messages&agent=${agent.id}`)
+  }
+
+  const handleViewProfile = (agent) => {
+    nav(`/agents/${agent.id}`)
   }
 
   const handleRate = (agent) => {
@@ -79,11 +105,15 @@ export default function AgentResults() {
       toast.error('Customer profile not found')
       return
     }
+    if (savedAgentIdSet.has(agent.id)) {
+      return
+    }
+    setSavedAgentIds((prev) => [...prev, agent.id])
     try {
       await api.post(`/customers/${user.customerId}/saved-agents`, { agentId: agent.id })
       toast.success('Agent saved')
-      nav(`/client/dashboard?tab=agents`)
     } catch (err) {
+      setSavedAgentIds((prev) => prev.filter((id) => id !== agent.id))
       toast.error(err.response?.data?.error || 'Failed to save agent')
     }
   }
@@ -115,19 +145,15 @@ export default function AgentResults() {
             <AgentCard
               key={agent.id}
               agent={agent}
+              onViewProfile={handleViewProfile}
               onMessage={handleMessage}
               onRate={handleRate}
               onSave={handleSave}
+              saved={savedAgentIdSet.has(agent.id)}
             />
           ))}
         </div>
       )}
-      <MessageAgentModal
-        open={messageOpen}
-        agent={messageAgent}
-        onClose={() => setMessageOpen(false)}
-        onSent={(agent) => nav(`/client/dashboard?tab=messages&agent=${agent.id}`)}
-      />
       <RateAgentModal
         open={rateOpen}
         agent={rateAgent}

@@ -1,8 +1,10 @@
 const express = require('express')
 const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 const prisma = require('../src/prisma')
 const { generateToken } = require('../src/utils/token')
 const { authGuard } = require('../src/middleware/auth')
+const { sendEmail } = require('../src/utils/emailClient')
 const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
 const { logClientAudit } = require('../src/utils/auditLog')
 const {
@@ -22,6 +24,7 @@ const router = express.Router()
 const sanitizeUser = (user) => ({
   id: user.id,
   email: user.email,
+  emailPending: user.emailPending || null,
   name: user.customer?.name || user.agent?.name || '',
   role: user.role,
   emailVerified: Boolean(user.emailVerified),
@@ -45,6 +48,176 @@ const getRequestIp = (req) => {
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded
   const ip = raw || req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ''
   return String(ip).split(',')[0].trim().replace(/^::ffff:/, '')
+}
+
+const hashValue = (value = '') => crypto.createHash('sha256').update(String(value)).digest('hex')
+
+const PASSWORD_CHANGE_SUBJECT = 'Your Connsura password was changed'
+const EMAIL_VERIFIED_SUBJECT = 'Your email was verified'
+const ACCOUNT_DELETED_SUBJECT = 'Your Connsura account was deleted'
+const TWO_FACTOR_ENABLED_SUBJECT = 'Two-factor authentication enabled'
+const TWO_FACTOR_DISABLED_SUBJECT = 'Two-factor authentication disabled'
+const LOGOUT_OTHER_DEVICES_SUBJECT = 'You were logged out of other devices'
+const ACCOUNT_DEACTIVATED_SUBJECT = 'Your Connsura account was deactivated'
+
+const buildPasswordChangeEmail = () => ({
+  text:
+    'Your password was successfully changed.\n\nIf this was not you, contact support immediately at security@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Password changed</h2>
+      <p style="margin: 0 0 12px 0;">Your password was successfully changed.</p>
+      <p style="margin: 0;">If this was not you, contact support immediately at security@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendPasswordChangeEmail = async (email) => {
+  const content = buildPasswordChangeEmail()
+  return sendEmail({
+    to: email,
+    subject: PASSWORD_CHANGE_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'security@connsura.com',
+  })
+}
+
+const buildEmailVerifiedEmail = () => ({
+  text: 'Your email was verified.\n\nIf this was not you, contact us immediately at security@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Email verified</h2>
+      <p style="margin: 0 0 12px 0;">Your email was verified.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at security@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendEmailVerifiedEmail = async (email) => {
+  const content = buildEmailVerifiedEmail()
+  return sendEmail({
+    to: email,
+    subject: EMAIL_VERIFIED_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'security@connsura.com',
+  })
+}
+
+const buildAccountDeletedEmail = () => ({
+  text:
+    'Your Connsura account was deleted.\n\nIf this was not you, contact us immediately at support@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Account deleted</h2>
+      <p style="margin: 0 0 12px 0;">Your Connsura account was deleted.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at support@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendAccountDeletedEmail = async (email) => {
+  const content = buildAccountDeletedEmail()
+  return sendEmail({
+    to: email,
+    subject: ACCOUNT_DELETED_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'support@connsura.com',
+  })
+}
+
+const buildTwoFactorEnabledEmail = () => ({
+  text:
+    'Two-factor authentication has been enabled on your Connsura account.\n\nIf this was not you, contact us immediately at security@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Two-factor authentication enabled</h2>
+      <p style="margin: 0 0 12px 0;">Two-factor authentication has been enabled on your Connsura account.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at security@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendTwoFactorEnabledEmail = async (email) => {
+  const content = buildTwoFactorEnabledEmail()
+  return sendEmail({
+    to: email,
+    subject: TWO_FACTOR_ENABLED_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'security@connsura.com',
+  })
+}
+
+const buildTwoFactorDisabledEmail = () => ({
+  text:
+    'Two-factor authentication has been disabled on your Connsura account.\n\nIf this was not you, contact us immediately at security@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Two-factor authentication disabled</h2>
+      <p style="margin: 0 0 12px 0;">Two-factor authentication has been disabled on your Connsura account.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at security@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendTwoFactorDisabledEmail = async (email) => {
+  const content = buildTwoFactorDisabledEmail()
+  return sendEmail({
+    to: email,
+    subject: TWO_FACTOR_DISABLED_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'security@connsura.com',
+  })
+}
+
+const buildLogoutOtherDevicesEmail = () => ({
+  text:
+    'You were logged out of other devices on your Connsura account.\n\nIf this was not you, contact us immediately at security@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Logged out of other devices</h2>
+      <p style="margin: 0 0 12px 0;">You were logged out of other devices on your Connsura account.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at security@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendLogoutOtherDevicesEmail = async (email) => {
+  const content = buildLogoutOtherDevicesEmail()
+  return sendEmail({
+    to: email,
+    subject: LOGOUT_OTHER_DEVICES_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'security@connsura.com',
+  })
+}
+
+const buildAccountDeactivatedEmail = () => ({
+  text:
+    'Your Connsura account was deactivated.\n\nIf this was not you, contact us immediately at support@connsura.com.',
+  html: `
+    <div style="font-family: Arial, sans-serif; color: #111827;">
+      <h2 style="margin: 0 0 12px 0;">Account deactivated</h2>
+      <p style="margin: 0 0 12px 0;">Your Connsura account was deactivated.</p>
+      <p style="margin: 0;">If this was not you, contact us immediately at support@connsura.com.</p>
+    </div>
+  `,
+})
+
+const sendAccountDeactivatedEmail = async (email) => {
+  const content = buildAccountDeactivatedEmail()
+  return sendEmail({
+    to: email,
+    subject: ACCOUNT_DEACTIVATED_SUBJECT,
+    text: content.text,
+    html: content.html,
+    replyTo: 'support@connsura.com',
+  })
 }
 
 const handleOtpSendError = (err, res) => {
@@ -228,18 +401,117 @@ router.post('/email-otp/verify', async (req, res) => {
   }
 })
 
-router.post('/email-otp/request', authGuard, async (req, res) => {
-  const email = String(req.user?.email || '').trim().toLowerCase()
-  if (!email) {
+router.post('/email-change/request', authGuard, async (req, res) => {
+  const nextEmailRaw = String(req.body?.email || '')
+  const nextEmail = normalizeEmail(nextEmailRaw)
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  if (!nextEmail) {
     return res.status(400).json({ error: 'Email is required' })
   }
-  if (req.user.emailVerified) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { customer: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const normalizedCurrent = normalizeEmail(user.email)
+    if (normalizedCurrent === nextEmail) {
+      return res.status(400).json({ error: 'Email is unchanged' })
+    }
+    const existing = await prisma.user.findUnique({ where: { email: nextEmail } })
+    if (existing) {
+      return res.status(400).json({ error: 'Email already in use' })
+    }
+    const auditTarget = user.customer?.id || user.id
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_EMAIL_CHANGE_STARTED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        new_email_hash: hashValue(nextEmail),
+      })
+    }
+    const result = await sendEmailOtp(nextEmail, {
+      ip,
+      template: 'link',
+      subject: 'Verify your new email',
+    })
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailPending: nextEmail,
+        emailPendingRequestedAt: new Date(),
+        emailVerified: false,
+      },
+      include: { agent: true, customer: true },
+    })
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_EMAIL_VERIFICATION_SENT', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        delivery: result.delivery,
+        new_email_hash: hashValue(nextEmail),
+      })
+      await logClientAudit(auditTarget, 'SECURITY_EMAIL_SENT', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        type: 'email_verify',
+        result: 'success',
+        delivery: result.delivery,
+      })
+    }
+    return res.json({ sent: true, delivery: result.delivery, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('email change request error', err)
+    return res.status(500).json({ error: 'Failed to start email change' })
+  }
+})
+
+router.post('/email-otp/request', authGuard, async (req, res) => {
+  const pendingEmail = normalizeEmail(req.user?.emailPending || '')
+  const email = pendingEmail || String(req.user?.email || '').trim().toLowerCase()
+  if (!email) return res.status(400).json({ error: 'Email is required' })
+  if (req.user.emailVerified && !pendingEmail) {
     return res.json({ verified: true, user: sanitizeUser(req.user) })
   }
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   try {
-    const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'link' })
+    const result = await sendEmailOtp(email, {
+      ip,
+      template: 'link',
+      subject: pendingEmail ? 'Verify your new email' : undefined,
+    })
     if (req.user?.role === 'CUSTOMER') {
-      await logClientAudit(req.user.customer?.id || req.user.id, 'EMAIL_VERIFY_SENT', { delivery: result.delivery })
+      await logClientAudit(req.user.customer?.id || req.user.id, 'EMAIL_VERIFY_SENT', {
+        delivery: result.delivery,
+        pending: Boolean(pendingEmail),
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+      })
+      if (pendingEmail) {
+        await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_EMAIL_VERIFICATION_SENT', {
+          delivery: result.delivery,
+          new_email_hash: hashValue(pendingEmail),
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+        })
+        await logClientAudit(req.user.customer?.id || req.user.id, 'SECURITY_EMAIL_SENT', {
+          delivery: result.delivery,
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: 'email_verify',
+          result: 'success',
+        })
+      }
     }
     return res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
@@ -255,9 +527,13 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
   if (!code) {
     return res.status(400).json({ error: 'Verification code is required' })
   }
+  const pendingEmail = normalizeEmail(req.user?.emailPending || '')
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   let result
   try {
-    result = await verifyEmailOtp(req.user.email, code)
+    result = await verifyEmailOtp(pendingEmail || req.user.email, code)
   } catch (err) {
     console.error('email otp confirm error', err)
     return res.status(500).json({ error: 'Failed to verify email' })
@@ -268,9 +544,60 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
   try {
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { emailVerified: true },
+      data: pendingEmail
+        ? { email: pendingEmail, emailVerified: true, emailPending: null, emailPendingRequestedAt: null }
+        : { emailVerified: true },
       include: { agent: true, customer: true },
     })
+    if (pendingEmail && updated.customer?.id) {
+      const customer = await prisma.customer.findUnique({ where: { id: updated.customer.id } })
+      if (customer) {
+        let profileData = {}
+        try {
+          profileData = customer.profileData ? JSON.parse(customer.profileData) : {}
+        } catch {
+          profileData = {}
+        }
+        const updatedProfileData = { ...profileData, email: pendingEmail }
+        await prisma.customer.update({
+          where: { id: updated.customer.id },
+          data: { profileData: JSON.stringify(updatedProfileData) },
+        })
+      }
+    }
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_EMAIL_VERIFIED', {
+        new_email_hash: pendingEmail ? hashValue(pendingEmail) : null,
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+      })
+    }
+    if (pendingEmail && updated.role === 'CUSTOMER') {
+      let emailDelivery = 'disabled'
+      try {
+        const emailResult = await sendEmailVerifiedEmail(updated.email)
+        emailDelivery = emailResult?.delivery || 'smtp'
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: 'email_verified',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      } catch (err) {
+        console.error('email verified receipt error', err)
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: 'email_verified',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
     return res.json({ verified: true, user: sanitizeUser(updated) })
   } catch (err) {
     console.error('email otp confirm error', err)
@@ -279,6 +606,9 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
 })
 
 router.post('/totp/setup', authGuard, async (req, res) => {
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
@@ -288,6 +618,14 @@ router.post('/totp/setup', authGuard, async (req, res) => {
     if (!user.email) return res.status(400).json({ error: 'Email is required for authenticator setup' })
     if (user.totpEnabled) {
       return res.status(400).json({ error: 'Authenticator is already enabled. Disable it to reconfigure.' })
+    }
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(user.customer?.id || user.id, 'CLIENT_2FA_SETUP_STARTED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'started',
+      })
     }
     const secret = generateTotpSecret()
     const encryptedSecret = encryptSecret(secret)
@@ -322,6 +660,9 @@ router.post('/totp/setup', authGuard, async (req, res) => {
 
 router.post('/totp/confirm', authGuard, async (req, res) => {
   const code = String(req.body?.code || '').trim()
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   if (!code) {
     return res.status(400).json({ error: 'Verification code is required' })
   }
@@ -335,6 +676,14 @@ router.post('/totp/confirm', authGuard, async (req, res) => {
     }
     const secret = decryptSecret(user.totpSecret)
     const valid = verifyTotp(code, secret)
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(user.customer?.id || user.id, 'CLIENT_2FA_VERIFICATION_SUBMITTED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: valid ? 'success' : 'failed',
+      })
+    }
     if (!valid) {
       return res.status(400).json({ error: 'Invalid authenticator code' })
     }
@@ -343,10 +692,73 @@ router.post('/totp/confirm', authGuard, async (req, res) => {
       data: { totpEnabled: true },
       include: { agent: true, customer: true },
     })
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_2FA_ENABLED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+      })
+    }
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendTwoFactorEnabledEmail(updated.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: '2fa_enabled_receipt',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('2fa enabled email error', err)
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: '2fa_enabled_receipt',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
     return res.json({ verified: true, user: sanitizeUser(updated) })
   } catch (err) {
     console.error('totp confirm error', err)
     return res.status(500).json({ error: 'Failed to enable authenticator' })
+  }
+})
+
+router.post('/totp/cancel', authGuard, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { agent: true, customer: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (user.totpEnabled) {
+      return res.status(400).json({ error: 'Authenticator is already enabled' })
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        totpSecret: null,
+        totpEnabled: false,
+        totpRecoveryId: null,
+        totpBackupCodes: '[]',
+        totpBackupCodesUpdatedAt: null,
+      },
+      include: { agent: true, customer: true },
+    })
+    return res.json({ cancelled: true, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('totp cancel error', err)
+    return res.status(500).json({ error: 'Failed to cancel authenticator setup' })
   }
 })
 
@@ -397,6 +809,9 @@ router.post('/totp/disable', authGuard, async (req, res) => {
   const password = String(req.body?.password || '')
   const code = String(req.body?.code || '').trim()
   const backupCode = String(req.body?.backupCode || '').trim()
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   if (!password) {
     return res.status(400).json({ error: 'Password is required' })
   }
@@ -413,6 +828,15 @@ router.post('/totp/disable', authGuard, async (req, res) => {
     }
     const match = await bcrypt.compare(password, user.password)
     if (!match) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(user.customer?.id || user.id, 'CLIENT_2FA_DISABLE_CONFIRMED', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          result: 'failed',
+          reason: 'invalid_password',
+        })
+      }
       return res.status(400).json({ error: 'Invalid password' })
     }
     const secret = decryptSecret(user.totpSecret)
@@ -426,6 +850,15 @@ router.post('/totp/disable', authGuard, async (req, res) => {
       valid = result.valid
     }
     if (!valid) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(user.customer?.id || user.id, 'CLIENT_2FA_DISABLE_CONFIRMED', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          result: 'failed',
+          reason: 'invalid_code',
+        })
+      }
       return res.status(400).json({ error: 'Invalid authenticator code' })
     }
     const updated = await prisma.user.update({
@@ -439,6 +872,49 @@ router.post('/totp/disable', authGuard, async (req, res) => {
       },
       include: { agent: true, customer: true },
     })
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_2FA_DISABLE_CONFIRMED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+      })
+    }
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_2FA_DISABLED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+      })
+    }
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendTwoFactorDisabledEmail(updated.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: '2fa_disabled_receipt',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('2fa disabled email error', err)
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: '2fa_disabled_receipt',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
     return res.json({ disabled: true, user: sanitizeUser(updated) })
   } catch (err) {
     console.error('totp disable error', err)
@@ -449,9 +925,9 @@ router.post('/totp/disable', authGuard, async (req, res) => {
 router.post('/password', authGuard, async (req, res) => {
   const currentPassword = String(req.body?.currentPassword || '')
   const newPassword = String(req.body?.newPassword || '')
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'Current and new password are required' })
-  }
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
@@ -460,19 +936,93 @@ router.post('/password', authGuard, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
     }
+    const auditTarget = user.customer?.id || user.id
+    const auditMeta = {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+    }
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_STARTED', auditMeta)
+    }
+    if (!currentPassword || !newPassword) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+          ...auditMeta,
+          result: 'failed',
+          reason: 'missing_fields',
+        })
+      }
+      return res.status(400).json({ error: 'Current and new password are required' })
+    }
     const match = await bcrypt.compare(currentPassword, user.password)
     if (!match) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+          ...auditMeta,
+          result: 'failed',
+          reason: 'invalid_current_password',
+        })
+      }
       return res.status(400).json({ error: 'Invalid current password' })
     }
     const hashed = await bcrypt.hash(newPassword, 10)
+    const passwordChangedAt = new Date()
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed },
+      data: { password: hashed, passwordChangedAt },
       include: { agent: true, customer: true },
     })
-    return res.json({ updated: true, user: sanitizeUser(updated) })
+    const token = generateToken({ id: updated.id, role: updated.role })
+
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendPasswordChangeEmail(updated.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'SECURITY_EMAIL_SENT', {
+          ...auditMeta,
+          type: 'password_changed_receipt',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('password change email error', err)
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'SECURITY_EMAIL_SENT', {
+          ...auditMeta,
+          type: 'password_changed_receipt',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
+
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_SUCCESS', {
+        ...auditMeta,
+        result: 'success',
+        email_delivery: emailDelivery,
+      })
+      await logClientAudit(auditTarget, 'CLIENT_SESSIONS_REVOKED', {
+        ...auditMeta,
+        result: 'success',
+        mode: 'password_changed_at',
+      })
+    }
+    return res.json({ updated: true, user: sanitizeUser(updated), token })
   } catch (err) {
     console.error('password change error', err)
+    if (req.user?.role === 'CUSTOMER') {
+      await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'failed',
+        reason: 'server_error',
+      })
+    }
     return res.status(500).json({ error: 'Failed to update password' })
   }
 })
@@ -530,7 +1080,7 @@ router.post('/recovery/reset', async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10)
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed, totpBackupCodes: updatedBackupCodes },
+      data: { password: hashed, totpBackupCodes: updatedBackupCodes, passwordChangedAt: new Date() },
       include: { agent: true, customer: true },
     })
     recoveryAttempts.delete(attemptKey)
@@ -553,8 +1103,19 @@ router.post('/login', async (req, res) => {
       include: { agent: true, customer: true },
     })
     if (!user) return res.status(400).json({ error: 'Invalid credentials' })
+    if (user.customer?.isDisabled) {
+      return res.status(403).json({ error: 'Account is deactivated' })
+    }
     const match = await bcrypt.compare(password, user.password)
     if (!match) return res.status(400).json({ error: 'Invalid credentials' })
+    if (user.role === 'CUSTOMER') {
+      const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+      await logClientAudit(user.customer?.id || user.id, 'CLIENT_LOGIN_SUCCESS', {
+        session_id: sessionId,
+        ip: getRequestIp(req),
+        user_agent: String(req.headers['user-agent'] || ''),
+      })
+    }
     const token = generateToken({ id: user.id, role: user.role })
     res.json({ token, user: sanitizeUser(user) })
   } catch (err) {
@@ -565,12 +1126,124 @@ router.post('/login', async (req, res) => {
 
 router.post('/account/delete', authGuard, async (req, res) => {
   const password = String(req.body?.password || '')
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const deletionReason = req.body?.deletionReason ? String(req.body.deletionReason) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  if (!password) {
+    if (req.user?.role === 'CUSTOMER') {
+      await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_DELETE_ACCOUNT_FAILED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'failed',
+        reason: 'missing_password',
+        deletion_reason: deletionReason,
+      })
+    }
+    return res.status(400).json({ error: 'Password is required' })
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { customer: true },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    const auditTarget = user.customer?.id || user.id
+    const auditMeta = {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+      deletion_reason: deletionReason,
+    }
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_DELETE_ACCOUNT_CONFIRMED', auditMeta)
+    }
+    const match = await bcrypt.compare(password, user.password)
+    if (!match) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'CLIENT_DELETE_ACCOUNT_FAILED', {
+          ...auditMeta,
+          result: 'failed',
+          reason: 'invalid_password',
+        })
+      }
+      return res.status(400).json({ error: 'Invalid password' })
+    }
+    const email = user.email
+    const customerId = user.customer?.id || null
+    await prisma.user.delete({ where: { id: user.id } })
+    await prisma.emailOtp.delete({ where: { email } }).catch(() => {})
+    await prisma.emailOtpRequest.deleteMany({ where: { email } }).catch(() => {})
+    if (user.role === 'CUSTOMER' && customerId) {
+      await logClientAudit(customerId, 'CLIENT_DELETE_ACCOUNT_SUCCESS', {
+        ...auditMeta,
+        result: 'success',
+      })
+      await logClientAudit(customerId, 'CLIENT_SESSION_REVOKED', {
+        ...auditMeta,
+        result: 'success',
+        mode: 'account_deleted',
+      })
+      await logClientAudit(customerId, 'INAPP_NOTICE_SHOWN', {
+        ...auditMeta,
+        type: 'account_deleted',
+      })
+    }
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendAccountDeletedEmail(email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (user.role === 'CUSTOMER' && customerId) {
+        await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
+          ...auditMeta,
+          type: 'account_deleted_receipt',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('account deleted email error', err)
+      if (user.role === 'CUSTOMER' && customerId) {
+        await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
+          ...auditMeta,
+          type: 'account_deleted_receipt',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
+    return res.json({ deleted: true })
+  } catch (err) {
+    console.error('delete account error', err)
+    if (req.user?.role === 'CUSTOMER') {
+      await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_DELETE_ACCOUNT_FAILED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'failed',
+        reason: 'server_error',
+        deletion_reason: deletionReason,
+      })
+    }
+    return res.status(500).json({ error: 'Failed to delete account' })
+  }
+})
+
+router.post('/account/deactivate', authGuard, async (req, res) => {
+  const password = String(req.body?.password || '')
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
   if (!password) {
     return res.status(400).json({ error: 'Password is required' })
   }
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
+      include: { customer: true },
     })
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -579,14 +1252,130 @@ router.post('/account/delete', authGuard, async (req, res) => {
     if (!match) {
       return res.status(400).json({ error: 'Invalid password' })
     }
-    const email = user.email
-    await prisma.user.delete({ where: { id: user.id } })
-    await prisma.emailOtp.delete({ where: { email } }).catch(() => {})
-    await prisma.emailOtpRequest.deleteMany({ where: { email } }).catch(() => {})
-    return res.json({ deleted: true })
+    if (!user.customer) {
+      return res.status(400).json({ error: 'Customer profile not found' })
+    }
+    const customerId = user.customer.id
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: { isDisabled: true },
+    })
+    await prisma.profileShare.updateMany({
+      where: { customerId, status: { not: 'revoked' } },
+      data: { status: 'revoked' },
+    })
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { sessionsRevokedAt: new Date() },
+    })
+    await logClientAudit(customerId, 'CLIENT_ACCOUNT_DEACTIVATED', {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+      result: 'success',
+    })
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendAccountDeactivatedEmail(user.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        type: 'account_deactivated_receipt',
+        result: 'success',
+        delivery: emailDelivery,
+      })
+    } catch (err) {
+      console.error('account deactivated email error', err)
+      await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        type: 'account_deactivated_receipt',
+        result: 'failed',
+        reason: 'email_send_failed',
+      })
+    }
+    return res.json({ deactivated: true })
   } catch (err) {
-    console.error('delete account error', err)
-    return res.status(500).json({ error: 'Failed to delete account' })
+    console.error('deactivate account error', err)
+    return res.status(500).json({ error: 'Failed to deactivate account' })
+  }
+})
+
+router.get('/sessions', authGuard, async (req, res) => {
+  const sessionId = req.query?.sessionId ? String(req.query.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  if (req.user?.role === 'CUSTOMER') {
+    await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_ACTIVE_SESSIONS_VIEWED', {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+    })
+  }
+  res.json({
+    sessions: [
+      {
+        id: sessionId || 'current',
+        current: true,
+        ip,
+        userAgent,
+        lastSeenAt: new Date().toISOString(),
+      },
+    ],
+  })
+})
+
+router.post('/sessions/revoke-others', authGuard, async (req, res) => {
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { sessionsRevokedAt: new Date() },
+      include: { agent: true, customer: true },
+    })
+    const token = generateToken({ id: updated.id, role: updated.role })
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_LOGOUT_ALL_SESSIONS', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+      })
+    }
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendLogoutOtherDevicesEmail(updated.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('logout other devices email error', err)
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
+    return res.json({ revoked: true, token, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('revoke sessions error', err)
+    return res.status(500).json({ error: 'Failed to revoke sessions' })
   }
 })
 

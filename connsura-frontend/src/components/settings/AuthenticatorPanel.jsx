@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
+
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server'
+  const key = 'connsura_session_id'
+  let value = sessionStorage.getItem(key)
+  if (!value) {
+    value = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    sessionStorage.setItem(key, value)
+  }
+  return value
+}
 
 export default function AuthenticatorPanel() {
   const { user, setUser } = useAuth()
@@ -10,17 +21,28 @@ export default function AuthenticatorPanel() {
   const [setupLoading, setSetupLoading] = useState(false)
   const [confirmCode, setConfirmCode] = useState('')
   const [confirming, setConfirming] = useState(false)
+  const [canceling, setCanceling] = useState(false)
   const [disablePassword, setDisablePassword] = useState('')
   const [disableCode, setDisableCode] = useState('')
   const [disableBackupCode, setDisableBackupCode] = useState('')
   const [disableLoading, setDisableLoading] = useState(false)
   const [disableOpen, setDisableOpen] = useState(false)
+  const sessionId = useMemo(() => getSessionId(), [])
+
+  const logInappNotice = async (type) => {
+    if (!user?.customerId) return
+    try {
+      await api.post(`/customers/${user.customerId}/inapp-notice`, { sessionId, type })
+    } catch (err) {
+      console.warn('Unable to log in-app notice', err)
+    }
+  }
 
   const enabled = Boolean(user?.totpEnabled)
   const startSetup = async () => {
     setSetupLoading(true)
     try {
-      const res = await api.post('/auth/totp/setup')
+      const res = await api.post('/auth/totp/setup', { sessionId })
       setSetupData(res.data)
       if (res.data?.user) setUser(res.data.user)
       toast.success('Authenticator setup started')
@@ -39,16 +61,41 @@ export default function AuthenticatorPanel() {
     }
     setConfirming(true)
     try {
-      const res = await api.post('/auth/totp/confirm', { code })
+      const res = await api.post('/auth/totp/confirm', { code, sessionId })
       if (res.data?.user) setUser(res.data.user)
       setSetupData(null)
       setConfirmCode('')
-      toast.success('Authenticator enabled')
+      toast.success("Authenticator enabled. You'll be asked for a code when you sign in.")
+      await logInappNotice('2fa_enabled')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to enable authenticator')
     } finally {
       setConfirming(false)
     }
+  }
+
+  const cancelSetup = async () => {
+    setCanceling(true)
+    try {
+      await api.post('/auth/totp/cancel', { sessionId })
+      setSetupData(null)
+      setConfirmCode('')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to cancel setup')
+    } finally {
+      setCanceling(false)
+    }
+  }
+
+  const handleDisableClick = async () => {
+    if (user?.customerId) {
+      try {
+        await api.post(`/customers/${user.customerId}/2fa/disable-click`, { sessionId })
+      } catch (err) {
+        console.warn('Unable to log 2FA disable click', err)
+      }
+    }
+    setDisableOpen(true)
   }
 
   const disableAuthenticator = async () => {
@@ -65,7 +112,7 @@ export default function AuthenticatorPanel() {
     }
     setDisableLoading(true)
     try {
-      const res = await api.post('/auth/totp/disable', { password, code, backupCode })
+      const res = await api.post('/auth/totp/disable', { password, code, backupCode, sessionId })
       if (res.data?.user) setUser(res.data.user)
       setSetupData(null)
       setConfirmCode('')
@@ -73,7 +120,8 @@ export default function AuthenticatorPanel() {
       setDisableCode('')
       setDisableBackupCode('')
       setDisableOpen(false)
-      toast.success('Authenticator disabled')
+      toast.success('Authenticator disabled. Your account is now password-only.')
+      await logInappNotice('2fa_disabled')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to disable authenticator')
     } finally {
@@ -135,6 +183,7 @@ export default function AuthenticatorPanel() {
               )}
             </div>
             <div className="space-y-2 text-sm">
+              <div className="text-slate-600">Scan the QR code with your authenticator app.</div>
               <div>
                 <div className="text-slate-500">Manual setup key</div>
                 <div className="font-mono text-slate-900 break-all">{setupData.secret}</div>
@@ -172,14 +221,24 @@ export default function AuthenticatorPanel() {
                   onChange={(e) => setConfirmCode(e.target.value)}
                 />
               </label>
-              <button
-                type="button"
-                className="pill-btn-primary px-5"
-                onClick={confirmSetup}
-                disabled={confirming}
-              >
-                {confirming ? 'Verifying...' : 'Enable authenticator'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="pill-btn-primary px-5"
+                  onClick={confirmSetup}
+                  disabled={confirming}
+                >
+                  {confirming ? 'Verifying...' : 'Enable authenticator'}
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-4"
+                  onClick={cancelSetup}
+                  disabled={canceling}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -194,7 +253,7 @@ export default function AuthenticatorPanel() {
           <button
             type="button"
             className="pill-btn-primary px-4"
-            onClick={() => setDisableOpen(true)}
+            onClick={handleDisableClick}
           >
             Disable authenticator
           </button>
