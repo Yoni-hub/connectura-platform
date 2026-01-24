@@ -23,6 +23,13 @@ export default function Admin() {
   const [agents, setAgents] = useState([])
   const [clients, setClients] = useState([])
   const [logs, setLogs] = useState([])
+  const [auditMode, setAuditMode] = useState('client')
+  const [auditQuery, setAuditQuery] = useState('')
+  const [auditStart, setAuditStart] = useState('')
+  const [auditEnd, setAuditEnd] = useState('')
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState('')
+  const [auditSearched, setAuditSearched] = useState(false)
   const [form, setForm] = useState({ email: '', password: '' })
   const [detailTabs, setDetailTabs] = useState([])
   const [activeDetailKey, setActiveDetailKey] = useState(null)
@@ -50,6 +57,8 @@ export default function Admin() {
   const [questionEdits, setQuestionEdits] = useState({})
   const [newProductName, setNewProductName] = useState('')
   const lastQuestionPrefillProductRef = useRef('')
+  const auditSearchTimerRef = useRef(null)
+  const auditRequestIdRef = useRef(0)
 
   const isAuthed = Boolean(admin)
 
@@ -373,8 +382,7 @@ export default function Admin() {
           const res = await adminApi.get('/admin/clients')
           setClients(res.data.clients || [])
         } else if (view === 'audit') {
-          const res = await adminApi.get('/admin/audit')
-          setLogs(res.data.logs || [])
+          setLogs([])
         }
       } catch (err) {
         if (err.response?.status === 401) {
@@ -394,6 +402,43 @@ export default function Admin() {
     if (!isAuthed || view !== 'content') return
     loadContentEntries()
   }, [isAuthed, view])
+
+  useEffect(() => {
+    if (view !== 'audit') return
+    setAuditMode('client')
+    setAuditQuery('')
+    setAuditStart('')
+    setAuditEnd('')
+    setAuditError('')
+    setAuditSearched(false)
+    setLogs([])
+  }, [view])
+
+  useEffect(() => {
+    if (view !== 'audit') return
+    if (auditMode === 'admin') return
+    const trimmed = auditQuery.trim()
+    if (!trimmed) {
+      if (auditSearchTimerRef.current) {
+        clearTimeout(auditSearchTimerRef.current)
+      }
+      setAuditSearched(false)
+      setAuditError('')
+      setLogs([])
+      return
+    }
+    if (auditSearchTimerRef.current) {
+      clearTimeout(auditSearchTimerRef.current)
+    }
+    auditSearchTimerRef.current = setTimeout(() => {
+      handleAuditSearch()
+    }, 400)
+    return () => {
+      if (auditSearchTimerRef.current) {
+        clearTimeout(auditSearchTimerRef.current)
+      }
+    }
+  }, [auditQuery, auditStart, auditEnd, auditMode, view])
 
   useEffect(() => {
     if (!isAuthed || view !== 'forms') return
@@ -453,6 +498,72 @@ export default function Admin() {
       setClients((prev) => prev.filter((c) => c.id !== id))
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed')
+    }
+  }
+
+  const toIsoDate = (value) => {
+    if (!value) return ''
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return ''
+    return parsed.toISOString()
+  }
+
+  const handleAuditSearch = async () => {
+    setAuditError('')
+    if ((auditMode === 'client' || auditMode === 'agent') && !auditQuery.trim()) {
+      setAuditError('Enter a name, email, or ID to search.')
+      setLogs([])
+      setAuditSearched(false)
+      return
+    }
+    const startIso = toIsoDate(auditStart)
+    const endIso = toIsoDate(auditEnd)
+    if (auditStart && !startIso) {
+      setAuditError('Start date is invalid.')
+      setLogs([])
+      setAuditSearched(false)
+      return
+    }
+    if (auditEnd && !endIso) {
+      setAuditError('End date is invalid.')
+      setLogs([])
+      setAuditSearched(false)
+      return
+    }
+    if (startIso && endIso && new Date(endIso) < new Date(startIso)) {
+      setAuditError('End date must be after the start date.')
+      setLogs([])
+      setAuditSearched(false)
+      return
+    }
+
+    const requestId = auditRequestIdRef.current + 1
+    auditRequestIdRef.current = requestId
+    setAuditLoading(true)
+    try {
+      const params = {
+        type: auditMode,
+      }
+      if (auditMode === 'client' || auditMode === 'agent') {
+        params.query = auditQuery.trim()
+      }
+      if (startIso) params.start = startIso
+      if (endIso) params.end = endIso
+      const res = await adminApi.get('/admin/audit', { params })
+      if (auditRequestIdRef.current === requestId) {
+        setLogs(res.data.logs || [])
+        setAuditSearched(true)
+      }
+    } catch (err) {
+      if (auditRequestIdRef.current === requestId) {
+        setLogs([])
+        setAuditError(err.response?.data?.error || 'Failed to load audit logs.')
+        setAuditSearched(true)
+      }
+    } finally {
+      if (auditRequestIdRef.current === requestId) {
+        setAuditLoading(false)
+      }
     }
   }
 
@@ -921,38 +1032,122 @@ export default function Admin() {
     </div>
   )
 
-  const renderAudit = () => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Audit logs</h2>
-        <div className="text-sm text-slate-500">{logs.length} entries</div>
+  const renderAudit = () => {
+    const modes = [
+      { key: 'client', label: 'Client logs' },
+      { key: 'agent', label: 'Agent logs' },
+      { key: 'admin', label: 'Admin logs' },
+    ]
+    const modeLabel = auditMode === 'agent' ? 'agent' : 'client'
+    const searchLabel = `Search ${modeLabel} logs`
+    const searchPlaceholder = 'Name, email, or ID'
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {modes.map((mode) => (
+            <button
+              key={mode.key}
+              type="button"
+              className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                auditMode === mode.key
+                  ? 'border-[#0b3b8c] bg-[#e8f0ff] text-[#0b3b8c]'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+              }`}
+              onClick={() => {
+                setAuditMode(mode.key)
+                setAuditQuery('')
+                setAuditError('')
+                setAuditSearched(false)
+                setLogs([])
+              }}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          {auditMode !== 'admin' && (
+            <label className="block text-sm">
+              {searchLabel}
+              <input
+                type="text"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                value={auditQuery}
+                onChange={(event) => setAuditQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+              />
+            </label>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              Start date/time
+              <span className="ml-2 text-xs text-slate-400">Optional</span>
+              <input
+                type="datetime-local"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                value={auditStart}
+                onChange={(event) => setAuditStart(event.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              End date/time
+              <span className="ml-2 text-xs text-slate-400">Optional</span>
+              <input
+                type="datetime-local"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                value={auditEnd}
+                onChange={(event) => setAuditEnd(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="pill-btn-primary px-4"
+              onClick={handleAuditSearch}
+              disabled={auditLoading}
+            >
+              {auditLoading ? 'Searching...' : auditMode === 'admin' ? 'Load logs' : 'Search logs'}
+            </button>
+            {auditError && <div className="text-sm text-rose-600">{auditError}</div>}
+          </div>
+        </div>
+
+        {auditSearched && !auditLoading && logs.length === 0 && (
+          <div className="text-sm text-slate-500">No logs found.</div>
+        )}
+
+        {auditSearched && logs.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-3 py-2">When</th>
+                  <th className="px-3 py-2">Actor</th>
+                  <th className="px-3 py-2">Target</th>
+                  <th className="px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((l) => (
+                  <tr key={l.id} className="border-t border-slate-100">
+                    <td className="px-3 py-2">{new Date(l.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2">{l.actorEmail || l.actorId || '--'}</td>
+                    <td className="px-3 py-2">
+                      {l.targetType} #{l.targetId}
+                    </td>
+                    <td className="px-3 py-2 capitalize">{l.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
-            <tr>
-              <th className="px-3 py-2">When</th>
-              <th className="px-3 py-2">Actor</th>
-              <th className="px-3 py-2">Target</th>
-              <th className="px-3 py-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((l) => (
-              <tr key={l.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{new Date(l.createdAt).toLocaleString()}</td>
-                <td className="px-3 py-2">{l.actorEmail || l.actorId || '--'}</td>
-                <td className="px-3 py-2">
-                  {l.targetType} #{l.targetId}
-                </td>
-                <td className="px-3 py-2 capitalize">{l.action}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderContentManager = () => {
     const contentEntry =
@@ -2035,6 +2230,13 @@ export default function Admin() {
     questionSourceFilter,
     questionEdits,
     newProductName,
+    auditMode,
+    auditQuery,
+    auditStart,
+    auditEnd,
+    auditLoading,
+    auditError,
+    auditSearched,
   ])
 
   return <main className="page-shell py-8">{content}</main>

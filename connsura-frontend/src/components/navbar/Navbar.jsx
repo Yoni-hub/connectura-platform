@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AuthModal from './AuthModal'
 import { useAuth } from '../../context/AuthContext'
 
@@ -8,7 +8,10 @@ export default function Navbar() {
   const [authOpen, setAuthOpen] = useState(false)
   const [authIntent, setAuthIntent] = useState('agent')
   const [authStartMode, setAuthStartMode] = useState('login')
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const nav = useNavigate()
+  const isCustomer = user?.role === 'CUSTOMER'
+  const customerLabel = user?.name || user?.email || 'Client'
 
   const handleCreateProfileClick = () => {
     sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
@@ -61,6 +64,12 @@ export default function Navbar() {
     triggerAuth('agent')
   }
 
+  const handleLogout = () => {
+    logout()
+    setMenuOpen(false)
+    nav('/')
+  }
+
   return (
     <>
       <header className="sticky top-0 z-40 relative border-b border-transparent bg-white/95 backdrop-blur shadow-none">
@@ -88,97 +97,143 @@ export default function Navbar() {
           </button>
 
           <nav className="hidden items-center gap-5 text-sm md:flex">
-            <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
-              Find agents
-            </Link>
-            {user?.role === 'CUSTOMER' ? (
-              <Link to="/client/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
-                {user?.name || user?.email || 'Client'}
-              </Link>
-            ) : (
-              <button type="button" onClick={handleCreateProfileClick} className="text-slate-700 hover:text-[#0b3b8c]">
-                Create your insurance profile
-              </button>
-            )}
-            {user?.role === 'AGENT' ? (
-              (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
-                <Link to="/agent/onboarding" className="text-slate-700 hover:text-[#0b3b8c]">
-                  Agent onboarding
+            {isCustomer ? (
+              <>
+                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Find agents
                 </Link>
-              ) : (
-                <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
-                  Agent dashboard
+                <Link to="/client/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
+                  {customerLabel}
                 </Link>
-              )
+                <button type="button" onClick={handleLogout} className="text-slate-700 hover:text-[#0b3b8c]">
+                  Log out
+                </button>
+                <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Contact us
+                </Link>
+                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
+                  About us
+                </Link>
+              </>
             ) : (
-              <button type="button" onClick={handleForAgentsClick} className="text-slate-700 hover:text-[#0b3b8c]">
-                For agents
-              </button>
+              <>
+                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Find agents
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleCreateProfileClick}
+                  className="text-slate-700 hover:text-[#0b3b8c]"
+                >
+                  Create your insurance profile
+                </button>
+                {user?.role === 'AGENT' ? (
+                  (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
+                    <Link to="/agent/onboarding" className="text-slate-700 hover:text-[#0b3b8c]">
+                      Agent onboarding
+                    </Link>
+                  ) : (
+                    <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
+                      Agent dashboard
+                    </Link>
+                  )
+                ) : (
+                  <button type="button" onClick={handleForAgentsClick} className="text-slate-700 hover:text-[#0b3b8c]">
+                    For agents
+                  </button>
+                )}
+                <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
+                  Contact us
+                </Link>
+                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
+                  About us
+                </Link>
+              </>
             )}
-            <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
-              About us
-            </Link>
           </nav>
         </div>
 
         {menuOpen && (
           <div className="md:hidden absolute left-0 right-0 top-full border-t border-[#dfe7f3] bg-white/95 backdrop-blur shadow-[0_16px_34px_rgba(0,42,92,0.08)]">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
-              <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                Find agents
-              </Link>
-              {user?.role === 'CUSTOMER' ? (
-                <Link
-                  to="/client/dashboard"
-                  className="text-slate-700 hover:text-[#0b3b8c]"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {user?.name || user?.email || 'Client'}
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                  onClick={() => {
-                    handleCreateProfileClick()
-                    setMenuOpen(false)
-                  }}
-                >
-                  Create your insurance profile
-                </button>
-              )}
-              {user?.role === 'AGENT' ? (
-                (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
+              {isCustomer ? (
+                <>
+                  <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    Find agents
+                  </Link>
                   <Link
-                    to="/agent/onboarding"
+                    to="/client/dashboard"
                     className="text-slate-700 hover:text-[#0b3b8c]"
                     onClick={() => setMenuOpen(false)}
                   >
-                    Agent onboarding
+                    {customerLabel}
                   </Link>
-                ) : (
-                  <Link
-                    to="/agent/dashboard"
-                    className="text-slate-700 hover:text-[#0b3b8c]"
-                    onClick={() => setMenuOpen(false)}
+                  <button
+                    type="button"
+                    className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                    onClick={handleLogout}
                   >
-                    Agent dashboard
+                    Log out
+                  </button>
+                  <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    Contact us
                   </Link>
-                )
+                  <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    About us
+                  </Link>
+                </>
               ) : (
-                <button
-                  type="button"
-                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                  onClick={() => {
-                    handleForAgentsClick()
-                  }}
-                >
-                  For agents
-                </button>
+                <>
+                  <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    Find agents
+                  </Link>
+                  <button
+                    type="button"
+                    className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                    onClick={() => {
+                      handleCreateProfileClick()
+                      setMenuOpen(false)
+                    }}
+                  >
+                    Create your insurance profile
+                  </button>
+                  {user?.role === 'AGENT' ? (
+                    (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
+                      <Link
+                        to="/agent/onboarding"
+                        className="text-slate-700 hover:text-[#0b3b8c]"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        Agent onboarding
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/agent/dashboard"
+                        className="text-slate-700 hover:text-[#0b3b8c]"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        Agent dashboard
+                      </Link>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                      onClick={() => {
+                        handleForAgentsClick()
+                      }}
+                    >
+                      For agents
+                    </button>
+                  )}
+                  <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    Contact us
+                  </Link>
+                  <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                    About us
+                  </Link>
+                </>
               )}
-              <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                About us
-              </Link>
             </div>
           </div>
         )}

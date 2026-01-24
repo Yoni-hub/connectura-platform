@@ -32,6 +32,8 @@ const parseFullName = (fullName = '') => {
 }
 
 const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '')
+const reminderLinkClass =
+  'inline-flex text-sm font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:hover:no-underline'
 
 const getInitials = (name = '', fallback = 'AG') => {
   const parts = name.trim().split(' ').filter(Boolean)
@@ -900,34 +902,6 @@ export default function ClientDashboard() {
   const passportCompletedCount = passportSections.filter((section) => section.count > 0).length
   const passportHasData = passportCompletedCount > 0
   const passportStatus = !passportHasData ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
-  const formsOverviewStatus = !formsStarted ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
-  const formsSectionOverview = [
-    {
-      id: 'household',
-      label: 'Household Information',
-      status: householdCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
-    },
-    {
-      id: 'address',
-      label: 'Address Information',
-      status: addressCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
-    },
-    {
-      id: 'additional',
-      label: 'Additional Information',
-      status: additionalCount > 0 ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
-    },
-    {
-      id: 'summary',
-      label: 'Summary',
-      status: formsCompleted ? 'Completed' : formsStarted ? 'In progress' : 'Not started',
-    },
-  ]
-  const resolveSectionTone = (status) => {
-    if (status === 'Completed') return 'green'
-    if (status === 'In progress') return 'amber'
-    return 'gray'
-  }
 
   const requestEmailVerification = async () => {
     if (!user?.email) {
@@ -1513,25 +1487,34 @@ export default function ClientDashboard() {
         <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">Connsura Client Dashboard</h1>
-              <p className="text-slate-500">
-                Welcome back{displayName ? `, ${displayName}` : ''}. Manage your profile.
-                {needsEmailVerification && (
-                  <span className="ml-3 text-amber-600">
-                    {hasPendingEmail
-                      ? 'Verify your new email to finish the update.'
-                      : 'Email not verified. Verify your email to share your profile.'}
-                    <button
-                      type="button"
-                      className="ml-2 font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline"
-                      onClick={requestEmailVerification}
-                      disabled={verificationSending}
-                    >
-                      {verificationSent ? 'Resend code' : 'Verify email'}
-                    </button>
-                  </span>
-                )}
-              </p>
+              {activeTab === 'Overview' && (
+                <p className="text-slate-500">
+                  Welcome back{displayName ? `, ${displayName}` : ''}. Manage your profile.
+                  {needsEmailVerification && (
+                    <span className="ml-3 text-amber-600">
+                      {hasPendingEmail
+                        ? 'Verify your new email to finish the update.'
+                        : 'Email not verified. Verify your email to share your profile.'}
+                      <button
+                        type="button"
+                        className="ml-2 font-semibold text-[#006aff] hover:underline disabled:text-slate-400 disabled:no-underline"
+                        onClick={requestEmailVerification}
+                        disabled={verificationSending}
+                      >
+                        {verificationSent ? 'Resend code' : 'Verify email'}
+                      </button>
+                    </span>
+                  )}
+                </p>
+              )}
+              {activeTab === 'My Insurance Passport' && (
+                <p className="text-slate-600">
+                  Summary of the information you have saved in your forms.
+                </p>
+              )}
+              {activeTab === 'Forms' && (
+                <p className="text-slate-600">Complete your insurance profile.</p>
+              )}
               {activeShares.length > 0 && (
                 <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                   <div className="font-semibold">Sharing in progress</div>
@@ -1561,146 +1544,107 @@ export default function ClientDashboard() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className={`pill-btn-primary px-4 ${
-                  isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
-                }`}
-                onClick={() => {
-                  if (!isEmailVerified) {
-                    toast.error('Verify your email to share your profile')
-                    return
-                  }
-                  setShareOpen(true)
-                }}
-                disabled={!isEmailVerified}
-              >
-                Share
-              </button>
-              <button
-                type="button"
-                className="pill-btn-ghost px-4"
-                onClick={() => {
-                  logout()
-                  nav('/')
-                }}
-              >
-                Log out
-              </button>
-            </div>
+            {(activeTab === 'Overview' ||
+              (activeTab === 'My Insurance Passport' && passportHasData)) && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className={`pill-btn-primary px-4 ${
+                    isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
+                  }`}
+                  onClick={() => {
+                    if (!isEmailVerified) {
+                      toast.error('Verify your email to share your profile')
+                      return
+                    }
+                    setShareOpen(true)
+                  }}
+                  disabled={!isEmailVerified}
+                >
+                  Share
+                </button>
+              </div>
+            )}
           </div>
 
           {loading && <Skeleton className="h-24" />}
 
           {!loading && activeTab === 'Overview' && (
             <div className="surface p-5">
-              <h2 className="text-xl font-semibold mb-2">Overview</h2>
               <p className="text-slate-600">Stay on top of your insurance profile and forms.</p>
               {totalUnread > 0 && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <div className="text-sm font-semibold text-rose-800">
-                    You have {totalUnread} unread {totalUnread === 1 ? 'message' : 'messages'}.
+                    You have {totalUnread} unread {totalUnread === 1 ? 'message' : 'messages'}.{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => updateTab('Messages')}
+                    >
+                      View messages
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={() => updateTab('Messages')}
-                  >
-                    View messages
-                  </button>
                 </div>
               )}
               {!threadsLoading && threads.length === 0 && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="text-sm font-semibold text-slate-900">Talk to an agent</div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Browse agents and start a conversation when you are ready.
+                    Browse agents and start a conversation when you are ready.{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => nav('/agents')}
+                    >
+                      Find agents
+                    </button>
                   </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={() => nav('/agents')}
-                  >
-                    Find agents
-                  </button>
                 </div>
               )}
               {(hasAgentReply || waitingOnAgentReply) && (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <div className="text-sm font-semibold text-rose-800">Continue your conversation</div>
                   <p className="mt-1 text-sm text-rose-700">
-                    {hasAgentReply ? 'Agent replied - continue conversation.' : 'Waiting for agent reply.'}
+                    {hasAgentReply ? 'Agent replied - continue conversation.' : 'Waiting for agent reply.'}{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => updateTab('Messages')}
+                    >
+                      View messages
+                    </button>
                   </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={() => updateTab('Messages')}
-                  >
-                    View messages
-                  </button>
                 </div>
               )}
               {savedAgentIds.size > 0 && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="text-sm font-semibold text-slate-900">You have a saved agent</div>
                   <p className="mt-1 text-sm text-slate-600">
-                    View your saved agents to keep the relationship active.
+                    View your saved agents to keep the relationship active.{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => updateTab('Agents')}
+                    >
+                      View saved agents
+                    </button>
                   </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={() => updateTab('Agents')}
-                  >
-                    View saved agents
-                  </button>
                 </div>
               )}
               {needsEmailVerification && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-sm font-semibold text-amber-900">Verify your email</div>
                   <p className="mt-1 text-sm text-amber-700">
-                    Confirm your email to secure your account and share your profile.
+                    Confirm your email to secure your account and share your profile.{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={requestEmailVerification}
+                      disabled={verificationSending}
+                    >
+                      {verificationSent ? 'Resend code' : 'Verify email'}
+                    </button>
                   </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={requestEmailVerification}
-                    disabled={verificationSending}
-                  >
-                    {verificationSent ? 'Resend code' : 'Verify email'}
-                  </button>
-                </div>
-              )}
-              {!formsStarted && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-900">Set up your profile</div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Start your forms to build your insurance passport.
-                  </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={handleStartForms}
-                    disabled={formsStarting}
-                  >
-                    Set up now
-                  </button>
-                </div>
-              )}
-              {formsStarted && !formsCompleted && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-900">Continue your forms</div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Pick up where you left off in your insurance passport.
-                  </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={handleContinueForms}
-                  >
-                    Continue
-                  </button>
                 </div>
               )}
               {needsAuthenticator && (
@@ -1709,69 +1653,35 @@ export default function ClientDashboard() {
                     Add Google Authenticator for account recovery
                   </div>
                   <p className="mt-1 text-sm text-amber-700">
-                    Set it up in Settings to recover access if you forget your password or email.
+                    Set it up in Settings to recover access if you forget your password or email.{' '}
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => updateTab('Settings')}
+                    >
+                      Set up authenticator
+                    </button>
                   </p>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={() => updateTab('Settings')}
-                  >
-                    Set up authenticator
-                  </button>
                 </div>
               )}
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-semibold text-slate-900">Need help finishing your profile?</div>
                 <p className="mt-1 text-sm text-slate-600">
-                  Talk to an agent for guidance and next steps.
+                  Talk to an agent for guidance and next steps.{' '}
+                  <button
+                    type="button"
+                    className={reminderLinkClass}
+                    onClick={handleTalkToAgent}
+                  >
+                    Talk to an Agent
+                  </button>
                 </p>
-                <button
-                  type="button"
-                  className="pill-btn-primary mt-3 px-4"
-                  onClick={handleTalkToAgent}
-                >
-                  Talk to an Agent
-                </button>
               </div>
             </div>
           )}
 
           {!loading && activeTab === 'My Insurance Passport' && (
             <div className="space-y-4">
-              <div className="surface p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-semibold">My Insurance Passport</h2>
-                    <p className="text-sm text-slate-500">
-                      Summary of the information you have saved in your forms.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {passportHasData && (
-                      <button
-                        type="button"
-                        className="pill-btn-ghost px-4"
-                        onClick={() => {
-                          if (!isEmailVerified) {
-                            toast.error('Verify your email to share your profile')
-                            return
-                          }
-                          setShareOpen(true)
-                        }}
-                      >
-                        Share
-                      </button>
-                    )}
-                    <button type="button" className="pill-btn-primary px-4" onClick={() => updateTab('Forms')}>
-                      Edit in Forms
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 text-sm text-slate-600">
-                  {passportCompletedCount} of {passportSections.length} sections filled • Status: {passportStatus}
-                </div>
-              </div>
-
               {!passportHasData && (
                 <div className="surface p-5 space-y-3">
                   <div className="text-sm text-slate-500">
@@ -1784,22 +1694,33 @@ export default function ClientDashboard() {
               )}
 
               {passportHasData && (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-4">
                   {passportSections.map((section) => (
-                    <div key={section.id} className="surface p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-700">{section.label}</div>
-                        <Badge label={section.count > 0 ? 'Saved' : 'Not started'} tone={section.count > 0 ? 'green' : 'gray'} />
+                    <div
+                      key={section.id}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-900">{section.label}</div>
+                        <button
+                          type="button"
+                          className={reminderLinkClass}
+                          onClick={() => updateTab('Forms')}
+                        >
+                          Edit in Forms
+                        </button>
                       </div>
-                      <div className="text-lg font-semibold">
-                        {section.count > 0
-                          ? formatCountLabel(section.count, section.singular, section.plural)
-                          : 'Not started'}
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
+                        <div>
+                          <span className="font-semibold text-slate-900">Entries:</span>{' '}
+                          {section.count > 0
+                            ? formatCountLabel(section.count, section.singular, section.plural)
+                            : 'Not started'}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-900">Summary:</span> {section.detail}
+                        </div>
                       </div>
-                      <div className="text-sm text-slate-600">{section.detail}</div>
-                      <button type="button" className="pill-btn-ghost px-4 text-sm" onClick={() => updateTab('Forms')}>
-                        Edit in Forms
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -1809,78 +1730,23 @@ export default function ClientDashboard() {
 
           {!loading && activeTab === 'Forms' && (
             <div className="space-y-4">
-              <div className="surface p-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold">Forms</h2>
-                  <p className="text-sm text-slate-500">Complete your insurance profile.</p>
-                </div>
-                <button
-                  type="button"
-                  className="pill-btn-ghost px-4"
-                  onClick={handleCancelForms}
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="surface p-4 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">Forms status</div>
-                    <div className="text-sm text-slate-600">Status: {formsOverviewStatus}</div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {!formsStarted && (
-                      <button
-                        type="button"
-                        className="pill-btn-primary px-4"
-                        onClick={handleStartForms}
-                        disabled={formsStarting}
-                      >
-                        {formsStarting ? 'Starting...' : 'Start Forms'}
-                      </button>
-                    )}
-                    {formsStarted && !formsCompleted && (
-                      <button type="button" className="pill-btn-primary px-4" onClick={handleContinueForms}>
-                        Continue
-                      </button>
-                    )}
-                    {formsStarted && formsCompleted && (
-                      <>
-                        <button
-                          type="button"
-                          className="pill-btn-primary px-4"
-                          onClick={() => openFormsSection('summary')}
-                        >
-                          Continue to Summary
-                        </button>
-                        <button
-                          type="button"
-                          className="pill-btn-ghost px-4"
-                          onClick={() => openFormsSection('household')}
-                        >
-                          Edit
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {formsSectionOverview.map((section) => (
-                    <div key={section.id} className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-700">{section.label}</div>
-                        <Badge label={section.status} tone={resolveSectionTone(section.status)} />
-                      </div>
-                      <button
-                        type="button"
-                        className="pill-btn-ghost px-3 text-xs"
-                        onClick={() => openFormsSection(section.id)}
-                        disabled={!formsStarted}
-                      >
-                        Open section
-                      </button>
-                    </div>
-                  ))}
+              <div className="surface p-4 flex flex-wrap items-center justify-end gap-3">
+                <div className="flex flex-wrap gap-2">
+                  {!formsStarted && (
+                    <button
+                      type="button"
+                      className="pill-btn-primary px-4"
+                      onClick={handleStartForms}
+                      disabled={formsStarting}
+                    >
+                      {formsStarting ? 'Starting...' : 'Start Forms'}
+                    </button>
+                  )}
+                  {formsStarted && !formsCompleted && (
+                    <button type="button" className="pill-btn-primary px-4" onClick={handleContinueForms}>
+                      Continue
+                    </button>
+                  )}
                 </div>
               </div>
               <CreateProfile
@@ -1889,7 +1755,6 @@ export default function ClientDashboard() {
                 initialData={client?.profileData?.forms || null}
                 startSection={formsStartSection}
                 startKey={formsStartKey}
-                showProgress
                 onSectionSave={handleSectionSave}
               />
             </div>

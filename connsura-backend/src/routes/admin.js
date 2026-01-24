@@ -100,6 +100,13 @@ const logAudit = async (actorId, targetType, targetId, action, diff = null) => {
   }
 }
 
+const parseAuditDate = (value) => {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
 const ensureSiteContentDefaults = async () => {
   const existing = await prisma.siteContent.findMany({
     where: { slug: { in: SITE_CONTENT_DEFAULTS.map((entry) => entry.slug) } },
@@ -362,7 +369,94 @@ router.delete('/clients/:id', adminGuard, async (req, res) => {
 
 // Audit logs
 router.get('/audit', adminGuard, async (req, res) => {
+  const type = String(req.query?.type || '').trim().toLowerCase()
+  const query = String(req.query?.query || '').trim()
+  const startRaw = String(req.query?.start || '').trim()
+  const endRaw = String(req.query?.end || '').trim()
+  const startDate = parseAuditDate(startRaw)
+  const endDate = parseAuditDate(endRaw)
+  if ((startRaw && !startDate) || (endRaw && !endDate)) {
+    return res.status(400).json({ error: 'Invalid date range' })
+  }
+  if (startDate && endDate && endDate < startDate) {
+    return res.status(400).json({ error: 'End date must be after start date' })
+  }
+
+  const createdAt = {}
+  if (startDate) createdAt.gte = startDate
+  if (endDate) createdAt.lte = endDate
+  const baseWhere = Object.keys(createdAt).length ? { createdAt } : {}
+
+  let where = baseWhere
+
+  if (type === 'client' || type === 'agent') {
+    if (!query) {
+      return res.json({ logs: [] })
+    }
+    const normalizedQuery = query.toLowerCase()
+    const numericId = Number(query)
+    const isNumeric = Number.isFinite(numericId)
+    const matches = []
+
+    if (type === 'client') {
+      const customerWhere = { OR: [] }
+      if (isNumeric) {
+        customerWhere.OR.push({ id: numericId }, { userId: numericId })
+      }
+      customerWhere.OR.push(
+        { name: { contains: query, mode: 'insensitive' } },
+        { user: { email: { contains: query, mode: 'insensitive' } } }
+      )
+      const customers = await prisma.customer.findMany({
+        where: customerWhere,
+        select: { id: true },
+        take: 50,
+      })
+      matches.push(...customers.map((customer) => String(customer.id)))
+    } else {
+      const agentWhere = { OR: [] }
+      if (isNumeric) {
+        agentWhere.OR.push({ id: numericId }, { userId: numericId })
+      }
+      agentWhere.OR.push(
+        { name: { contains: query, mode: 'insensitive' } },
+        { user: { email: { contains: query, mode: 'insensitive' } } }
+      )
+      const agents = await prisma.agent.findMany({
+        where: agentWhere,
+        select: { id: true },
+        take: 50,
+      })
+      matches.push(...agents.map((agent) => String(agent.id)))
+    }
+
+    const orFilters = [
+      { targetId: { equals: query } },
+      { targetId: { equals: normalizedQuery, mode: 'insensitive' } },
+    ]
+    if (matches.length) {
+      orFilters.push({ targetId: { in: matches } })
+    }
+    if (query.includes('@')) {
+      orFilters.push({ targetId: { equals: normalizedQuery, mode: 'insensitive' } })
+    }
+
+    where = {
+      ...baseWhere,
+      targetType: type === 'client' ? 'Client' : 'Agent',
+      OR: orFilters,
+    }
+  } else if (type === 'admin') {
+    where = {
+      ...baseWhere,
+      targetType: { notIn: ['Client', 'Agent'] },
+    }
+  } else if (type) {
+    return res.status(400).json({ error: 'Invalid audit log type' })
+  }
+
   const logs = await prisma.auditLog.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     take: 200,
     include: { actor: true },

@@ -64,7 +64,7 @@ const parseShareLink = (line = '') => {
 }
 
 export default function AgentDashboard() {
-  const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
+  const { user, lastPassword, setLastPassword, setUser, completeAuth } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
   const [loading, setLoading] = useState(true)
@@ -519,22 +519,9 @@ export default function AgentDashboard() {
         <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">Connsura Agent Dashboard</h1>
               <p className="text-slate-500">
                 Welcome back{agent?.name ? `, ${agent.name.split(' ')[0]}` : ''}. Track your leads and messages.
               </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="pill-btn-ghost px-4"
-                onClick={() => {
-                  logout()
-                  nav('/')
-                }}
-              >
-                Log out
-              </button>
             </div>
           </div>
 
