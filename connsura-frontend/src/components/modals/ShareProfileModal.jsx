@@ -33,10 +33,13 @@ const getAddressHasData = (address) => {
   if (!address) return false
   const primary = address.primary
   const primaryHasData =
-    primary && [primary.phone1, primary.email1, primary.street1].some((value) => hasText(value))
+    primary &&
+    ([primary.phone1, primary.email1, primary.street1].some((value) => hasText(value)) ||
+      (Array.isArray(primary.details) && primary.details.some((detail) => hasDetailValue(detail?.value))))
   const additionalHasData = Array.isArray(address.additional)
     ? address.additional.some((entry) =>
-        [entry.phone1, entry.email1, entry.street1].some((value) => hasText(value))
+        [entry.phone1, entry.email1, entry.street1].some((value) => hasText(value)) ||
+          (Array.isArray(entry.details) && entry.details.some((detail) => hasDetailValue(detail?.value)))
       )
     : false
   return primaryHasData || additionalHasData

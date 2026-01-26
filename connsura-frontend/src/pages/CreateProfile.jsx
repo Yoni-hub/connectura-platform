@@ -150,6 +150,8 @@ const additionalFormProductOptions = [
   'Long-Term Care Insurance',
   'Cyber Liability Insurance',
 ]
+const personalAutoLabel = 'Personal Auto'
+const driverQuestionLabel = 'Who drives this car the most'
 
 const baseHouseholdFields = [
   { id: 'ni-first-name', key: 'first-name', label: 'First Name' },
@@ -626,6 +628,16 @@ export default function CreateProfile({
     additionalAddresses,
   })
   const hasAdditionalData = additionalForms.length > 0
+  const driverQuestionKey = driverQuestionLabel.toLowerCase()
+  const normalizeQuestionLabel = (value = '') => value.toString().trim().toLowerCase()
+  const isDriverQuestion = (value = '') => normalizeQuestionLabel(value) === driverQuestionKey
+  const resolveAdditionalProductName = (value) => {
+    if (!value) return ''
+    const match = products.find((product) => String(product.id) === String(value))
+    if (match?.name) return match.name
+    if (additionalFormProductOptions.includes(value)) return value
+    return ''
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -669,6 +681,30 @@ export default function CreateProfile({
   useEffect(() => {
     baseAdditionalQuestionKeysRef.current = baseAdditionalQuestionKeys
   }, [baseAdditionalQuestionKeys])
+
+  useEffect(() => {
+    if (additionalFormMode !== 'existing') {
+      setBaseAdditionalQuestionKeys([])
+      return
+    }
+    const productName = resolveAdditionalProductName(additionalFormProductId)
+    if (productName.toLowerCase() !== personalAutoLabel.toLowerCase()) {
+      setBaseAdditionalQuestionKeys([])
+      return
+    }
+    setAdditionalQuestions((prev) => {
+      const existingIndex = prev.findIndex((question) => isDriverQuestion(question?.question))
+      const existing = existingIndex >= 0 ? prev[existingIndex] : null
+      const normalizedInput = Array.isArray(existing?.input) ? existing.input : []
+      const nextBase = { question: driverQuestionLabel, input: normalizedInput }
+      if (existingIndex === 0 && prev[0]?.question === driverQuestionLabel) {
+        return prev
+      }
+      const remaining = prev.filter((question) => !isDriverQuestion(question?.question))
+      return [nextBase, ...remaining]
+    })
+    setBaseAdditionalQuestionKeys([driverQuestionLabel])
+  }, [additionalFormMode, additionalFormProductId, products])
 
   useEffect(() => {
     if (!initialData || initialDataRef.current) return
@@ -1374,6 +1410,16 @@ export default function CreateProfile({
   }
   const toggleResidentSelection = (current, id) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+  const toggleAdditionalQuestionResident = (index, id) => {
+    setAdditionalQuestions((prev) => {
+      const next = [...prev]
+      const current = next[index] ?? createAdditionalQuestion()
+      const currentIds = Array.isArray(current.input) ? current.input : []
+      const nextIds = toggleResidentSelection(currentIds, id)
+      next[index] = { ...current, input: nextIds }
+      return next
+    })
+  }
   const setActiveAddressResidents = (nextResidents) => {
     if (activeAddressIndex === 'primary') {
       setResidential((prev) => ({ ...prev, residents: nextResidents }))
@@ -1431,20 +1477,19 @@ export default function CreateProfile({
       if (nameFieldKeys.has(fieldKey)) return
       const value = person?.[fieldKey]
       if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
+        const label =
+          field.id === 'address1' ? field.label.replace(/Street Address 1/i, 'Street Address') : field.label
+        details.push({ label, value })
       }
     })
     return details
   }
   const buildHouseholdSummaryRows = (fullName) =>
     fullName ? [{ label: 'Full Name', value: fullName }] : []
-  const buildAddressDetails = (residentialEntry, addressType) => {
+  const buildAddressDetails = (residentialEntry) => {
     const details = []
-    if (hasNonEmptyValue(addressType)) {
-      details.push({ label: 'Address Type', value: addressType })
-    }
     residentialFields.forEach((field) => {
-      if (field.id === 'addressType') return
+      if (field.id === 'addressType' || field.id === 'address2') return
       const value = residentialEntry?.[field.id]
       if (hasNonEmptyValue(value)) {
         details.push({ label: field.label, value })
@@ -1475,6 +1520,23 @@ export default function CreateProfile({
     const firstName = getFirstName(baseLabel) || baseLabel
     if (!firstName) return '-'
     return residentIds.length > 1 ? `${firstName} ...` : firstName
+  }
+  const formatDriverSelection = (value) => {
+    if (!Array.isArray(value)) {
+      return typeof value === 'string' && value.trim() ? value : '-'
+    }
+    const labels = value.map((id) => residentLabelMap.get(id) || id).filter(Boolean)
+    if (!labels.length) return '-'
+    const firstLabel = labels[0] || ''
+    const firstName = getFirstName(firstLabel) || firstLabel
+    return labels.length > 1 ? `${firstName} ...` : firstName
+  }
+  const formatAdditionalQuestionInput = (question) => {
+    if (!question) return '-'
+    if (isDriverQuestion(question.question)) {
+      return formatDriverSelection(question.input)
+    }
+    return summaryValue(question.input)
   }
 
   const buildFormsPayload = useCallback((overrides = {}) => {
@@ -1576,19 +1638,15 @@ export default function CreateProfile({
     const primaryContactSnapshot = contacts[0] || createContact()
     const primaryAddressSnapshot = {
       label: primaryAddressLabel,
-      phone1: primaryContactSnapshot?.phone1 || '',
-      email1: primaryContactSnapshot?.email1 || '',
       street1: residential?.address1 || '',
-      details: buildAddressDetails(residential, residential?.addressType || ''),
+      details: buildAddressDetails(residential),
     }
     const additionalAddressSnapshots = additionalAddresses
       .filter((entry) => hasNonEmptyValue(entry))
       .map((entry, index) => ({
         label: getAdditionalAddressLabel(entry, index),
-        phone1: entry?.contact?.phone1 || '',
-        email1: entry?.contact?.email1 || '',
         street1: entry?.residential?.address1 || '',
-        details: buildAddressDetails(entry?.residential, entry?.addressType || entry?.residential?.addressType || ''),
+        details: buildAddressDetails(entry?.residential),
       }))
     const snapshot = {
       household: {
@@ -2148,16 +2206,8 @@ export default function CreateProfile({
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
                       <div>
-                        <span className="font-semibold text-slate-900">Address Type:</span>{' '}
-                        {summaryValue(residential.addressType)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                        <span className="font-semibold text-slate-900">Street Address:</span>{' '}
                         {summaryValue(residential.address1)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
-                        {summaryValue(residential.address2)}
                       </div>
                       <div>
                         <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}
@@ -2206,16 +2256,8 @@ export default function CreateProfile({
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
                         <div>
-                          <span className="font-semibold text-slate-900">Address Type:</span>{' '}
-                          {summaryValue(address.residential?.addressType || address.addressType)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                          <span className="font-semibold text-slate-900">Street Address:</span>{' '}
                           {summaryValue(address.residential?.address1)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
-                          {summaryValue(address.residential?.address2)}
                         </div>
                         <div>
                           <span className="font-semibold text-slate-900">City:</span>{' '}
@@ -2361,13 +2403,29 @@ export default function CreateProfile({
                                   inputClassName={additionalQuestionInputClass}
                                   multiline
                                 />
-                                <input
-                                  className={inputClass}
-                                  placeholder="Answer"
-                                  aria-label="Answer"
-                                  value={question.input}
-                                  onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
-                                />
+                                {isDriverQuestion(question.question) ? (
+                                  householdMemberOptions.length ? (
+                                    <MultiSelectDropdown
+                                      id={`additional-driver-${index}`}
+                                      options={householdMemberOptions}
+                                      selectedIds={Array.isArray(question.input) ? question.input : []}
+                                      onToggle={(id) => toggleAdditionalQuestionResident(index, id)}
+                                      placeholder="Select household members"
+                                    />
+                                  ) : (
+                                    <div className="text-xs text-slate-500">
+                                      Add household members to select who drives this car.
+                                    </div>
+                                  )
+                                ) : (
+                                  <input
+                                    className={inputClass}
+                                    placeholder="Answer"
+                                    aria-label="Answer"
+                                    value={question.input}
+                                    onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
+                                  />
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2516,7 +2574,7 @@ export default function CreateProfile({
                                   <span className="font-semibold text-[#006aff] break-words">
                                     {summaryValue(question.question)}:
                                   </span>
-                                  <span>{summaryValue(question.input)}</span>
+                                  <span>{formatAdditionalQuestionInput(question)}</span>
                                 </div>
                               ))}
                             </div>
@@ -2594,16 +2652,8 @@ export default function CreateProfile({
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
                   <div>
-                    <span className="font-semibold text-slate-900">Address Type:</span>{' '}
-                    {summaryValue(residential.addressType)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
+                    <span className="font-semibold text-slate-900">Street Address:</span>{' '}
                     {summaryValue(residential.address1)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Street Address 2:</span>{' '}
-                    {summaryValue(residential.address2)}
                   </div>
                   <div>
                     <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}

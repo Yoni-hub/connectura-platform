@@ -10,6 +10,7 @@ import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
+import ShareSummary from '../components/share/ShareSummary'
 import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
@@ -62,11 +63,70 @@ const hasNonEmptyValue = (value) => {
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
 
+const householdDetailFields = [
+  { key: 'dob', label: 'Date of Birth' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'marital-status', label: 'Marital Status' },
+  { key: 'education-level', label: 'Education Level' },
+  { key: 'employment', label: 'Employment' },
+  { key: 'occupation', label: 'Occupation' },
+  { key: 'driver-status', label: 'Driver Status' },
+  { key: 'license-type', label: "Driver's License Type" },
+  { key: 'license-status', label: 'License Status' },
+  { key: 'years-licensed', label: 'Years Licensed' },
+  { key: 'license-state', label: 'License State' },
+  { key: 'license-number', label: 'License Number' },
+  { key: 'accident-prevention', label: 'Accident Prevention Course' },
+  { key: 'sr22', label: 'SR-22 Required?' },
+  { key: 'fr44', label: 'FR-44 Required?' },
+]
+
+const addressDetailFields = [
+  { key: 'address1', label: 'Street Address' },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State' },
+  { key: 'zip', label: 'Zip Code' },
+]
+
+const buildHouseholdDetails = (person = {}) => {
+  const details = []
+  if (hasNonEmptyValue(person?.relation)) {
+    details.push({ label: 'Relation to Applicant', value: person.relation })
+  }
+  householdDetailFields.forEach((field) => {
+    const value = person?.[field.key]
+    if (hasNonEmptyValue(value)) {
+      details.push({ label: field.label, value })
+    }
+  })
+  return details
+}
+
+const buildAddressDetails = (residentialEntry = {}) => {
+  const details = []
+  addressDetailFields.forEach((field) => {
+    const value = residentialEntry?.[field.key]
+    if (hasNonEmptyValue(value)) {
+      details.push({ label: field.label, value })
+    }
+  })
+  return details
+}
+
+const getAdditionalAddressLabel = (entry = {}, index = 0) => {
+  const rawType = entry?.addressType || entry?.residential?.addressType || ''
+  const type = rawType ? rawType.trim() : ''
+  return type || `Additional Address ${index + 1}`
+}
+
 const buildPersonName = (person = {}) => {
-  const firstName = person['first-name'] || person.firstName || ''
-  const middleInitial = person['middle-initial'] || person.middleInitial || ''
-  const lastName = person['last-name'] || person.lastName || ''
-  return [firstName, middleInitial, lastName].filter(Boolean).join(' ')
+  const nameParts = [person['first-name'] || person.firstName, person['middle-initial'] || person.middleInitial, person['last-name'] || person.lastName]
+    .filter(Boolean)
+  const baseName = nameParts.join(' ')
+  if (!person?.suffix) {
+    return baseName
+  }
+  return baseName ? `${baseName}, ${person.suffix}` : person.suffix
 }
 
 const formatCountLabel = (count, singular, plural) => {
@@ -902,6 +962,64 @@ export default function ClientDashboard() {
   const passportCompletedCount = passportSections.filter((section) => section.count > 0).length
   const passportHasData = passportCompletedCount > 0
   const passportStatus = !passportHasData ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
+  const passportShareSections = {
+    household: householdCount > 0,
+    address: addressCount > 0,
+    additional: additionalCount > 0,
+  }
+  const passportSnapshotFallback = useMemo(() => {
+    const primaryLabel = namedInsured?.relation ? namedInsured.relation : 'Primary Applicant'
+    const primary = {
+      label: primaryLabel,
+      fullName: buildPersonName(namedInsured),
+      details: buildHouseholdDetails(namedInsured),
+    }
+    const additional = additionalHouseholds
+      .filter(hasNonEmptyValue)
+      .map((person) => ({
+        label: person?.relation || 'Additional Household Member',
+        fullName: buildPersonName(person),
+        details: buildHouseholdDetails(person),
+      }))
+    const primaryAddress = {
+      label: 'Primary Address',
+      street1: residential?.address1 || '',
+      details: buildAddressDetails(residential),
+    }
+    const additionalAddressSnapshots = additionalAddresses
+      .filter(hasNonEmptyValue)
+      .map((entry, index) => ({
+        label: getAdditionalAddressLabel(entry, index),
+        street1: entry?.residential?.address1 || '',
+        details: buildAddressDetails(entry?.residential || {}),
+      }))
+    const additionalFormSnapshots = additionalForms
+      .map((form) => ({
+        name: form?.name || form?.productName || '',
+        questions: (form?.questions || [])
+          .filter((question) => hasNonEmptyValue(question?.input))
+          .map((question) => ({
+            question: question?.question || '',
+            input: question?.input || '',
+          })),
+      }))
+      .filter((form) => form.questions.length > 0)
+    return {
+      household: { primary, additional },
+      address: { primary: primaryAddress, additional: additionalAddressSnapshots },
+      additionalForms: additionalFormSnapshots,
+      forms: passportForms,
+    }
+  }, [
+    additionalAddresses,
+    additionalForms,
+    additionalHouseholds,
+    contacts,
+    namedInsured,
+    passportForms,
+    residential,
+  ])
+  const resolvedShareSnapshot = shareSnapshot ?? passportSnapshotFallback
 
   const requestEmailVerification = async () => {
     if (!user?.email) {
@@ -924,6 +1042,14 @@ export default function ClientDashboard() {
     } finally {
       setVerificationSending(false)
     }
+  }
+
+  const handleShareClick = () => {
+    if (!isEmailVerified) {
+      toast.error('Verify your email to share your profile')
+      return
+    }
+    setShareOpen(true)
   }
 
   const openFormsFlow = () => {
@@ -1552,13 +1678,7 @@ export default function ClientDashboard() {
                   className={`pill-btn-primary px-4 ${
                     isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
                   }`}
-                  onClick={() => {
-                    if (!isEmailVerified) {
-                      toast.error('Verify your email to share your profile')
-                      return
-                    }
-                    setShareOpen(true)
-                  }}
+                  onClick={handleShareClick}
                   disabled={!isEmailVerified}
                 >
                   Share
@@ -1695,34 +1815,16 @@ export default function ClientDashboard() {
 
               {passportHasData && (
                 <div className="space-y-4">
-                  {passportSections.map((section) => (
-                    <div
-                      key={section.id}
-                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      className={reminderLinkClass}
+                      onClick={() => updateTab('Forms')}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-semibold text-slate-900">{section.label}</div>
-                        <button
-                          type="button"
-                          className={reminderLinkClass}
-                          onClick={() => updateTab('Forms')}
-                        >
-                          Edit in Forms
-                        </button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                        <div>
-                          <span className="font-semibold text-slate-900">Entries:</span>{' '}
-                          {section.count > 0
-                            ? formatCountLabel(section.count, section.singular, section.plural)
-                            : 'Not started'}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Summary:</span> {section.detail}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      Edit in Forms
+                    </button>
+                  </div>
+                  <ShareSummary snapshot={resolvedShareSnapshot} sections={passportShareSections} />
                 </div>
               )}
             </div>
@@ -1743,8 +1845,15 @@ export default function ClientDashboard() {
                     </button>
                   )}
                   {formsStarted && !formsCompleted && (
-                    <button type="button" className="pill-btn-primary px-4" onClick={handleContinueForms}>
-                      Continue
+                    <button
+                      type="button"
+                      className={`pill-btn-primary px-4 ${
+                        isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
+                      }`}
+                      onClick={handleShareClick}
+                      disabled={!isEmailVerified}
+                    >
+                      Share
                     </button>
                   )}
                 </div>
@@ -2940,7 +3049,7 @@ export default function ClientDashboard() {
       <ShareProfileModal
         open={shareOpen}
         onClose={() => setShareOpen(false)}
-        snapshot={shareSnapshot}
+        snapshot={resolvedShareSnapshot}
       />
       <RateAgentModal
         open={rateOpen}

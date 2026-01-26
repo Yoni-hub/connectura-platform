@@ -1,4 +1,6 @@
 const summaryValue = (value) => (value ? value : '-')
+const driverQuestionKey = 'who drives this car the most'
+const isDriverQuestion = (value = '') => value.toString().trim().toLowerCase() === driverQuestionKey
 
 const hasValue = (value) => {
   if (value === null || value === undefined) return false
@@ -10,6 +12,29 @@ const formatValue = (value) => {
   if (Array.isArray(value)) return value.join(', ')
   if (value === null || value === undefined) return ''
   return String(value)
+}
+
+const buildHouseholdLabelMap = (household) => {
+  const map = new Map()
+  if (!household) return map
+  if (household.primary) {
+    map.set('primary', household.primary.fullName || household.primary.label || 'Primary Applicant')
+  }
+  if (Array.isArray(household.additional)) {
+    household.additional.forEach((person, index) => {
+      map.set(`additional-${index}`, person.fullName || person.label || `Household ${index + 1}`)
+    })
+  }
+  return map
+}
+
+const formatHouseholdSelection = (value, labelMap) => {
+  if (!Array.isArray(value) || !value.length) return '-'
+  const labels = value.map((id) => labelMap.get(id) || id).filter(Boolean)
+  if (!labels.length) return '-'
+  const firstLabel = labels[0] || ''
+  const firstName = firstLabel.split(/\s+/).filter(Boolean)[0] || firstLabel
+  return labels.length > 1 ? `${firstName} ...` : firstName
 }
 
 const buildHouseholdRows = (person) => {
@@ -44,6 +69,7 @@ export default function ShareSummary({ snapshot, sections }) {
   const household = snapshot?.household || {}
   const address = snapshot?.address || {}
   const additionalForms = Array.isArray(snapshot?.additionalForms) ? snapshot.additionalForms : []
+  const householdLabelMap = buildHouseholdLabelMap(household)
   const showHousehold = sections ? Boolean(sections.household) : true
   const showAddress = sections ? Boolean(sections.address) : true
   const selectedAdditional = resolveAdditionalSelection(additionalForms, sections)
@@ -56,6 +82,16 @@ export default function ShareSummary({ snapshot, sections }) {
     }))
     .filter((form) => form.questions.length > 0)
   const showAdditional = filteredAdditional.length > 0
+  const formatQuestionInput = (question) => {
+    if (!question) return '-'
+    if (isDriverQuestion(question.question)) {
+      if (Array.isArray(question.input)) {
+        return formatHouseholdSelection(question.input, householdLabelMap)
+      }
+      return formatValue(question.input) || '-'
+    }
+    return formatValue(question.input) || '-'
+  }
 
   return (
     <div className="space-y-4">
@@ -103,19 +139,6 @@ export default function ShareSummary({ snapshot, sections }) {
       {showAddress && address?.primary && (
         <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
           <div className="text-sm font-semibold text-slate-900">{address.primary.label || 'Address'}</div>
-          <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-            <div>
-              <span className="font-semibold text-slate-900">Phone #1:</span> {summaryValue(address.primary.phone1)}
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900">Email Address #1:</span>{' '}
-              {summaryValue(address.primary.email1)}
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900">Street Address 1:</span>{' '}
-              {summaryValue(address.primary.street1)}
-            </div>
-          </div>
           {renderDetails(address.primary.details)}
         </div>
       )}
@@ -128,17 +151,6 @@ export default function ShareSummary({ snapshot, sections }) {
             className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
           >
             <div className="text-sm font-semibold text-slate-900">{entry.label || `Address ${index + 1}`}</div>
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-              <div>
-                <span className="font-semibold text-slate-900">Phone #1:</span> {summaryValue(entry.phone1)}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900">Email Address #1:</span> {summaryValue(entry.email1)}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-900">Street Address 1:</span> {summaryValue(entry.street1)}
-              </div>
-            </div>
             {renderDetails(entry.details)}
           </div>
         ))}
@@ -155,7 +167,7 @@ export default function ShareSummary({ snapshot, sections }) {
                 form.questions.map((question, qIndex) => (
                   <div key={`additional-share-${index}-${qIndex}`} className="flex flex-wrap gap-2">
                     <span className="font-semibold text-slate-900">{summaryValue(question.question)}:</span>
-                    <span>{summaryValue(question.input)}</span>
+                    <span>{formatQuestionInput(question)}</span>
                   </div>
                 ))
               ) : (
