@@ -201,6 +201,7 @@ model QuestionBank {
   id         Int            @id @default(autoincrement())
   text       String
   normalized String         @unique
+  sortOrder  Int?
   source     QuestionSource @default(SYSTEM)
   productId  Int?
   customerId Int?

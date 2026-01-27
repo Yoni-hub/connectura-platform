@@ -589,7 +589,7 @@ router.get('/questions', adminGuard, async (req, res) => {
             ...(productId ? { productId } : {}),
             source: 'SYSTEM',
           },
-          orderBy: { id: 'asc' },
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
         })
       : []
 
@@ -647,25 +647,46 @@ router.post('/questions', adminGuard, async (req, res) => {
 
   const records = buildQuestionRecords(received, 'SYSTEM', productId || null, null)
   if (!records.length) return res.status(400).json({ error: 'Invalid question text' })
+  const orderMap = new Map(records.map((record, index) => [record.normalized, index + 1]))
+  records.forEach((record) => {
+    record.sortOrder = orderMap.get(record.normalized) || null
+  })
 
   if (sync) {
     if (!productId) return res.status(400).json({ error: 'Product is required for sync' })
 
     const existing = await prisma.questionBank.findMany({
       where: { productId, source: 'SYSTEM' },
-      orderBy: { id: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     })
     const existingByNormalized = new Map(existing.map((item) => [item.normalized, item]))
     const incomingNormalized = new Set(records.map((record) => record.normalized))
 
     const toDelete = existing.filter((item) => !incomingNormalized.has(item.normalized))
     const toCreate = records.filter((record) => !existingByNormalized.has(record.normalized))
+    const toUpdateOrder = existing.filter(
+      (item) =>
+        orderMap.has(item.normalized) && item.sortOrder !== orderMap.get(item.normalized)
+    )
+    let skipped = 0
+    const skippedTexts = []
 
     if (toDelete.length) {
       await prisma.questionBank.deleteMany({ where: { id: { in: toDelete.map((item) => item.id) } } })
       for (const item of toDelete) {
         await logAudit(req.admin.id, 'QuestionBank', item.id, 'delete', { productId })
       }
+    }
+
+    if (toUpdateOrder.length) {
+      await prisma.$transaction(
+        toUpdateOrder.map((item) =>
+          prisma.questionBank.update({
+            where: { id: item.id },
+            data: { sortOrder: orderMap.get(item.normalized) },
+          })
+        )
+      )
     }
 
     const createdQuestions = []
@@ -677,6 +698,11 @@ router.post('/questions', adminGuard, async (req, res) => {
           productId: created.productId,
         })
       } catch (err) {
+        if (err?.code === 'P2002') {
+          skipped += 1
+          skippedTexts.push(record.text)
+          continue
+        }
         if (err?.code !== 'P2002') {
           throw err
         }
@@ -685,12 +711,14 @@ router.post('/questions', adminGuard, async (req, res) => {
 
     const updated = await prisma.questionBank.findMany({
       where: { productId, source: 'SYSTEM' },
-      orderBy: { id: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     })
 
     return res.status(201).json({
       created: createdQuestions.length,
       deleted: toDelete.length,
+      skipped,
+      skippedTexts,
       prepared: records.length,
       received: received.length,
       questions: updated.map((question) => ({
@@ -704,31 +732,45 @@ router.post('/questions', adminGuard, async (req, res) => {
 
   const createdQuestions = []
   let skipped = 0
+  const skippedTexts = []
+  let sortCursor = 0
+  if (productId || productId === 0) {
+    const last = await prisma.questionBank.findFirst({
+      where: { productId, source: 'SYSTEM' },
+      orderBy: [{ sortOrder: 'desc' }, { id: 'desc' }],
+      select: { sortOrder: true },
+    })
+    sortCursor = last?.sortOrder ?? 0
+  }
   for (const record of records) {
     try {
+      sortCursor += 1
+      record.sortOrder = sortCursor
       const created = await prisma.questionBank.create({ data: record })
       createdQuestions.push(created)
       await logAudit(req.admin.id, 'QuestionBank', created.id, 'create', {
         productId: created.productId,
-      })
-    } catch (err) {
-      if (err?.code === 'P2002') {
-        skipped += 1
-        continue
+        })
+      } catch (err) {
+        if (err?.code === 'P2002') {
+          skipped += 1
+          skippedTexts.push(record.text)
+          continue
+        }
+        throw err
       }
-      throw err
     }
-  }
 
-  const payload = {
-    created: createdQuestions.length,
-    prepared: records.length,
-    received: received.length,
-    skipped,
-    questions: createdQuestions.map((question) => ({
-      id: question.id,
-      text: question.text,
-      source: question.source,
+    const payload = {
+      created: createdQuestions.length,
+      prepared: records.length,
+      received: received.length,
+      skipped,
+      skippedTexts,
+      questions: createdQuestions.map((question) => ({
+        id: question.id,
+        text: question.text,
+        source: question.source,
       productId: question.productId,
     })),
   }

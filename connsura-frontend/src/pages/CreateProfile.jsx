@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { allOccupations, occupationMap } from '../data/occupationMap'
 import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
@@ -152,6 +152,15 @@ const additionalFormProductOptions = [
 ]
 const personalAutoLabel = 'Personal Auto'
 const driverQuestionLabel = 'Who drives this car the most'
+const sectionQuestionProductSlugs = {
+  household: 'household-information',
+  address: 'address-information',
+}
+const sectionQuestionProductNames = {
+  household: 'Household Information',
+  address: 'Address Information',
+}
+const sectionQuestionProductSlugSet = new Set(Object.values(sectionQuestionProductSlugs))
 
 const baseHouseholdFields = [
   { id: 'ni-first-name', key: 'first-name', label: 'First Name' },
@@ -549,6 +558,7 @@ export default function CreateProfile({
   const { user } = useAuth()
   const [formSchema, setFormSchema] = useState(() => buildDefaultSchema())
   const [products, setProducts] = useState([])
+  const [sectionBankQuestions, setSectionBankQuestions] = useState({ household: [], address: [] })
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createAddressEntry = () => ({
@@ -616,6 +626,7 @@ export default function CreateProfile({
   const notificationTimerRef = useRef(null)
   const [notification, setNotification] = useState(null)
   const baseAdditionalQuestionKeysRef = useRef([])
+  const sectionProductIdsRef = useRef({ household: '', address: '' })
   const suppressProductSyncRef = useRef(false)
   const suppressModeResetRef = useRef(false)
   const initialDataRef = useRef(false)
@@ -633,10 +644,50 @@ export default function CreateProfile({
   const isDriverQuestion = (value = '') => normalizeQuestionLabel(value) === driverQuestionKey
   const resolveAdditionalProductName = (value) => {
     if (!value) return ''
-    const match = products.find((product) => String(product.id) === String(value))
+    const match = additionalFormProducts.find((product) => String(product.id) === String(value))
     if (match?.name) return match.name
     if (additionalFormProductOptions.includes(value)) return value
     return ''
+  }
+
+  const additionalFormProducts = useMemo(
+    () => products.filter((product) => !sectionQuestionProductSlugSet.has(product.slug)),
+    [products]
+  )
+
+  const resolveSectionProductId = (sectionKey) => {
+    const slug = sectionQuestionProductSlugs[sectionKey]
+    const name = sectionQuestionProductNames[sectionKey]
+    if (!slug && !name) return ''
+    const match = products.find(
+      (product) => product.slug === slug || product.name === name
+    )
+    return match ? String(match.id) : ''
+  }
+
+  const loadSectionQuestions = async (sectionKey, productId) => {
+    if (!productId) return
+    try {
+      const token = getStoredToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, { headers })
+      if (!res.ok) return
+      const data = await res.json()
+      const bankQuestions = Array.isArray(data.questions) ? data.questions : []
+      const systemOnly = bankQuestions.filter((question) => question?.source === 'SYSTEM' || !question?.source)
+      const normalized = systemOnly
+        .map((question) => ({
+          text: question?.text || '',
+          key: normalizeQuestionText(question?.text || ''),
+        }))
+        .filter((entry) => entry.key)
+      setSectionBankQuestions((prev) => ({
+        ...prev,
+        [sectionKey]: normalized,
+      }))
+    } catch (error) {
+      console.warn(`Failed to load ${sectionKey} question bank`, error)
+    }
   }
 
   useEffect(() => {
@@ -679,19 +730,27 @@ export default function CreateProfile({
   }, [])
 
   useEffect(() => {
+    if (!products.length) return
+    const householdId = resolveSectionProductId('household')
+    const addressId = resolveSectionProductId('address')
+    if (householdId && sectionProductIdsRef.current.household !== householdId) {
+      sectionProductIdsRef.current.household = householdId
+      loadSectionQuestions('household', householdId)
+    }
+    if (addressId && sectionProductIdsRef.current.address !== addressId) {
+      sectionProductIdsRef.current.address = addressId
+      loadSectionQuestions('address', addressId)
+    }
+  }, [products])
+
+  useEffect(() => {
     baseAdditionalQuestionKeysRef.current = baseAdditionalQuestionKeys
   }, [baseAdditionalQuestionKeys])
 
   useEffect(() => {
-    if (additionalFormMode !== 'existing') {
-      setBaseAdditionalQuestionKeys([])
-      return
-    }
+    if (additionalFormMode !== 'existing') return
     const productName = resolveAdditionalProductName(additionalFormProductId)
-    if (productName.toLowerCase() !== personalAutoLabel.toLowerCase()) {
-      setBaseAdditionalQuestionKeys([])
-      return
-    }
+    if (productName.toLowerCase() !== personalAutoLabel.toLowerCase()) return
     setAdditionalQuestions((prev) => {
       const existingIndex = prev.findIndex((question) => isDriverQuestion(question?.question))
       const existing = existingIndex >= 0 ? prev[existingIndex] : null
@@ -703,7 +762,17 @@ export default function CreateProfile({
       const remaining = prev.filter((question) => !isDriverQuestion(question?.question))
       return [nextBase, ...remaining]
     })
-    setBaseAdditionalQuestionKeys([driverQuestionLabel])
+    setBaseAdditionalQuestionKeys((prev) => {
+      const driverKey = normalizeQuestionText(driverQuestionLabel)
+      const current = Array.isArray(prev) && prev.length ? prev : baseAdditionalQuestionKeysRef.current || []
+      const nextSet = new Set(current)
+      nextSet.add(driverKey)
+      const next = Array.from(nextSet)
+      if (next.length === (current || []).length && next.every((key) => (current || []).includes(key))) {
+        return prev
+      }
+      return next
+    })
   }, [additionalFormMode, additionalFormProductId, products])
 
   useEffect(() => {
@@ -1000,6 +1069,23 @@ export default function CreateProfile({
       value: customFieldValues?.[sectionKey]?.[field.id] ?? '',
       onChange: (event) => setCustomFieldValue(sectionKey, field.id, event.target.value),
     }))
+
+  const buildQuestionBankRows = (sectionKey, idPrefix, questions = [], excludeKeys = new Set()) =>
+    questions
+      .map((question, index) => {
+        const text = question?.text || ''
+        const normalized = normalizeQuestionText(text)
+        const key = `qb-${normalized}`
+        if (!text || key === 'qb-' || excludeKeys.has(normalized)) return null
+        return {
+          id: `${idPrefix}-${index}`,
+          label: text,
+          type: 'text',
+          value: customFieldValues?.[sectionKey]?.[key] ?? '',
+          onChange: (event) => setCustomFieldValue(sectionKey, key, event.target.value),
+        }
+      })
+      .filter(Boolean)
   const buildHouseholdFields = (person, setPerson, idPrefix) => {
     const occupationOptionsForEmployment =
       specialEmploymentOccupations[person.employment] ||
@@ -1132,7 +1218,7 @@ export default function CreateProfile({
   const editAdditionalForm = (index) => {
     const form = additionalForms[index] ?? { name: '', questions: [], productId: null }
     const fallbackProduct =
-      products.find(
+      additionalFormProducts.find(
         (product) => product.name === form.productName || product.name === form.name
       ) || null
     const resolvedProductId = form.productId || fallbackProduct?.id || ''
@@ -1343,7 +1429,27 @@ export default function CreateProfile({
     activeHousehold.idPrefix
   )
   const householdCustomFields = buildCustomFieldRows('household', `${activeHousehold.idPrefix}-custom`)
-  const activeHouseholdFieldRows = [...activeHouseholdFields, ...householdCustomFields]
+  const householdLabelExclusions = (() => {
+    const keys = new Set()
+    keys.add(normalizeQuestionText('Relation To Applicant'))
+    activeHouseholdFields.forEach((field) => {
+      if (field?.label) keys.add(normalizeQuestionText(field.label))
+    })
+    householdCustomFields.forEach((field) => {
+      if (field?.label) keys.add(normalizeQuestionText(field.label))
+    })
+    return keys
+  })()
+  const householdBankFields =
+    activeHouseholdIndex === 'primary'
+      ? buildQuestionBankRows(
+          'household',
+          `${activeHousehold.idPrefix}-bank`,
+          sectionBankQuestions.household,
+          householdLabelExclusions
+        )
+      : []
+  const activeHouseholdFieldRows = [...activeHouseholdFields, ...householdCustomFields, ...householdBankFields]
   const primaryContact = contacts[0] || createContact()
   const primaryAddressLabel = 'Primary Address'
   const getAdditionalAddressLabel = (entry, index) => {
@@ -1373,6 +1479,85 @@ export default function CreateProfile({
     'address',
     `addr-${activeAdditionalAddressIndex === null ? 'primary' : activeAdditionalAddressIndex}-custom`
   )
+  const addressQuestionRows = (() => {
+    if (activeAddressIndex !== 'primary') return []
+    const rows = []
+    const seen = new Set()
+    const residentKey = normalizeQuestionText('Who lives in this address')
+    const fieldMap = new Map([
+      [normalizeQuestionText('Address Type'), { id: 'addressType', type: 'select' }],
+      [normalizeQuestionText('Street Address'), { id: 'address1', type: 'text' }],
+      [normalizeQuestionText('Street Address 1'), { id: 'address1', type: 'text' }],
+      [normalizeQuestionText('Street Address 2'), { id: 'address2', type: 'text' }],
+      [normalizeQuestionText('City'), { id: 'city', type: 'text' }],
+      [normalizeQuestionText('State'), { id: 'state', type: 'text' }],
+      [normalizeQuestionText('Zip Code'), { id: 'zip', type: 'text' }],
+      [normalizeQuestionText('Zip'), { id: 'zip', type: 'text' }],
+    ])
+
+    sectionBankQuestions.address.forEach((question, index) => {
+      const label = (question?.text || '').toString().trim()
+      const normalized = normalizeQuestionText(label)
+      if (!normalized || seen.has(normalized)) return
+      seen.add(normalized)
+
+      if (normalized === residentKey) {
+        rows.push({
+          type: 'residents',
+          id: `addr-bank-residents-${index}`,
+          label,
+        })
+        return
+      }
+
+      const mapped = fieldMap.get(normalized)
+      if (mapped) {
+        rows.push({
+          type: 'field',
+          id: `addr-bank-${mapped.id}-${index}`,
+          label,
+          fieldId: mapped.id,
+          fieldType: mapped.type,
+        })
+        return
+      }
+
+      rows.push({
+        type: 'custom',
+        id: `addr-bank-custom-${index}`,
+        label,
+        customKey: `qb-${normalized}`,
+      })
+    })
+
+    if (!rows.length) {
+      orderedResidentialFields.forEach((field, index) => {
+        rows.push({
+          type: 'field',
+          id: `addr-fallback-${field.id}-${index}`,
+          label: field.label,
+          fieldId: field.id,
+          fieldType: field.type || 'text',
+        })
+      })
+      rows.push({
+        type: 'residents',
+        id: 'addr-fallback-residents',
+        label: 'Who lives in this address',
+      })
+    }
+
+    addressCustomFields.forEach((field) => {
+      rows.push({
+        type: 'customField',
+        id: field.id,
+        label: field.label,
+        customField: field,
+      })
+    })
+
+    return rows
+  })()
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
   const showHouseholdForm =
@@ -1541,8 +1726,8 @@ export default function CreateProfile({
 
   const buildFormsPayload = useCallback((overrides = {}) => {
     const nextAdditionalForms = overrides.additionalForms ?? additionalForms
-    const availableProducts = products.length
-      ? products
+    const availableProducts = additionalFormProducts.length
+      ? additionalFormProducts
       : additionalFormProductOptions.map((name) => ({ id: name, name }))
     const parseProductId = (value) => {
       if (!value) return null
@@ -1581,7 +1766,7 @@ export default function CreateProfile({
     customFieldValues,
     mailing,
     namedInsured,
-    products,
+    additionalFormProducts,
     residential,
   ])
 
@@ -2093,69 +2278,95 @@ export default function CreateProfile({
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeAddressLabel}</div>
                     </div>
-                    <div className={`mt-3 ${gridClass}`}>
-                      {orderedResidentialFields.map((field) => {
-                        const isAddressType = field.id === 'addressType'
-                        const errorKey = field.id
-                        return (
-                          <div key={`res-${field.id}`} className="contents">
-                            <FieldRow
-                              id={`res-${field.id}`}
-                              label={field.label}
-                              type={field.type}
-                              options={isAddressType ? addressTypeOptions : undefined}
-                              placeholder={isAddressType ? 'Select address type' : undefined}
-                              value={isAddressType ? activeAddressType : activeAddressResidential?.[field.id] ?? ''}
-                              onChange={(event) =>
-                                isAddressType
-                                  ? setActiveAddressType(event.target.value)
-                                  : setActiveAddressResidentialField(field.id, event.target.value)
-                              }
-                            />
-                            {addressErrors[errorKey] && (
-                              <div className="col-span-2 text-xs text-rose-600">
-                                {addressErrors[errorKey]}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div className={`mt-4 ${gridClass}`}>
-                      <label htmlFor="address-residents" className={labelClass}>
-                        Who lives in this address
-                      </label>
-                      {householdMemberOptions.length ? (
-                        <MultiSelectDropdown
-                          id="address-residents"
-                          options={householdMemberOptions}
-                          selectedIds={activeAddressResidents}
-                          onToggle={toggleActiveAddressResident}
-                          placeholder="Select household members"
-                        />
-                      ) : (
-                        <div className="text-xs text-slate-500">
-                          Add household members to select who lives here.
-                        </div>
-                      )}
-                      {addressErrors.residents && (
-                        <div className="col-span-2 text-xs text-rose-600">{addressErrors.residents}</div>
-                      )}
-                    </div>
-
-                    {addressCustomFields.length > 0 && (
+                    {addressQuestionRows.length > 0 && (
                       <div className={`mt-3 ${gridClass}`}>
-                        {addressCustomFields.map((field) => (
-                          <div key={field.id} className="contents">
-                            <FieldRow {...field} />
-                            {addressErrors[field.id] && (
-                              <div className="col-span-2 text-xs text-rose-600">
-                                {addressErrors[field.id]}
+                        {addressQuestionRows.map((row) => {
+                          if (row.type === 'residents') {
+                            return (
+                              <div key={row.id} className="contents">
+                                <label htmlFor="address-residents" className={labelClass}>
+                                  {row.label}
+                                </label>
+                                {householdMemberOptions.length ? (
+                                  <MultiSelectDropdown
+                                    id="address-residents"
+                                    options={householdMemberOptions}
+                                    selectedIds={activeAddressResidents}
+                                    onToggle={toggleActiveAddressResident}
+                                    placeholder="Select household members"
+                                  />
+                                ) : (
+                                  <div className="text-xs text-slate-500">
+                                    Add household members to select who lives here.
+                                  </div>
+                                )}
+                                {addressErrors.residents && (
+                                  <div className="col-span-2 text-xs text-rose-600">{addressErrors.residents}</div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        ))}
+                            )
+                          }
+
+                          if (row.type === 'customField') {
+                            const field = row.customField
+                            return (
+                              <div key={row.id} className="contents">
+                                <FieldRow {...field} />
+                                {addressErrors[field.id] && (
+                                  <div className="col-span-2 text-xs text-rose-600">
+                                    {addressErrors[field.id]}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          }
+
+                          if (row.type === 'custom') {
+                            const value = customFieldValues?.address?.[row.customKey] ?? ''
+                            return (
+                              <div key={row.id} className="contents">
+                                <FieldRow
+                                  id={row.id}
+                                  label={row.label}
+                                  value={value}
+                                  onChange={(event) => setCustomFieldValue('address', row.customKey, event.target.value)}
+                                />
+                                {addressErrors[row.customKey] && (
+                                  <div className="col-span-2 text-xs text-rose-600">
+                                    {addressErrors[row.customKey]}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          }
+
+                          const isAddressType = row.fieldId === 'addressType'
+                          const value = isAddressType
+                            ? activeAddressType
+                            : activeAddressResidential?.[row.fieldId] ?? ''
+                          const handleChange = (event) =>
+                            isAddressType
+                              ? setActiveAddressType(event.target.value)
+                              : setActiveAddressResidentialField(row.fieldId, event.target.value)
+                          return (
+                            <div key={row.id} className="contents">
+                              <FieldRow
+                                id={row.id}
+                                label={row.label}
+                                type={row.fieldType}
+                                options={isAddressType ? addressTypeOptions : undefined}
+                                placeholder={isAddressType ? 'Select address type' : undefined}
+                                value={value}
+                                onChange={handleChange}
+                              />
+                              {addressErrors[row.fieldId] && (
+                                <div className="col-span-2 text-xs text-rose-600">
+                                  {addressErrors[row.fieldId]}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
 
@@ -2358,8 +2569,8 @@ export default function CreateProfile({
                             disabled={typeof activeAdditionalFormIndex === 'number'}
                           >
                             <option value="">- Select a product -</option>
-                            {(products.length
-                              ? products
+                            {(additionalFormProducts.length
+                              ? additionalFormProducts
                               : additionalFormProductOptions.map((name) => ({ id: name, name }))).map((option) => (
                               <option key={option.id} value={option.id}>
                                 {option.name}
@@ -2493,11 +2704,14 @@ export default function CreateProfile({
                               setAdditionalSaving(false)
                               return
                             }
-                            await saveCustomerQuestions(
-                              additionalQuestions.map((question) => question.question),
-                              productId || null,
-                              resolvedName
-                            )
+                            const baseKeys = new Set(baseAdditionalQuestionKeysRef.current || [])
+                            const questionsToSave =
+                              additionalFormMode === 'existing'
+                                ? additionalQuestions
+                                    .map((question) => (question?.question || '').toString().trim())
+                                    .filter((text) => text && !baseKeys.has(normalizeQuestionText(text)))
+                                : additionalQuestions.map((question) => question.question)
+                            await saveCustomerQuestions(questionsToSave, productId || null, resolvedName)
                             const nextForm = {
                               name: resolvedName,
                               questions: additionalQuestions,

@@ -83,7 +83,10 @@ async function ensureAdminSeed() {
 async function ensureQuestionBank() {
   const count = await prisma.questionBank.count({ where: { source: 'SYSTEM' } })
   if (count) return
-  const records = buildQuestionRecords(questionBank, 'SYSTEM')
+  const records = buildQuestionRecords(questionBank, 'SYSTEM').map((record, index) => ({
+    ...record,
+    sortOrder: index + 1,
+  }))
   if (!records.length) return
   await prisma.questionBank.createMany({ data: records, skipDuplicates: true })
   console.log(`Seeded ${records.length} system questions.`)

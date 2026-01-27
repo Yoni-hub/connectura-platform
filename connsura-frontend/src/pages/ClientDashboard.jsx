@@ -245,16 +245,21 @@ export default function ClientDashboard() {
   const [emailMessage, setEmailMessage] = useState(null)
   const [emailDraft, setEmailDraft] = useState(user?.email || '')
   const [languageDraft, setLanguageDraft] = useState('')
-  const [timezoneDraft, setTimezoneDraft] = useState('')
   const [preferencesSaving, setPreferencesSaving] = useState(false)
   const [preferencesMessage, setPreferencesMessage] = useState('')
   const [loginActivity, setLoginActivity] = useState([])
   const [loginActivityLoading, setLoginActivityLoading] = useState(false)
+  const [loginActivityOpen, setLoginActivityOpen] = useState(false)
+  const [loginActivityPage, setLoginActivityPage] = useState(1)
   const [sessions, setSessions] = useState([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const [sessionsPage, setSessionsPage] = useState(1)
   const [sessionsMessage, setSessionsMessage] = useState(null)
   const [sharedActivity, setSharedActivity] = useState([])
   const [sharedActivityLoading, setSharedActivityLoading] = useState(false)
+  const [sharedActivityOpen, setSharedActivityOpen] = useState(false)
+  const [sharedActivityPage, setSharedActivityPage] = useState(1)
   const [consentHistory, setConsentHistory] = useState([])
   const [consentLoading, setConsentLoading] = useState(false)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
@@ -303,13 +308,11 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (!client?.profileData) return
     setLanguageDraft(client.profileData.language || '')
-    setTimezoneDraft(client.profileData.timezone || '')
     if (client.profileData.cookie_preference) {
       setCookiePref(client.profileData.cookie_preference)
     }
   }, [
     client?.profileData?.language,
-    client?.profileData?.timezone,
     client?.profileData?.cookie_preference,
   ])
 
@@ -349,7 +352,6 @@ export default function ClientDashboard() {
       })
       setEmailDraft(details.email || user?.email || '')
       setLanguageDraft(details.language || '')
-      setTimezoneDraft(details.timezone || '')
     } catch {
       setClient(null)
     } finally {
@@ -1317,7 +1319,7 @@ export default function ClientDashboard() {
     }
   }
 
-  const handlePreferencesSave = async (nextLanguage, nextTimezone) => {
+  const handlePreferencesSave = async (nextLanguage) => {
     if (!user?.customerId) return
     if (preferencesSaving) return
     setPreferencesSaving(true)
@@ -1325,7 +1327,6 @@ export default function ClientDashboard() {
     try {
       const res = await api.patch(`/customers/${user.customerId}/preferences`, {
         language: nextLanguage,
-        timezone: nextTimezone,
         sessionId,
       })
       if (res.data?.profile) {
@@ -1347,6 +1348,7 @@ export default function ClientDashboard() {
         params: { sessionId },
       })
       setLoginActivity(res.data?.activity || [])
+      setLoginActivityPage(1)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Unable to load login activity')
     } finally {
@@ -1362,6 +1364,7 @@ export default function ClientDashboard() {
         params: { sessionId },
       })
       setSessions(res.data?.sessions || [])
+      setSessionsPage(1)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Unable to load sessions')
     } finally {
@@ -1398,11 +1401,39 @@ export default function ClientDashboard() {
         params: { sessionId },
       })
       setSharedActivity(res.data?.activity || [])
+      setSharedActivityPage(1)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Unable to load shared activity')
     } finally {
       setSharedActivityLoading(false)
     }
+  }
+
+  const toggleLoginActivity = async () => {
+    if (loginActivityOpen) {
+      setLoginActivityOpen(false)
+      return
+    }
+    await loadLoginActivity()
+    setLoginActivityOpen(true)
+  }
+
+  const toggleSessions = async () => {
+    if (sessionsOpen) {
+      setSessionsOpen(false)
+      return
+    }
+    await loadSessions()
+    setSessionsOpen(true)
+  }
+
+  const toggleSharedActivity = async () => {
+    if (sharedActivityOpen) {
+      setSharedActivityOpen(false)
+      return
+    }
+    await loadSharedActivity()
+    setSharedActivityOpen(true)
   }
 
   const loadConsentHistory = async () => {
@@ -1551,22 +1582,62 @@ export default function ClientDashboard() {
   const emailValue = form.email || user?.email || ''
   const fallbackLanguage =
     typeof navigator !== 'undefined' && navigator.language ? navigator.language : ''
-  const fallbackTimeZone =
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
   const languageLabel = languageDraft || client?.profileData?.language || fallbackLanguage || 'Not set'
-  const timeZoneLabel = timezoneDraft || client?.profileData?.timezone || fallbackTimeZone || 'Not set'
   const languageOptions = [
-    { value: 'en', label: 'English' },
-    { value: 'es', label: 'Spanish' },
-    { value: 'fr', label: 'French' },
+    { value: 'Amharic', label: 'Amharic' },
+    { value: 'Arabic', label: 'Arabic' },
+    { value: 'Bengali', label: 'Bengali' },
+    { value: 'Cherokee', label: 'Cherokee' },
+    { value: 'Chinese', label: 'Chinese' },
+    { value: 'English', label: 'English' },
+    { value: 'French', label: 'French' },
+    { value: 'German', label: 'German' },
+    { value: 'Gujarati', label: 'Gujarati' },
+    { value: 'Haitian Creole', label: 'Haitian Creole' },
+    { value: 'Hawaiian', label: 'Hawaiian' },
+    { value: 'Hindi', label: 'Hindi' },
+    { value: 'Igbo', label: 'Igbo' },
+    { value: 'Inuktitut', label: 'Inuktitut' },
+    { value: 'Italian', label: 'Italian' },
+    { value: 'Japanese', label: 'Japanese' },
+    { value: 'Korean', label: 'Korean' },
+    { value: 'Navajo', label: 'Navajo' },
+    { value: 'Oromo', label: 'Oromo' },
+    { value: 'Persian (Farsi)', label: 'Persian (Farsi)' },
+    { value: 'Polish', label: 'Polish' },
+    { value: 'Portuguese', label: 'Portuguese' },
+    { value: 'Punjabi', label: 'Punjabi' },
+    { value: 'Russian', label: 'Russian' },
+    { value: 'Somali', label: 'Somali' },
+    { value: 'Spanish', label: 'Spanish' },
+    { value: 'Swahili', label: 'Swahili' },
+    { value: 'Tagalog (Filipino)', label: 'Tagalog (Filipino)' },
+    { value: 'Tamil', label: 'Tamil' },
+    { value: 'Telugu', label: 'Telugu' },
+    { value: 'Urdu', label: 'Urdu' },
+    { value: 'Vietnamese', label: 'Vietnamese' },
+    { value: 'Yoruba', label: 'Yoruba' },
+    { value: 'Yupik', label: 'Yupik' },
   ]
-  const timeZoneOptions = [
-    { value: 'America/New_York', label: 'Eastern (America/New_York)' },
-    { value: 'America/Chicago', label: 'Central (America/Chicago)' },
-    { value: 'America/Denver', label: 'Mountain (America/Denver)' },
-    { value: 'America/Los_Angeles', label: 'Pacific (America/Los_Angeles)' },
-    { value: 'UTC', label: 'UTC' },
-  ]
+  const activityPageSize = 5
+  const loginActivityTotalPages = Math.max(1, Math.ceil(loginActivity.length / activityPageSize))
+  const sessionsTotalPages = Math.max(1, Math.ceil(sessions.length / activityPageSize))
+  const sharedActivityTotalPages = Math.max(1, Math.ceil(sharedActivity.length / activityPageSize))
+  const loginActivityPageSafe = Math.min(loginActivityPage, loginActivityTotalPages)
+  const sessionsPageSafe = Math.min(sessionsPage, sessionsTotalPages)
+  const sharedActivityPageSafe = Math.min(sharedActivityPage, sharedActivityTotalPages)
+  const pagedLoginActivity = loginActivity.slice(
+    (loginActivityPageSafe - 1) * activityPageSize,
+    loginActivityPageSafe * activityPageSize,
+  )
+  const pagedSessions = sessions.slice(
+    (sessionsPageSafe - 1) * activityPageSize,
+    sessionsPageSafe * activityPageSize,
+  )
+  const pagedSharedActivity = sharedActivity.slice(
+    (sharedActivityPageSafe - 1) * activityPageSize,
+    sharedActivityPageSafe * activityPageSize,
+  )
   const termsVersion = client?.profileData?.terms_version || client?.profileData?.termsVersion || ''
   const termsAcceptedAt =
     client?.profileData?.terms_accepted_at || client?.profileData?.termsAcceptedAt || ''
@@ -1641,6 +1712,10 @@ export default function ClientDashboard() {
               {activeTab === 'Forms' && (
                 <p className="text-slate-600">Complete your insurance profile.</p>
               )}
+              {activeTab === 'Agents' && (
+                <p className="text-slate-600">Manage the agents you have saved for quick access.</p>
+              )}
+              {activeTab === 'Messages' && <p className="text-slate-600">Messages</p>}
               {activeShares.length > 0 && (
                 <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                   <div className="font-semibold">Sharing in progress</div>
@@ -1872,8 +1947,7 @@ export default function ClientDashboard() {
           {!loading && activeTab === 'Agents' && (
             <div className="space-y-4">
               <div className="surface p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-xl font-semibold">Saved agents</h2>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
                     className="pill-btn-ghost px-4"
@@ -1883,9 +1957,6 @@ export default function ClientDashboard() {
                     {savedAgentsLoading ? 'Loading...' : 'Refresh'}
                   </button>
                 </div>
-                <p className="text-sm text-slate-500 mt-2">
-                  Manage the agents you have saved for quick access.
-                </p>
               </div>
               {savedAgentsLoading && (
                 <div className="space-y-3">
@@ -1922,8 +1993,7 @@ export default function ClientDashboard() {
 
           {!loading && activeTab === 'Messages' && (
             <div className="surface p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-xl font-semibold">Messages</h2>
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   className="pill-btn-ghost px-4"
@@ -2343,7 +2413,7 @@ export default function ClientDashboard() {
                       onChange={(event) => {
                         const next = event.target.value
                         setLanguageDraft(next)
-                        handlePreferencesSave(next, timeZoneLabel === 'Not set' ? '' : timeZoneLabel)
+                        handlePreferencesSave(next)
                       }}
                       disabled={preferencesSaving}
                     >
@@ -2353,42 +2423,15 @@ export default function ClientDashboard() {
                           {option.label}
                         </option>
                       ))}
+                      {languageLabel &&
+                        languageLabel !== 'Not set' &&
+                        languageLabel !== fallbackLanguage &&
+                        !languageOptions.some((option) => option.value === languageLabel) && (
+                          <option value={languageLabel}>{languageLabel}</option>
+                        )}
                       {fallbackLanguage &&
                         !languageOptions.some((option) => option.value === fallbackLanguage) && (
                           <option value={fallbackLanguage}>{fallbackLanguage}</option>
-                        )}
-                    </select>
-                    {preferencesMessage && (
-                      <div
-                        className={`mt-2 text-xs font-semibold ${
-                          preferencesMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {preferencesMessage}
-                      </div>
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time zone</div>
-                    <select
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                      value={timeZoneLabel === 'Not set' ? '' : timeZoneLabel}
-                      onChange={(event) => {
-                        const next = event.target.value
-                        setTimezoneDraft(next)
-                        handlePreferencesSave(languageLabel === 'Not set' ? '' : languageLabel, next)
-                      }}
-                      disabled={preferencesSaving}
-                    >
-                      <option value="">Select time zone</option>
-                      {timeZoneOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                      {fallbackTimeZone &&
-                        !timeZoneOptions.some((option) => option.value === fallbackTimeZone) && (
-                          <option value={fallbackTimeZone}>{fallbackTimeZone}</option>
                         )}
                     </select>
                     {preferencesMessage && (
@@ -2415,7 +2458,6 @@ export default function ClientDashboard() {
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold">Security</h3>
-                  <p className="text-xs text-slate-500">Password, sessions, and sharing activity.</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
@@ -2539,24 +2581,49 @@ export default function ClientDashboard() {
                       <button
                         type="button"
                         className="text-xs font-semibold text-[#0b3b8c] hover:underline"
-                        onClick={loadLoginActivity}
+                        onClick={toggleLoginActivity}
                         disabled={loginActivityLoading}
                       >
-                        {loginActivityLoading ? 'Loading...' : 'View'}
+                        {loginActivityLoading ? 'Loading...' : loginActivityOpen ? 'Hide' : 'View'}
                       </button>
                     </div>
-                    {loginActivity.length === 0 && !loginActivityLoading && (
+                    {loginActivityOpen && loginActivity.length === 0 && !loginActivityLoading && (
                       <div className="text-sm text-slate-700">No recent login activity.</div>
                     )}
-                    {loginActivity.length > 0 && (
+                    {loginActivityOpen && loginActivity.length > 0 && (
                       <div className="space-y-2">
-                        {loginActivity.map((entry) => (
+                        {pagedLoginActivity.map((entry) => (
                           <div key={entry.id} className="text-xs text-slate-600">
                             <div className="font-semibold text-slate-800">{entry.ip || 'Unknown IP'}</div>
                             <div className="truncate">{entry.userAgent || 'Unknown device'}</div>
                             <div className="text-slate-400">{formatTimestamp(entry.timestamp)}</div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {loginActivityOpen && loginActivity.length > activityPageSize && (
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() => setLoginActivityPage((page) => Math.max(1, page - 1))}
+                          disabled={loginActivityPageSafe <= 1}
+                        >
+                          Previous
+                        </button>
+                        <span>
+                          Page {loginActivityPageSafe} of {loginActivityTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() =>
+                            setLoginActivityPage((page) => Math.min(loginActivityTotalPages, page + 1))
+                          }
+                          disabled={loginActivityPageSafe >= loginActivityTotalPages}
+                        >
+                          Next
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2566,18 +2633,18 @@ export default function ClientDashboard() {
                       <button
                         type="button"
                         className="text-xs font-semibold text-[#0b3b8c] hover:underline"
-                        onClick={loadSessions}
+                        onClick={toggleSessions}
                         disabled={sessionsLoading}
                       >
-                        {sessionsLoading ? 'Loading...' : 'Refresh'}
+                        {sessionsLoading ? 'Loading...' : sessionsOpen ? 'Hide' : 'View'}
                       </button>
                     </div>
-                    {sessions.length === 0 && !sessionsLoading && (
+                    {sessionsOpen && sessions.length === 0 && !sessionsLoading && (
                       <div className="text-sm text-slate-700">No active sessions found.</div>
                     )}
-                    {sessions.length > 0 && (
+                    {sessionsOpen && sessions.length > 0 && (
                       <div className="space-y-2">
-                        {sessions.map((session) => (
+                        {pagedSessions.map((session) => (
                           <div key={session.id} className="text-xs text-slate-600">
                             <div className="font-semibold text-slate-800">
                               {session.current ? 'Current session' : 'Session'}
@@ -2587,6 +2654,29 @@ export default function ClientDashboard() {
                             <div className="text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {sessionsOpen && sessions.length > activityPageSize && (
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() => setSessionsPage((page) => Math.max(1, page - 1))}
+                          disabled={sessionsPageSafe <= 1}
+                        >
+                          Previous
+                        </button>
+                        <span>
+                          Page {sessionsPageSafe} of {sessionsTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() => setSessionsPage((page) => Math.min(sessionsTotalPages, page + 1))}
+                          disabled={sessionsPageSafe >= sessionsTotalPages}
+                        >
+                          Next
+                        </button>
                       </div>
                     )}
                     {sessionsMessage && (
@@ -2615,21 +2705,21 @@ export default function ClientDashboard() {
                     <button
                       type="button"
                       className="text-xs font-semibold text-[#0b3b8c] hover:underline"
-                      onClick={loadSharedActivity}
+                      onClick={toggleSharedActivity}
                       disabled={sharedActivityLoading}
                     >
-                      {sharedActivityLoading ? 'Loading...' : 'View'}
+                      {sharedActivityLoading ? 'Loading...' : sharedActivityOpen ? 'Hide' : 'View'}
                     </button>
                   </div>
                   <div className="text-xs text-slate-500">
                     Active shares: {activeShares.length} | Pending edits: {pendingShares.length}
                   </div>
-                  {sharedActivity.length === 0 && !sharedActivityLoading && (
+                  {sharedActivityOpen && sharedActivity.length === 0 && !sharedActivityLoading && (
                     <div className="text-sm text-slate-700">No share activity yet.</div>
                   )}
-                  {sharedActivity.length > 0 && (
+                  {sharedActivityOpen && sharedActivity.length > 0 && (
                     <div className="space-y-2">
-                      {sharedActivity.map((entry) => (
+                      {pagedSharedActivity.map((entry) => (
                         <div key={entry.id} className="text-xs text-slate-600">
                           <div className="font-semibold text-slate-800">{entry.recipient}</div>
                           <div className="text-slate-500">Status: {entry.status}</div>
@@ -2638,6 +2728,31 @@ export default function ClientDashboard() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {sharedActivityOpen && sharedActivity.length > activityPageSize && (
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                        onClick={() => setSharedActivityPage((page) => Math.max(1, page - 1))}
+                        disabled={sharedActivityPageSafe <= 1}
+                      >
+                        Previous
+                      </button>
+                      <span>
+                        Page {sharedActivityPageSafe} of {sharedActivityTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                        onClick={() =>
+                          setSharedActivityPage((page) => Math.min(sharedActivityTotalPages, page + 1))
+                        }
+                        disabled={sharedActivityPageSafe >= sharedActivityTotalPages}
+                      >
+                        Next
+                      </button>
                     </div>
                   )}
                   <button

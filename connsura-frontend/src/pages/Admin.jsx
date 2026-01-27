@@ -46,7 +46,7 @@ export default function Admin() {
   const [formSchemaLoading, setFormSchemaLoading] = useState(false)
   const [formSchemaSaving, setFormSchemaSaving] = useState(false)
   const [activeFormSection, setActiveFormSection] = useState('household')
-  const [formsTab, setFormsTab] = useState('schema')
+  const [formsTab, setFormsTab] = useState('questions')
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(false)
   const [activeProductId, setActiveProductId] = useState('')
@@ -140,7 +140,7 @@ export default function Admin() {
     setActiveContentSlug('about_public')
     setFormSchema(null)
     setActiveFormSection('household')
-    setFormsTab('schema')
+    setFormsTab('questions')
     setProducts([])
     setActiveProductId('')
     setQuestions([])
@@ -442,7 +442,6 @@ export default function Admin() {
 
   useEffect(() => {
     if (!isAuthed || view !== 'forms') return
-    loadFormSchema()
     loadProducts()
   }, [isAuthed, view])
 
@@ -838,6 +837,7 @@ export default function Admin() {
       const createdCount = Number(res.data?.created || 0)
       const deletedCount = Number(res.data?.deleted || 0)
       const skippedCount = Number(res.data?.skipped || 0)
+      const skippedTexts = Array.isArray(res.data?.skippedTexts) ? res.data.skippedTexts : []
 
       if (syncMode) {
         const updated = Array.isArray(res.data?.questions) ? res.data.questions : []
@@ -853,6 +853,13 @@ export default function Admin() {
         } else {
           toast.success('Saved questions')
         }
+        if (skippedCount) {
+          toast.error(
+            `Skipped ${skippedCount} duplicate question(s) already used in another product${
+              skippedTexts.length ? `: ${skippedTexts.join(', ')}` : ''
+            }`
+          )
+        }
         return
       }
 
@@ -863,7 +870,11 @@ export default function Admin() {
       } else if (createdCount === 1) {
         toast.success('Question added')
       } else if (skippedCount > 0) {
-        toast.error('All questions already exist')
+        toast.error(
+          `Skipped ${skippedCount} duplicate question(s)${
+            skippedTexts.length ? `: ${skippedTexts.join(', ')}` : ''
+          }`
+        )
       } else {
         toast.error('No questions added')
       }
@@ -1500,117 +1511,9 @@ export default function Admin() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">Forms Content Manager</h2>
-            <p className="text-sm text-slate-600">Control the Create Profile schema and question bank.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="pill-btn-ghost px-4" onClick={loadFormSchema} disabled={formSchemaLoading}>
-              {formSchemaLoading ? 'Loading...' : 'Reload schema'}
-            </button>
-            <button type="button" className="pill-btn-primary px-4" onClick={saveFormSchema} disabled={formSchemaSaving || !schema}>
-              {formSchemaSaving ? 'Saving...' : 'Save schema'}
-            </button>
+            <p className="text-sm text-slate-600">Control the Create Profile question bank.</p>
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 'schema', label: 'Schema editor' },
-            { id: 'questions', label: 'Question bank' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                formsTab === tab.id ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
-              }`}
-              onClick={() => setFormsTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {formsTab === 'schema' && (
-          <>
-            {formSchemaLoading && <div className="text-slate-500">Loading schema...</div>}
-            {!formSchemaLoading && !schema && <div className="text-slate-500">No schema loaded.</div>}
-            {!formSchemaLoading && schema && (
-              <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-                <div className="space-y-2">
-                  <div className={labelClass}>Sections</div>
-                  {sections.map((section) => (
-                    <button
-                      key={section.key}
-                      type="button"
-                      className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${
-                        activeSection.key === section.key ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
-                      }`}
-                      onClick={() => setActiveFormSection(section.key)}
-                    >
-                      {section.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className={labelClass}>Section label</div>
-                    <input
-                      className={input}
-                      value={sectionData?.label || ''}
-                      onChange={(event) => updateSectionLabel(activeSection.key, event.target.value)}
-                      placeholder="Section title"
-                    />
-                  </div>
-                  {activeSection.groups.map((group) => renderFieldGroup(group.key, group.label))}
-                  {activeSection.key === 'address' && (
-                    <div className="space-y-3">
-                      <div className={labelClass}>Additional address types</div>
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Options</div>
-                        <div className="mt-3 space-y-2">
-                          {resolvedAddressTypes.map((option, index) => (
-                            <div key={`address-type-${index}`} className="flex flex-wrap items-center gap-2">
-                              <input
-                                className={input}
-                                value={option}
-                                onChange={(event) => updateAddressType(index, event.target.value)}
-                                placeholder="Address type"
-                              />
-                              <button
-                                type="button"
-                                className="pill-btn-ghost px-2 py-1 text-xs text-red-600"
-                                onClick={() => removeAddressType(index)}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          className="pill-btn-ghost mt-3 px-3 py-1 text-xs"
-                          onClick={addAddressType}
-                        >
-                          Add address type
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    {renderFieldGroup('customFields', 'Custom fields')}
-                    <button
-                      type="button"
-                      className="pill-btn-ghost px-3 py-1 text-xs"
-                      onClick={() => addCustomField(activeSection.key)}
-                    >
-                      Add custom field
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
 
         {formsTab === 'questions' && (
           <div className="space-y-4">

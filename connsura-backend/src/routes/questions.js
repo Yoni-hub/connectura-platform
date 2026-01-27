@@ -28,7 +28,7 @@ router.get('/product', async (req, res) => {
     const customerId = await resolveCustomerId(req)
     const systemQuestions = await prisma.questionBank.findMany({
       where: { productId, source: 'SYSTEM' },
-      orderBy: { id: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     })
     const customerQuestions = customerId
       ? await prisma.customerQuestion.findMany({
