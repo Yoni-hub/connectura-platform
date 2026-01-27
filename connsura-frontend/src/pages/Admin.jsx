@@ -5,6 +5,7 @@ import { adminApi, clearAdminToken, setAdminToken } from '../services/adminApi'
 import { renderSiteContent } from '../utils/siteContent'
 
 const CREATE_PROFILE_SECTION_KEYS = ['household', 'address', 'additional']
+const AUDIT_PAGE_SIZE = 10
 
 const filterCreateProfileSchema = (schema) => {
   if (!schema?.sections) return schema
@@ -30,6 +31,11 @@ export default function Admin() {
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState('')
   const [auditSearched, setAuditSearched] = useState(false)
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditHasMore, setAuditHasMore] = useState(false)
+  const [auditViewAll, setAuditViewAll] = useState(false)
+  const [auditLastFilters, setAuditLastFilters] = useState(null)
+  const [auditTotalPages, setAuditTotalPages] = useState(1)
   const [form, setForm] = useState({ email: '', password: '' })
   const [detailTabs, setDetailTabs] = useState([])
   const [activeDetailKey, setActiveDetailKey] = useState(null)
@@ -130,6 +136,18 @@ export default function Admin() {
     setAgents([])
     setClients([])
     setLogs([])
+    setAuditMode('client')
+    setAuditQuery('')
+    setAuditStart('')
+    setAuditEnd('')
+    setAuditLoading(false)
+    setAuditError('')
+    setAuditSearched(false)
+    setAuditPage(1)
+    setAuditHasMore(false)
+    setAuditViewAll(false)
+    setAuditLastFilters(null)
+    setAuditTotalPages(1)
     setDetailTabs([])
     setActiveDetailKey(null)
     setOtpEmail('')
@@ -411,19 +429,30 @@ export default function Admin() {
     setAuditEnd('')
     setAuditError('')
     setAuditSearched(false)
+    setAuditPage(1)
+    setAuditHasMore(false)
+    setAuditViewAll(false)
+    setAuditLastFilters(null)
+    setAuditTotalPages(1)
     setLogs([])
   }, [view])
 
   useEffect(() => {
     if (view !== 'audit') return
     if (auditMode === 'admin') return
+    if (auditViewAll) return
     const trimmed = auditQuery.trim()
-    if (!trimmed) {
+    const hasStart = Boolean(auditStart)
+    const hasEnd = Boolean(auditEnd)
+    if (!trimmed && !hasStart && !hasEnd) {
       if (auditSearchTimerRef.current) {
         clearTimeout(auditSearchTimerRef.current)
       }
       setAuditSearched(false)
       setAuditError('')
+      setAuditHasMore(false)
+      setAuditPage(1)
+      setAuditTotalPages(1)
       setLogs([])
       return
     }
@@ -431,14 +460,14 @@ export default function Admin() {
       clearTimeout(auditSearchTimerRef.current)
     }
     auditSearchTimerRef.current = setTimeout(() => {
-      handleAuditSearch()
+      handleAuditSearch({ page: 1 })
     }, 400)
     return () => {
       if (auditSearchTimerRef.current) {
         clearTimeout(auditSearchTimerRef.current)
       }
     }
-  }, [auditQuery, auditStart, auditEnd, auditMode, view])
+  }, [auditQuery, auditStart, auditEnd, auditMode, auditViewAll, view])
 
   useEffect(() => {
     if (!isAuthed || view !== 'forms') return
@@ -507,33 +536,47 @@ export default function Admin() {
     return parsed.toISOString()
   }
 
-  const handleAuditSearch = async () => {
+  const handleAuditSearch = async (options = {}) => {
+    const {
+      page = 1,
+      mode = auditMode,
+      viewAll = auditViewAll,
+      useLastFilters = false,
+    } = options
+    const lastFilters = auditLastFilters
+    const filters = useLastFilters && lastFilters ? lastFilters : { mode, query: auditQuery, start: auditStart, end: auditEnd, viewAll }
+    const trimmedQuery = String(filters.query || '').trim()
+    const hasRawCriteria = Boolean(trimmedQuery || filters.start || filters.end)
+    const useViewAll = Boolean(filters.viewAll || !hasRawCriteria)
+    const startIso = useViewAll ? '' : toIsoDate(filters.start)
+    const endIso = useViewAll ? '' : toIsoDate(filters.end)
+
     setAuditError('')
-    if ((auditMode === 'client' || auditMode === 'agent') && !auditQuery.trim()) {
-      setAuditError('Enter a name, email, or ID to search.')
-      setLogs([])
-      setAuditSearched(false)
-      return
-    }
-    const startIso = toIsoDate(auditStart)
-    const endIso = toIsoDate(auditEnd)
-    if (auditStart && !startIso) {
-      setAuditError('Start date is invalid.')
-      setLogs([])
-      setAuditSearched(false)
-      return
-    }
-    if (auditEnd && !endIso) {
-      setAuditError('End date is invalid.')
-      setLogs([])
-      setAuditSearched(false)
-      return
-    }
-    if (startIso && endIso && new Date(endIso) < new Date(startIso)) {
-      setAuditError('End date must be after the start date.')
-      setLogs([])
-      setAuditSearched(false)
-      return
+    if (!useViewAll) {
+      if (filters.start && !startIso) {
+        setAuditError('Start date is invalid.')
+        setLogs([])
+        setAuditSearched(false)
+        setAuditHasMore(false)
+        setAuditPage(1)
+        return
+      }
+      if (filters.end && !endIso) {
+        setAuditError('End date is invalid.')
+        setLogs([])
+        setAuditSearched(false)
+        setAuditHasMore(false)
+        setAuditPage(1)
+        return
+      }
+      if (startIso && endIso && new Date(endIso) < new Date(startIso)) {
+        setAuditError('End date must be after the start date.')
+        setLogs([])
+        setAuditSearched(false)
+        setAuditHasMore(false)
+        setAuditPage(1)
+        return
+      }
     }
 
     const requestId = auditRequestIdRef.current + 1
@@ -541,21 +584,36 @@ export default function Admin() {
     setAuditLoading(true)
     try {
       const params = {
-        type: auditMode,
+        type: filters.mode,
+        limit: AUDIT_PAGE_SIZE,
+        page,
       }
-      if (auditMode === 'client' || auditMode === 'agent') {
-        params.query = auditQuery.trim()
+      if (!useViewAll) {
+        if (trimmedQuery) params.query = trimmedQuery
+        if (startIso) params.start = startIso
+        if (endIso) params.end = endIso
       }
-      if (startIso) params.start = startIso
-      if (endIso) params.end = endIso
+      setAuditLastFilters({
+        mode: filters.mode,
+        query: useViewAll ? '' : trimmedQuery,
+        start: useViewAll ? '' : filters.start,
+        end: useViewAll ? '' : filters.end,
+        viewAll: useViewAll,
+      })
       const res = await adminApi.get('/admin/audit', { params })
       if (auditRequestIdRef.current === requestId) {
         setLogs(res.data.logs || [])
         setAuditSearched(true)
+        setAuditHasMore(Boolean(res.data.hasMore))
+        setAuditPage(res.data.page || page)
+        setAuditTotalPages(res.data.totalPages || 1)
+        setAuditViewAll(useViewAll)
       }
     } catch (err) {
       if (auditRequestIdRef.current === requestId) {
         setLogs([])
+        setAuditHasMore(false)
+        setAuditTotalPages(1)
         setAuditError(err.response?.data?.error || 'Failed to load audit logs.')
         setAuditSearched(true)
       }
@@ -564,6 +622,23 @@ export default function Admin() {
         setAuditLoading(false)
       }
     }
+  }
+
+  const handleAuditViewAll = (mode) => {
+    if (auditSearchTimerRef.current) {
+      clearTimeout(auditSearchTimerRef.current)
+    }
+    setAuditMode(mode)
+    setAuditQuery('')
+    setAuditStart('')
+    setAuditEnd('')
+    setAuditError('')
+    setAuditSearched(false)
+    setAuditHasMore(false)
+    setAuditPage(1)
+    setAuditViewAll(true)
+    setLogs([])
+    handleAuditSearch({ page: 1, mode, viewAll: true })
   }
 
   const handleOtpLookup = async () => {
@@ -1045,9 +1120,9 @@ export default function Admin() {
 
   const renderAudit = () => {
     const modes = [
-      { key: 'client', label: 'Client logs' },
-      { key: 'agent', label: 'Agent logs' },
-      { key: 'admin', label: 'Admin logs' },
+      { key: 'client', label: 'Client logs', viewAllLabel: 'View all clients' },
+      { key: 'agent', label: 'Agent logs', viewAllLabel: 'View all agents' },
+      { key: 'admin', label: 'Admin logs', viewAllLabel: 'View all admin logs' },
     ]
     const modeLabel = auditMode === 'agent' ? 'agent' : 'client'
     const searchLabel = `Search ${modeLabel} logs`
@@ -1070,10 +1145,27 @@ export default function Admin() {
                 setAuditQuery('')
                 setAuditError('')
                 setAuditSearched(false)
+                setAuditHasMore(false)
+                setAuditPage(1)
+                setAuditViewAll(false)
+                setAuditLastFilters(null)
                 setLogs([])
               }}
             >
               {mode.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {modes.map((mode) => (
+            <button
+              key={`${mode.key}-view-all`}
+              type="button"
+              className="pill-btn-ghost px-3 py-1 text-xs font-semibold"
+              onClick={() => handleAuditViewAll(mode.key)}
+              disabled={auditLoading && auditMode === mode.key}
+            >
+              {mode.viewAllLabel}
             </button>
           ))}
         </div>
@@ -1086,7 +1178,13 @@ export default function Admin() {
                 type="text"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
                 value={auditQuery}
-                onChange={(event) => setAuditQuery(event.target.value)}
+                onChange={(event) => {
+                  setAuditQuery(event.target.value)
+                  setAuditViewAll(false)
+                  setAuditHasMore(false)
+                  setAuditPage(1)
+                  setAuditLastFilters(null)
+                }}
                 placeholder={searchPlaceholder}
               />
             </label>
@@ -1099,7 +1197,13 @@ export default function Admin() {
                 type="datetime-local"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
                 value={auditStart}
-                onChange={(event) => setAuditStart(event.target.value)}
+                onChange={(event) => {
+                  setAuditStart(event.target.value)
+                  setAuditViewAll(false)
+                  setAuditHasMore(false)
+                  setAuditPage(1)
+                  setAuditLastFilters(null)
+                }}
               />
             </label>
             <label className="block text-sm">
@@ -1109,7 +1213,13 @@ export default function Admin() {
                 type="datetime-local"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
                 value={auditEnd}
-                onChange={(event) => setAuditEnd(event.target.value)}
+                onChange={(event) => {
+                  setAuditEnd(event.target.value)
+                  setAuditViewAll(false)
+                  setAuditHasMore(false)
+                  setAuditPage(1)
+                  setAuditLastFilters(null)
+                }}
               />
             </label>
           </div>
@@ -1117,7 +1227,7 @@ export default function Admin() {
             <button
               type="button"
               className="pill-btn-primary px-4"
-              onClick={handleAuditSearch}
+              onClick={() => handleAuditSearch({ page: 1 })}
               disabled={auditLoading}
             >
               {auditLoading ? 'Searching...' : auditMode === 'admin' ? 'Load logs' : 'Search logs'}
@@ -1131,29 +1241,57 @@ export default function Admin() {
         )}
 
         {auditSearched && logs.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-600">
-                <tr>
-                  <th className="px-3 py-2">When</th>
-                  <th className="px-3 py-2">Actor</th>
-                  <th className="px-3 py-2">Target</th>
-                  <th className="px-3 py-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((l) => (
-                  <tr key={l.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2">{new Date(l.createdAt).toLocaleString()}</td>
-                    <td className="px-3 py-2">{l.actorEmail || l.actorId || '--'}</td>
-                    <td className="px-3 py-2">
-                      {l.targetType} #{l.targetId}
-                    </td>
-                    <td className="px-3 py-2 capitalize">{l.action}</td>
+          <div className="space-y-2">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2">When</th>
+                    <th className="px-3 py-2">Actor</th>
+                    <th className="px-3 py-2">Target</th>
+                    <th className="px-3 py-2">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {logs.map((l) => (
+                    <tr key={l.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2">{new Date(l.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2">{l.actorEmail || l.actorId || '--'}</td>
+                      <td className="px-3 py-2">
+                        {l.targetType} #{l.targetId}
+                      </td>
+                      <td className="px-3 py-2 capitalize">{l.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <span>
+                Page {auditPage} · {AUDIT_PAGE_SIZE} per page
+              </span>
+              <span>
+                Page {auditPage} of {auditTotalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-3 py-1 text-xs"
+                  onClick={() => handleAuditSearch({ page: auditPage - 1, useLastFilters: true })}
+                  disabled={auditLoading || auditPage <= 1}
+                >
+                  {auditLoading ? 'Loading...' : 'Back'}
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-3 py-1 text-xs"
+                  onClick={() => handleAuditSearch({ page: auditPage + 1, useLastFilters: true })}
+                  disabled={auditLoading || !auditHasMore}
+                >
+                  {auditLoading ? 'Loading...' : auditHasMore ? 'Next' : 'End'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -2140,6 +2278,11 @@ export default function Admin() {
     auditLoading,
     auditError,
     auditSearched,
+    auditPage,
+    auditHasMore,
+    auditViewAll,
+    auditLastFilters,
+    auditTotalPages,
   ])
 
   return <main className="page-shell py-8">{content}</main>

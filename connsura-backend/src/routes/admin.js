@@ -107,6 +107,12 @@ const parseAuditDate = (value) => {
   return parsed
 }
 
+const parsePositiveInt = (value, fallback) => {
+  const raw = Number.parseInt(String(value), 10)
+  if (!Number.isFinite(raw) || raw <= 0) return fallback
+  return raw
+}
+
 const ensureSiteContentDefaults = async () => {
   const existing = await prisma.siteContent.findMany({
     where: { slug: { in: SITE_CONTENT_DEFAULTS.map((entry) => entry.slug) } },
@@ -373,6 +379,12 @@ router.get('/audit', adminGuard, async (req, res) => {
   const query = String(req.query?.query || '').trim()
   const startRaw = String(req.query?.start || '').trim()
   const endRaw = String(req.query?.end || '').trim()
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 10), 100)
+  const page = parsePositiveInt(req.query?.page, 1)
+  const offsetParam = Number.parseInt(String(req.query?.offset || ''), 10)
+  const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit
+  const effectivePage =
+    Number.isFinite(offsetParam) && offsetParam >= 0 ? Math.floor(offset / limit) + 1 : page
   const startDate = parseAuditDate(startRaw)
   const endDate = parseAuditDate(endRaw)
   if ((startRaw && !startDate) || (endRaw && !endDate)) {
@@ -390,61 +402,66 @@ router.get('/audit', adminGuard, async (req, res) => {
   let where = baseWhere
 
   if (type === 'client' || type === 'agent') {
+    const targetType = type === 'client' ? 'Client' : 'Agent'
     if (!query) {
-      return res.json({ logs: [] })
-    }
-    const normalizedQuery = query.toLowerCase()
-    const numericId = Number(query)
-    const isNumeric = Number.isFinite(numericId)
-    const matches = []
-
-    if (type === 'client') {
-      const customerWhere = { OR: [] }
-      if (isNumeric) {
-        customerWhere.OR.push({ id: numericId }, { userId: numericId })
+      where = {
+        ...baseWhere,
+        targetType,
       }
-      customerWhere.OR.push(
-        { name: { contains: query, mode: 'insensitive' } },
-        { user: { email: { contains: query, mode: 'insensitive' } } }
-      )
-      const customers = await prisma.customer.findMany({
-        where: customerWhere,
-        select: { id: true },
-        take: 50,
-      })
-      matches.push(...customers.map((customer) => String(customer.id)))
     } else {
-      const agentWhere = { OR: [] }
-      if (isNumeric) {
-        agentWhere.OR.push({ id: numericId }, { userId: numericId })
+      const normalizedQuery = query.toLowerCase()
+      const numericId = Number(query)
+      const isNumeric = Number.isFinite(numericId)
+      const matches = []
+
+      if (type === 'client') {
+        const customerWhere = { OR: [] }
+        if (isNumeric) {
+          customerWhere.OR.push({ id: numericId }, { userId: numericId })
+        }
+        customerWhere.OR.push(
+          { name: { contains: query, mode: 'insensitive' } },
+          { user: { email: { contains: query, mode: 'insensitive' } } }
+        )
+        const customers = await prisma.customer.findMany({
+          where: customerWhere,
+          select: { id: true },
+          take: 50,
+        })
+        matches.push(...customers.map((customer) => String(customer.id)))
+      } else {
+        const agentWhere = { OR: [] }
+        if (isNumeric) {
+          agentWhere.OR.push({ id: numericId }, { userId: numericId })
+        }
+        agentWhere.OR.push(
+          { name: { contains: query, mode: 'insensitive' } },
+          { user: { email: { contains: query, mode: 'insensitive' } } }
+        )
+        const agents = await prisma.agent.findMany({
+          where: agentWhere,
+          select: { id: true },
+          take: 50,
+        })
+        matches.push(...agents.map((agent) => String(agent.id)))
       }
-      agentWhere.OR.push(
-        { name: { contains: query, mode: 'insensitive' } },
-        { user: { email: { contains: query, mode: 'insensitive' } } }
-      )
-      const agents = await prisma.agent.findMany({
-        where: agentWhere,
-        select: { id: true },
-        take: 50,
-      })
-      matches.push(...agents.map((agent) => String(agent.id)))
-    }
 
-    const orFilters = [
-      { targetId: { equals: query } },
-      { targetId: { equals: normalizedQuery, mode: 'insensitive' } },
-    ]
-    if (matches.length) {
-      orFilters.push({ targetId: { in: matches } })
-    }
-    if (query.includes('@')) {
-      orFilters.push({ targetId: { equals: normalizedQuery, mode: 'insensitive' } })
-    }
+      const orFilters = [
+        { targetId: { equals: query } },
+        { targetId: { equals: normalizedQuery, mode: 'insensitive' } },
+      ]
+      if (matches.length) {
+        orFilters.push({ targetId: { in: matches } })
+      }
+      if (query.includes('@')) {
+        orFilters.push({ targetId: { equals: normalizedQuery, mode: 'insensitive' } })
+      }
 
-    where = {
-      ...baseWhere,
-      targetType: type === 'client' ? 'Client' : 'Agent',
-      OR: orFilters,
+      where = {
+        ...baseWhere,
+        targetType,
+        OR: orFilters,
+      }
     }
   } else if (type === 'admin') {
     where = {
@@ -455,14 +472,21 @@ router.get('/audit', adminGuard, async (req, res) => {
     return res.status(400).json({ error: 'Invalid audit log type' })
   }
 
-  const logs = await prisma.auditLog.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-    include: { actor: true },
-  })
+  const [total, logs] = await Promise.all([
+    prisma.auditLog.count({ where }),
+    prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
+      include: { actor: true },
+    }),
+  ])
+  const hasMore = logs.length > limit
+  const trimmed = logs.slice(0, limit)
+  const totalPages = Math.max(1, Math.ceil(total / limit))
   res.json({
-    logs: logs.map((log) => ({
+    logs: trimmed.map((log) => ({
       id: log.id,
       actorId: log.actorId,
       actorEmail: log.actor?.email,
@@ -472,6 +496,14 @@ router.get('/audit', adminGuard, async (req, res) => {
       diff: log.diff ? JSON.parse(log.diff) : null,
       createdAt: log.createdAt,
     })),
+    page: effectivePage,
+    limit,
+    offset,
+    total,
+    totalPages,
+    hasMore,
+    nextPage: hasMore ? effectivePage + 1 : null,
+    nextOffset: hasMore ? offset + limit : null,
   })
 })
 
