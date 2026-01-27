@@ -281,6 +281,10 @@ export default function ClientDashboard() {
   const [cookieMessage, setCookieMessage] = useState('')
   const [verificationSent, setVerificationSent] = useState(false)
   const [verificationSending, setVerificationSending] = useState(false)
+  const [verificationOpen, setVerificationOpen] = useState(false)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationError, setVerificationError] = useState('')
+  const [verificationConfirming, setVerificationConfirming] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
@@ -828,6 +832,7 @@ export default function ClientDashboard() {
   const hasPendingEmail = Boolean(user?.emailPending)
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
+  const verificationTargetEmail = user?.emailPending || user?.email || ''
   const formsStarted = Boolean(client?.profileData?.forms_started)
   const formsCompleted = client?.profileData?.profile_status === 'completed'
   const formsCurrentSection = useMemo(
@@ -1029,6 +1034,7 @@ export default function ClientDashboard() {
       return
     }
     setVerificationSending(true)
+    setVerificationError('')
     try {
       const res = await api.post('/auth/email-otp/request', { sessionId })
       if (res.data?.verified) {
@@ -1038,11 +1044,41 @@ export default function ClientDashboard() {
       }
       const delivery = res.data?.delivery
       setVerificationSent(true)
+      setVerificationCode('')
+      setVerificationOpen(true)
       toast.success(delivery === 'log' ? 'Verification email generated. Check the server logs.' : 'Verification email sent.')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not send verification code')
     } finally {
       setVerificationSending(false)
+    }
+  }
+
+  const handleVerifyCodeConfirm = async () => {
+    const trimmed = verificationCode.trim()
+    if (!trimmed) {
+      setVerificationError('Enter the code from your email.')
+      return
+    }
+    if (verificationConfirming) return
+    setVerificationConfirming(true)
+    setVerificationError('')
+    try {
+      const res = await api.post('/auth/email-otp/confirm', { code: trimmed, sessionId })
+      if (res.data?.user) {
+        setUser(res.data.user)
+        setEmailDraft(res.data.user.email || '')
+      } else {
+        setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+      }
+      setVerificationOpen(false)
+      toast.success('Email verified')
+    } catch (err) {
+      const message = err.response?.data?.error || 'Verification failed'
+      setVerificationError(message)
+      toast.error(message)
+    } finally {
+      setVerificationConfirming(false)
     }
   }
 
@@ -1304,6 +1340,8 @@ export default function ClientDashboard() {
       }
       setEmailEditing(false)
       setVerificationSent(true)
+      setVerificationCode('')
+      setVerificationOpen(true)
       setEmailMessage({
         type: 'success',
         text: 'Email updated. Please verify your new email to keep your account secure.',
@@ -1741,7 +1779,7 @@ export default function ClientDashboard() {
               )}
               {needsEmailVerification && verificationSent && (
                 <div className="mt-2 text-sm text-slate-600">
-                  Check your email to finish verification.
+                  Check your email for the verification code.
                 </div>
               )}
             </div>
@@ -2402,7 +2440,7 @@ export default function ClientDashboard() {
                       </div>
                     )}
                     {needsEmailVerification && verificationSent && (
-                      <div className="text-xs text-amber-600">Check your email to verify your address.</div>
+                      <div className="text-xs text-amber-600">Check your email for the verification code.</div>
                     )}
                   </div>
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
@@ -3180,6 +3218,50 @@ export default function ClientDashboard() {
         onApprove={() => handleApproveEdits(reviewShare?.token)}
         onDecline={() => handleDeclineEdits(reviewShare?.token)}
       />
+      <Modal title="Verify email" open={verificationOpen} onClose={() => setVerificationOpen(false)}>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">Enter verification code</h3>
+            <p className="text-sm text-slate-600">
+              Enter the 6-digit code sent to {verificationTargetEmail || 'your email'}.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <input
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              value={verificationCode}
+              onChange={(event) => {
+                const next = event.target.value.replace(/\D/g, '').slice(0, 6)
+                setVerificationCode(next)
+              }}
+              placeholder="Enter 6-digit code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+            {verificationError && (
+              <div className="text-xs font-semibold text-rose-600">{verificationError}</div>
+            )}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="pill-btn-ghost px-4"
+              onClick={requestEmailVerification}
+              disabled={verificationSending}
+            >
+              {verificationSending ? 'Sending...' : 'Resend code'}
+            </button>
+            <button
+              type="button"
+              className="pill-btn-primary px-5"
+              onClick={handleVerifyCodeConfirm}
+              disabled={verificationConfirming}
+            >
+              {verificationConfirming ? 'Verifying...' : 'Verify email'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </main>
   )
 }

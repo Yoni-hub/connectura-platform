@@ -345,7 +345,7 @@ router.post('/register', async (req, res) => {
     })
     if (isCustomer) {
       try {
-        const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'link' })
+        const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
         await logClientAudit(user.customer?.id || user.id, 'EMAIL_VERIFY_SENT', { delivery: result.delivery })
         await logClientAudit(user.customer?.id || user.id, 'CLIENT_SIGN_UP_SUCCESS')
       } catch (err) {
@@ -376,7 +376,7 @@ router.post('/email-otp', async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: 'Email already registered. Please sign in.' })
     }
-    const result = await sendEmailOtp(email, { ip: getRequestIp(req), template: 'code' })
+    const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
     res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
     return handleOtpSendError(err, res)
@@ -433,11 +433,7 @@ router.post('/email-change/request', authGuard, async (req, res) => {
         new_email_hash: hashValue(nextEmail),
       })
     }
-    const result = await sendEmailOtp(nextEmail, {
-      ip,
-      template: 'link',
-      subject: 'Verify your new email',
-    })
+    const result = await sendEmailOtp(nextEmail, { ip, subject: 'Verify your new email' })
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -484,7 +480,6 @@ router.post('/email-otp/request', authGuard, async (req, res) => {
   try {
     const result = await sendEmailOtp(email, {
       ip,
-      template: 'link',
       subject: pendingEmail ? 'Verify your new email' : undefined,
     })
     if (req.user?.role === 'CUSTOMER') {

@@ -26,34 +26,7 @@ const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0')
 const VERIFY_EMAIL_SUBJECT = 'Verify your email'
 const VERIFY_EMAIL_REPLY_TO = 'security@connsura.com'
 
-const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173'
-
-const buildVerifyUrl = (code) => {
-  const base = getFrontendBaseUrl()
-  const url = new URL('/verify-email', base)
-  url.searchParams.set('code', code)
-  return url.toString()
-}
-
-const buildOtpText = ({ code, expiresMinutes, verifyUrl, template }) => {
-  if (template === 'link') {
-    return `CONNSURA
-================
-
-Verify your email
-
-Use the link below to verify your email:
-
-${verifyUrl}
-
-This link expires in ${expiresMinutes} minutes.
-
-For your security, never share this link. If you did not request this, you can ignore this email.
-
-Thanks,
-The Connsura Team`
-  }
-
+const buildOtpText = ({ code, expiresMinutes }) => {
   return `CONNSURA
 ================
 
@@ -71,22 +44,7 @@ Thanks,
 The Connsura Team`
 }
 
-const buildOtpHtml = ({ code, expiresMinutes, verifyUrl, template }) => {
-  if (template === 'link') {
-    return `
-      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-        <h2 style="margin: 0 0 12px 0;">Verify your email</h2>
-        <p style="margin: 0 0 16px 0;">Click the button below to verify your email address.</p>
-        <p style="margin: 0 0 16px 0;">
-          <a href="${verifyUrl}" style="background:#0b3b8c;color:#ffffff;padding:12px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">
-            Verify email
-          </a>
-        </p>
-        <p style="margin: 0 0 12px 0; color: #6b7280;">This link expires in ${expiresMinutes} minutes.</p>
-      </div>
-    `
-  }
-
+const buildOtpHtml = ({ code, expiresMinutes }) => {
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
       <h2 style="margin: 0 0 12px 0;">Verify your email</h2>
@@ -97,11 +55,10 @@ const buildOtpHtml = ({ code, expiresMinutes, verifyUrl, template }) => {
   `
 }
 
-const deliverEmail = async (email, code, { template, subject } = {}) => {
+const deliverEmail = async (email, code, { subject } = {}) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
-  const verifyUrl = buildVerifyUrl(code)
-  const text = buildOtpText({ code, expiresMinutes, verifyUrl, template })
-  const html = buildOtpHtml({ code, expiresMinutes, verifyUrl, template })
+  const text = buildOtpText({ code, expiresMinutes })
+  const html = buildOtpHtml({ code, expiresMinutes })
   const delivery = await sendEmail({
     to: email,
     subject: subject || VERIFY_EMAIL_SUBJECT,
@@ -169,7 +126,7 @@ const checkRateLimit = async (email, ip) => {
   prisma.emailOtpRequest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => {})
 }
 
-const sendEmailOtp = async (email, { ip, template = 'code', subject } = {}) => {
+const sendEmailOtp = async (email, { ip, subject } = {}) => {
   const normalized = normalizeEmail(email)
   await checkRateLimit(normalized, ip)
 
@@ -208,7 +165,7 @@ const sendEmailOtp = async (email, { ip, template = 'code', subject } = {}) => {
     },
   })
 
-  const delivery = await deliverEmail(normalized, code, { template, subject })
+  const delivery = await deliverEmail(normalized, code, { subject })
   return { delivery: delivery.delivery }
 }
 
