@@ -11,7 +11,13 @@ export default function Navbar() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
   const isCustomer = user?.role === 'CUSTOMER'
+  const isAgent = user?.role === 'AGENT'
   const customerLabel = user?.name || user?.email || 'Client'
+  const agentLabel = user?.name || user?.email || 'Agent'
+  const agentHome =
+    (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended
+      ? '/agent/onboarding'
+      : '/agent/dashboard'
 
   const handleCreateProfileClick = () => {
     sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
@@ -115,6 +121,18 @@ export default function Navbar() {
                   About us
                 </Link>
               </>
+            ) : isAgent ? (
+              <>
+                <Link to={agentHome} className="text-slate-700 hover:text-[#0b3b8c]">
+                  {agentLabel}
+                </Link>
+                <button type="button" onClick={handleLogout} className="text-slate-700 hover:text-[#0b3b8c]">
+                  Log out
+                </button>
+                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
+                  About us
+                </Link>
+              </>
             ) : (
               <>
                 <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
@@ -156,37 +174,56 @@ export default function Navbar() {
         {menuOpen && (
           <div className="md:hidden absolute left-0 right-0 top-full border-t border-[#dfe7f3] bg-white/95 backdrop-blur shadow-[0_16px_34px_rgba(0,42,92,0.08)]">
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
-              {isCustomer ? (
-                <>
-                  <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    Find agents
-                  </Link>
-                  <Link
-                    to="/client/dashboard"
-                    className="text-slate-700 hover:text-[#0b3b8c]"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    {customerLabel}
-                  </Link>
-                  <button
-                    type="button"
-                    className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                    onClick={handleLogout}
-                  >
-                    Log out
-                  </button>
-                  <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    Contact us
-                  </Link>
-                  <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    About us
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    Find agents
-                  </Link>
+            {isCustomer ? (
+              <>
+                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  Find agents
+                </Link>
+                <Link
+                  to="/client/dashboard"
+                  className="text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {customerLabel}
+                </Link>
+                <button
+                  type="button"
+                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={handleLogout}
+                >
+                  Log out
+                </button>
+                <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  Contact us
+                </Link>
+                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  About us
+                </Link>
+              </>
+            ) : isAgent ? (
+              <>
+                <Link to={agentHome} className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  {agentLabel}
+                </Link>
+                <button
+                  type="button"
+                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={handleLogout}
+                >
+                  Log out
+                </button>
+                <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  Contact us
+                </Link>
+                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  About us
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
+                  Find agents
+                </Link>
                   <button
                     type="button"
                     className="text-left text-slate-700 hover:text-[#0b3b8c]"

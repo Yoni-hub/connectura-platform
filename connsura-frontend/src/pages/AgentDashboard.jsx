@@ -8,7 +8,7 @@ import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 
-const navItems = ['Overview', 'Profile', 'Clients', 'Messages', 'Settings']
+const navItems = ['Overview', 'Profile', 'Onboarding', 'Clients', 'Messages', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -61,6 +61,29 @@ const parseShareLink = (line = '') => {
   const url = match[1]
   const tokenMatch = url.match(/\/share\/([a-f0-9]+)/i)
   return { url, token: tokenMatch ? tokenMatch[1] : null }
+}
+
+const summaryValue = (value) => {
+  if (value === null || value === undefined) return '—'
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '—'
+  if (typeof value === 'string') return value.trim() ? value : '—'
+  return String(value)
+}
+
+const renderSummaryDetails = (details = []) => {
+  const filtered = details.filter((detail) => detail && detail.value !== undefined && detail.value !== null)
+  if (!filtered.length) {
+    return <div className="text-sm text-slate-500">No details provided.</div>
+  }
+  return (
+    <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+      {filtered.map((detail) => (
+        <div key={detail.label}>
+          <span className="font-semibold text-slate-900">{detail.label}:</span> {summaryValue(detail.value)}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function AgentDashboard() {
@@ -445,6 +468,24 @@ export default function AgentDashboard() {
     () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
     [threads]
   )
+  const summaryCardClass =
+    'w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]'
+  const onboardingAccountDetails = [{ label: 'Account email', value: agent?.email || user?.email }]
+  const onboardingIdentityDetails = [
+    { label: 'Producer #', value: agent?.producerNumber },
+    { label: 'States', value: Array.isArray(agent?.states) ? agent.states : [] },
+    { label: 'Address', value: agent?.address },
+    { label: 'ZIP', value: agent?.zip },
+    { label: 'Phone', value: agent?.phone },
+    { label: 'Availability', value: agent?.availability },
+  ]
+  const onboardingProductDetails = [
+    { label: 'Specialty', value: agent?.specialty },
+    { label: 'Languages', value: Array.isArray(agent?.languages) ? agent.languages : [] },
+    { label: 'Products', value: Array.isArray(agent?.products) ? agent.products : [] },
+    { label: 'Appointed carriers', value: Array.isArray(agent?.appointedCarriers) ? agent.appointedCarriers : [] },
+    { label: 'Bio', value: agent?.bio },
+  ]
 
   const renderMessageBody = (body = '') => {
     const lines = String(body).split('\n')
@@ -490,16 +531,16 @@ export default function AgentDashboard() {
   }
 
   return (
-    <main className="page-shell py-8">
+    <main className="page-shell py-8 pb-28 lg:pb-8">
       <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
-        <aside className="surface p-4 lg:p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Connsura</div>
-          <div className="space-y-1">
+        <aside className="surface fixed bottom-0 left-0 right-0 z-30 rounded-none border-t border-slate-200 border-x-0 border-b-0 bg-white/95 backdrop-blur px-3 py-2 lg:static lg:rounded-2xl lg:border lg:border-transparent lg:bg-white/80 lg:backdrop-blur-0 lg:p-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 hidden lg:block">Connsura</div>
+          <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
             {navItems.map((item) => (
               <button
                 key={item}
                 onClick={() => updateTab(item)}
-                className={`w-full rounded-xl px-3 py-2.5 font-semibold transition flex items-center justify-between ${
+                className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left flex items-center justify-between gap-2 ${
                   activeTab === item
                     ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm'
                     : 'text-slate-700 hover:bg-slate-50'
@@ -507,7 +548,7 @@ export default function AgentDashboard() {
               >
                 <span>{item}</span>
                 {item === 'Messages' && totalUnread > 0 && (
-                  <span className="ml-2 inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                  <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
                     {totalUnread}
                   </span>
                 )}
@@ -727,7 +768,7 @@ export default function AgentDashboard() {
                   )}
                 </div>
               </div>
-                ) : activeTab === 'Profile' ? (
+              ) : activeTab === 'Profile' ? (
                 <div className="grid gap-6 lg:grid-cols-[420px,1fr]">
                   <form className="surface p-4 space-y-2 max-w-md w-full" onSubmit={handleSave}>
                     <div className="flex items-center gap-2">
@@ -764,38 +805,38 @@ export default function AgentDashboard() {
 
                     <label className="block text-sm">
                       Agent/Agency name
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  />
-                </label>
+                      <input
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                        value={form.name}
+                        onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      />
+                    </label>
 
-                <label className="block text-sm">
-                  Email
-                    <input
-                      type="email"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  />
-                </label>
+                    <label className="block text-sm">
+                      Email
+                      <input
+                        type="email"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                        value={form.email}
+                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      />
+                    </label>
 
-                <label className="block text-sm">
-                  Phone number
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="e.g., (555) 123-4567"
-                  />
-                </label>
+                    <label className="block text-sm">
+                      Phone number
+                      <input
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                        value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        placeholder="e.g., (555) 123-4567"
+                      />
+                    </label>
 
-                <label className="block text-sm">
-                  Address
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                    value={form.address}
+                    <label className="block text-sm">
+                      Address
+                      <input
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                        value={form.address}
                         onChange={(e) => setForm({ ...form, address: e.target.value })}
                       />
                     </label>
@@ -832,10 +873,10 @@ export default function AgentDashboard() {
                       </select>
                     </label>
 
-                      <div className="flex justify-end gap-3 pt-2">
-                        <button
-                          type="button"
-                          className="pill-btn-ghost"
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        className="pill-btn-ghost"
                         onClick={() => {
                           if (!agent) return
                           setForm({
@@ -850,8 +891,8 @@ export default function AgentDashboard() {
                           setPhotoFile(null)
                           setPhotoPreview(resolvePhotoUrl(agent.photo))
                         }}
-                        >
-                          Cancel
+                      >
+                        Cancel
                       </button>
                       <button type="submit" disabled={saving || photoUploading} className="pill-btn-primary px-8">
                         {saving || photoUploading ? 'Saving...' : 'Save changes'}
@@ -1024,6 +1065,22 @@ export default function AgentDashboard() {
                         </>
                       )}
                     </div>
+                  </div>
+                </div>
+              ) : activeTab === 'Onboarding' ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500">Review the onboarding details you submitted.</p>
+                  <div className={summaryCardClass}>
+                    <div className="text-sm font-semibold text-slate-900">Account credentials</div>
+                    {renderSummaryDetails(onboardingAccountDetails)}
+                  </div>
+                  <div className={summaryCardClass}>
+                    <div className="text-sm font-semibold text-slate-900">Identity & licensing</div>
+                    {renderSummaryDetails(onboardingIdentityDetails)}
+                  </div>
+                  <div className={summaryCardClass}>
+                    <div className="text-sm font-semibold text-slate-900">Products & audiences</div>
+                    {renderSummaryDetails(onboardingProductDetails)}
                   </div>
                 </div>
               ) : (

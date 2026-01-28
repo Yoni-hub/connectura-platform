@@ -124,9 +124,23 @@ const LICENSE_TYPES = [
   'Viatical Settlement Broker',
 ]
 
-export default function AgentOnboarding() {
+export default function AgentOnboarding({
+  embedded = false,
+  forceAllOpen = false,
+  readOnly = false,
+  hideOverlays = false,
+  hideHeader = false,
+  hideStepNav = false,
+  hideConfirm = false,
+  stackCards = false,
+  sideBySide = false,
+} = {}) {
   const { user, register } = useAuth()
   const nav = useNavigate()
+  const isEmbedded = Boolean(embedded)
+  const showAll = Boolean(forceAllOpen)
+  const isReadOnly = Boolean(readOnly)
+  const allowOverlays = !hideOverlays && !isEmbedded
   const [activeIndex, setActiveIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -145,6 +159,15 @@ export default function AgentOnboarding() {
   const [otpCode, setOtpCode] = useState('')
   const [otpSending, setOtpSending] = useState(false)
   const [otpVerifying, setOtpVerifying] = useState(false)
+  const [showLicenseConsent, setShowLicenseConsent] = useState(false)
+  const [licenseConsentError, setLicenseConsentError] = useState('')
+  const [showMatchSelect, setShowMatchSelect] = useState(false)
+  const [matchOptions, setMatchOptions] = useState([])
+  const [selectedMatchIndex, setSelectedMatchIndex] = useState('')
+  const [matchError, setMatchError] = useState('')
+  const [pendingAgentId, setPendingAgentId] = useState(null)
+  const [showFinalApproval, setShowFinalApproval] = useState(false)
+  const [finalApprovalData, setFinalApprovalData] = useState(null)
   const [identityType, setIdentityType] = useState('agent')
   const [form, setForm] = useState({
     name: '',
@@ -172,6 +195,7 @@ export default function AgentOnboarding() {
     accountEmail: '',
     accountPassword: '',
     accountPasswordConfirm: '',
+    licenseConsent: false,
   })
 
   useEffect(() => {
@@ -224,7 +248,7 @@ export default function AgentOnboarding() {
         setAgentStatus(status)
         setAgentUnderReview(underReviewFlag)
         setAgentSuspended(suspendedFlag)
-        setShowReviewOverlay(submittedFlag && status !== 'approved')
+        setShowReviewOverlay(allowOverlays && submittedFlag && status !== 'approved')
       } catch {
         toast.error('Could not load your profile')
       } finally {
@@ -232,7 +256,7 @@ export default function AgentOnboarding() {
       }
     }
     loadAgent()
-  }, [user?.agentId])
+  }, [user?.agentId, allowOverlays])
 
   const toggleValue = (field, value) => {
     setForm((prev) => {
@@ -326,12 +350,16 @@ export default function AgentOnboarding() {
     }
   }
 
-  const runLicenseLookup = async (agentId) => {
+  const runLicenseLookup = async (agentId, selectionIndex = null) => {
     const targetAgentId = agentId || user?.agentId
     if (!targetAgentId) return
     const npnValue = form.verifyNpn || form.producerNumber
     if (!npnValue) {
       toast.error('NPN is required for the SCC license lookup.')
+      return
+    }
+    if (!form.licenseConsent) {
+      toast.error('You cant continue onboarding without licensing status verification.')
       return
     }
     setLookupLoading(true)
@@ -344,15 +372,43 @@ export default function AgentOnboarding() {
         state: form.state,
         npn: npnValue,
         licenseNumber: licenseValue,
+        consent: Boolean(form.licenseConsent),
+        selectionIndex: selectionIndex || undefined,
       })
       setLookupResult(res.data)
-      if (!res.data?.results?.length) {
-        setAgentStatus('pending')
-        setAgentUnderReview(true)
-        setShowReviewOverlay(true)
+      const { decision, reasons, candidates, needsSelection, extracted, source, checked_at } = res.data || {}
+      if (needsSelection && Array.isArray(candidates) && candidates.length) {
+        setMatchOptions(candidates)
+        setSelectedMatchIndex('')
+        setMatchError('')
+        setPendingAgentId(targetAgentId)
+        setShowMatchSelect(true)
+        return { decision: 'NEEDS_HUMAN_REVIEW' }
       }
+
+      if (decision === 'APPROVED') {
+        setFinalApprovalData({ extracted, source, checked_at, agentId: targetAgentId })
+        setShowFinalApproval(true)
+        return { decision }
+      }
+
+      const reasonText = Array.isArray(reasons)
+        ? reasons.map((r) => r.message || r.reason_code).filter(Boolean).join(' ')
+        : ''
+      if (decision === 'DENIED') {
+        toast.error(reasonText || 'License verification denied.')
+      } else {
+        toast.error(reasonText || 'License verification needs review.')
+      }
+      setAgentStatus('pending')
+      setAgentUnderReview(true)
+      setShowReviewOverlay(true)
+      return { decision }
     } catch (err) {
       toast.error(err.response?.data?.error || 'License lookup failed')
+      setAgentStatus('pending')
+      setAgentUnderReview(true)
+      setShowReviewOverlay(true)
     } finally {
       setLookupLoading(false)
     }
@@ -399,11 +455,13 @@ export default function AgentOnboarding() {
     if (!newUser) return false
     const saved = await saveOnboarding(newUser.agentId)
     if (!saved) return false
-    await runLicenseLookup(newUser.agentId)
-    setAgentStatus('pending')
-    setAgentUnderReview(true)
-    setShowReviewOverlay(true)
-    toast.success('Email verified. Your agent profile is under review.')
+    const result = await runLicenseLookup(newUser.agentId)
+    if (!result || result.decision !== 'APPROVED') {
+      setAgentStatus('pending')
+      setAgentUnderReview(true)
+      setShowReviewOverlay(true)
+      toast.success('Email verified. Your agent profile is under review.')
+    }
     return true
   }
 
@@ -492,6 +550,12 @@ export default function AgentOnboarding() {
       toast.error(`Please fill the required fields: ${missing.map((m) => m.label).join(', ')}.`)
       return
     }
+    if (!form.licenseConsent) {
+      setActiveIndex(1)
+      setLicenseConsentError('')
+      setShowLicenseConsent(true)
+      return
+    }
 
     if (!user) {
       openEmailVerifyModal()
@@ -499,10 +563,12 @@ export default function AgentOnboarding() {
     }
     const saved = await saveOnboarding(user.agentId)
     if (!saved) return
-    await runLicenseLookup(user.agentId)
-    toast.success(
-      'Account created successfully. Your agent onboarding is under review. When your account is approved, we will send you a link to your email to log into your dashboard. Need help? Call us at 1123-456-7890 or email help@connsura.com.'
-    )
+    const result = await runLicenseLookup(user.agentId)
+    if (!result || result.decision !== 'APPROVED') {
+      toast.success(
+        'Account created successfully. Your agent onboarding is under review. When your account is approved, we will send you a link to your email to log into your dashboard. Need help? Call us at 1123-456-7890 or email help@connsura.com.'
+      )
+    }
   }
 
   const focusField = (id) => {
@@ -575,6 +641,11 @@ export default function AgentOnboarding() {
       return
     }
     if (!validateStep(activeIndex)) return
+    if (activeIndex === 1 && nextIndex === 2 && !form.licenseConsent) {
+      setLicenseConsentError('')
+      setShowLicenseConsent(true)
+      return
+    }
     setActiveIndex(nextIndex)
   }
 
@@ -593,9 +664,16 @@ export default function AgentOnboarding() {
     )
   }
 
-  return (
-    <main className="page-shell py-10">
-      <div className="surface p-5 md:p-6 space-y-6">
+  const cardWidth = sideBySide ? 'w-3/4 mx-auto' : stackCards ? 'w-full' : 'w-full max-w-md mx-auto'
+  const gridColumnsClass = sideBySide ? 'md:grid-cols-3 items-start' : 'md:grid-cols-4'
+  const cardSpanClass = sideBySide ? '' : 'md:col-span-4'
+  const baseCardClass = `rounded-xl border shadow-sm flex flex-col ${cardWidth}`
+  const fitContentClass = 'self-start h-fit'
+  const identityCardClass = sideBySide ? 'w-full max-h-[520px] overflow-y-auto self-start' : fitContentClass
+
+  const content = (
+    <div className="surface p-5 md:p-6 space-y-6">
+      {!hideHeader && (
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Agent onboarding</p>
@@ -604,30 +682,38 @@ export default function AgentOnboarding() {
               Finish these steps to start receiving matched client intents. You can update details later in your dashboard.
             </p>
           </div>
-          <button
-            type="button"
-            className="pill-btn-ghost px-4"
-            onClick={() => {
-              nav('/')
-            }}
-          >
-            Home
-          </button>
+          {!isEmbedded && (
+            <button
+              type="button"
+              className="pill-btn-ghost px-4"
+              onClick={() => {
+                nav('/')
+              }}
+            >
+              Home
+            </button>
+          )}
         </div>
+      )}
 
+      {!hideStepNav && (
         <div className="grid gap-3 md:grid-cols-4">
           {steps.map((step, idx) => {
             const isActive = idx === activeIndex
-            const isUnlocked = idx <= activeIndex
+            const isUnlocked = showAll ? true : idx <= activeIndex
+            const disableStepNav = isReadOnly || showAll
             return (
               <button
                 type="button"
                 key={step.id}
-                disabled={!isUnlocked}
+                disabled={disableStepNav || !isUnlocked}
                 className={`rounded-xl border p-3 text-sm ${
                   isActive ? 'border-[#0b3b8c] bg-[#e8f0ff]' : 'border-slate-200 bg-white'
                 } ${isUnlocked ? '' : 'cursor-not-allowed opacity-60'}`}
-                onClick={() => setActiveIndex(idx)}
+                onClick={() => {
+                  if (disableStepNav || !isUnlocked) return
+                  setActiveIndex(idx)
+                }}
               >
                 <div className="font-semibold text-slate-900">{step.title}</div>
                 <div className="text-slate-600 text-xs mt-1 leading-snug">{step.blurb}</div>
@@ -635,15 +721,16 @@ export default function AgentOnboarding() {
             )
           })}
         </div>
+      )}
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <div
-            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
-              activeIndex === 0 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
-            }`}
-          >
-            <h3 className="text-sm font-semibold mb-2">Connsura account credentials</h3>
-            <div className="space-y-2">
+      <div className={`grid gap-4 ${gridColumnsClass}`}>
+        <div
+          className={`${baseCardClass} ${fitContentClass} p-3 ${
+            showAll || activeIndex === 0 ? `border-[#0b3b8c] bg-[#e8f0ff]/40 ${cardSpanClass}` : 'hidden'
+          }`}
+        >
+          <h3 className="text-sm font-semibold mb-2">Connsura account credentials</h3>
+          <fieldset disabled={isReadOnly} className="space-y-2">
               <label className="block text-sm">
                 Email <span className="text-red-500">*</span>
                 <input
@@ -680,43 +767,45 @@ export default function AgentOnboarding() {
                   id="account-password-confirm"
                 />
               </label>
-            </div>
-            <div className="flex items-center justify-end gap-3 pt-4 mt-auto">
-              <button
-                type="button"
-                className="pill-btn-primary px-6"
-                onClick={() => handleStepAdvance(1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-
-          <div
-            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
-              activeIndex === 1 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold">Identity & licensing</h3>
-              <div className="flex items-center gap-2">
+            </fieldset>
+            {!isReadOnly && !showAll && (
+              <div className="flex items-center justify-end gap-3 pt-4 mt-auto">
                 <button
                   type="button"
-                  className={`${identityType === 'agency' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
-                  onClick={() => setIdentityType('agency')}
+                  className="pill-btn-primary px-6"
+                  onClick={() => handleStepAdvance(1)}
                 >
-                  agency
-                </button>
-                <button
-                  type="button"
-                  className={`${identityType === 'agent' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
-                  onClick={() => setIdentityType('agent')}
-                >
-                  agent
+                  Next
                 </button>
               </div>
-            </div>
-            <div className="space-y-2">
+            )}
+        </div>
+
+        <div
+          className={`${baseCardClass} ${identityCardClass} p-3 ${
+            showAll || activeIndex === 1 ? `border-[#0b3b8c] bg-[#e8f0ff]/40 ${cardSpanClass}` : 'hidden'
+          }`}
+        >
+          <fieldset disabled={isReadOnly} className="space-y-2">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold">Identity & licensing</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={`${identityType === 'agency' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
+                    onClick={() => setIdentityType('agency')}
+                  >
+                    agency
+                  </button>
+                  <button
+                    type="button"
+                    className={`${identityType === 'agent' ? 'pill-btn-primary' : 'pill-btn-ghost'} px-3 py-1 text-xs`}
+                    onClick={() => setIdentityType('agent')}
+                  >
+                    agent
+                  </button>
+                </div>
+              </div>
               <label className="block text-sm">
                 Virginia License Number <span className="text-red-500">*</span>
                 <input
@@ -948,32 +1037,34 @@ export default function AgentOnboarding() {
                   )}
                 </div>
               </label>
-            </div>
-            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
-              <button
-                type="button"
-                className="pill-btn-ghost px-6"
-                onClick={() => handleStepAdvance(0)}
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                className="pill-btn-primary px-6"
-                onClick={() => handleStepAdvance(2)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+            </fieldset>
+            {!isReadOnly && !showAll && (
+              <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-6"
+                  onClick={() => handleStepAdvance(0)}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-primary px-6"
+                  onClick={() => handleStepAdvance(2)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+        </div>
 
-          <div
-            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
-              activeIndex === 2 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
-            }`}
-          >
-            <h3 className="text-sm font-semibold mb-2">Products & audiences</h3>
-            <div className="space-y-2">
+        <div
+          className={`${baseCardClass} ${fitContentClass} p-3 ${
+            showAll || activeIndex === 2 ? `border-[#0b3b8c] bg-[#e8f0ff]/40 ${cardSpanClass}` : 'hidden'
+          }`}
+        >
+          <h3 className="text-sm font-semibold mb-2">Products & audiences</h3>
+            <fieldset disabled={isReadOnly} className="space-y-2">
               <label className="block text-sm">
                 Languages you support <span className="text-red-500">*</span>
                 <input
@@ -1029,28 +1120,31 @@ export default function AgentOnboarding() {
                   id="bio"
                 />
               </label>
-            </div>
-            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
-              <button
-                type="button"
-                className="pill-btn-ghost px-6"
-                onClick={() => handleStepAdvance(1)}
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                className="pill-btn-primary px-6"
-                onClick={() => handleStepAdvance(3)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+            </fieldset>
+            {!isReadOnly && !showAll && (
+              <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-6"
+                  onClick={() => handleStepAdvance(1)}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-primary px-6"
+                  onClick={() => handleStepAdvance(3)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+        </div>
 
+        {!hideConfirm && (
           <div
-            className={`rounded-xl border p-3 shadow-sm flex flex-col w-full max-w-md mx-auto ${
-              activeIndex === 3 ? 'border-[#0b3b8c] bg-[#e8f0ff]/40 md:col-span-4' : 'hidden'
+            className={`${baseCardClass} ${fitContentClass} p-3 ${
+              showAll || activeIndex === 3 ? `border-[#0b3b8c] bg-[#e8f0ff]/40 ${cardSpanClass}` : 'hidden'
             }`}
           >
             <h3 className="text-sm font-semibold mb-2">Confirm & finish</h3>
@@ -1073,28 +1167,87 @@ export default function AgentOnboarding() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 mt-3">
               Reminder: Connsura connects clients to licensed agents. Quotes and policies are handled on your own systems. No platform payouts.
             </div>
-            <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
+            {!isReadOnly && !showAll && (
+              <div className="flex items-center justify-between gap-3 pt-4 mt-auto">
+                <button
+                  type="button"
+                  className="pill-btn-ghost px-6"
+                  onClick={() => handleStepAdvance(2)}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn-primary px-8"
+                  disabled={saving || lookupLoading}
+                  onClick={handleSubmit}
+                >
+                  {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      {isEmbedded ? content : <main className="page-shell py-10">{content}</main>}
+
+      {allowOverlays && showLicenseConsent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">License verification consent</h2>
+            <p className="text-slate-700">
+              Connsura verifies your license status with state regulators to complete onboarding.
+            </p>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={Boolean(form.licenseConsent)}
+                onChange={(e) => setForm({ ...form, licenseConsent: e.target.checked })}
+              />
+              I authorize Connsura to verify my license with state regulators.
+            </label>
+            {licenseConsentError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                {licenseConsentError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
-                className="pill-btn-ghost px-6"
-                onClick={() => handleStepAdvance(2)}
+                className="pill-btn-ghost px-5"
+                onClick={() => {
+                  setShowLicenseConsent(false)
+                  toast.error('You cant continue onboarding without licensing status verification.')
+                }}
               >
-                Back
+                Cancel
               </button>
               <button
                 type="button"
-                className="pill-btn-primary px-8"
-                disabled={saving || lookupLoading}
-                onClick={handleSubmit}
+                className="pill-btn-primary px-5"
+                onClick={() => {
+                  if (!form.licenseConsent) {
+                    setLicenseConsentError('You cant continue onboarding without licensing status verification.')
+                    return
+                  }
+                  setShowLicenseConsent(false)
+                  setActiveIndex(2)
+                }}
               >
-                {saving || lookupLoading ? 'Working...' : 'Submit & verify'}
+                Continue
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {showEmailVerify && (
+      {allowOverlays && showEmailVerify && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <h2 className="text-xl font-semibold text-slate-900">Verify your email address</h2>
@@ -1134,7 +1287,130 @@ export default function AgentOnboarding() {
         </div>
       )}
 
-      {showSuccess && (
+      {allowOverlays && showMatchSelect && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">Select your license record</h2>
+            <p className="text-slate-700">We found multiple matches. Please select the correct one to continue.</p>
+            <div className="space-y-2">
+              {matchOptions.map((option) => (
+                <label key={option.index} className="flex items-start gap-2 rounded-lg border border-slate-200 p-3">
+                  <input
+                    type="radio"
+                    name="matchOption"
+                    value={option.index}
+                    checked={String(selectedMatchIndex) === String(option.index)}
+                    onChange={(e) => setSelectedMatchIndex(e.target.value)}
+                  />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-semibold">{option.display_name || 'Unknown'}</span>
+                    <span className="block text-xs text-slate-500">
+                      {option.status || 'Unknown status'} · {option.city || 'Unknown city'} {option.state || ''}{' '}
+                      {option.zip_code || ''}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {matchError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">{matchError}</div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="pill-btn-ghost px-5"
+                onClick={() => {
+                  setShowMatchSelect(false)
+                  setMatchOptions([])
+                  setSelectedMatchIndex('')
+                  setPendingAgentId(null)
+                  toast.error('You must select a match to continue verification.')
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={async () => {
+                  if (!selectedMatchIndex) {
+                    setMatchError('Select a record to continue.')
+                    return
+                  }
+                  setMatchError('')
+                  setShowMatchSelect(false)
+                  const result = await runLicenseLookup(pendingAgentId, Number(selectedMatchIndex))
+                  if (!result || result.decision !== 'APPROVED') {
+                    setAgentStatus('pending')
+                    setAgentUnderReview(true)
+                    setShowReviewOverlay(true)
+                  }
+                }}
+              >
+                Confirm selection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {allowOverlays && showFinalApproval && finalApprovalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h2 className="text-xl font-semibold text-slate-900">Confirm your license details</h2>
+            <p className="text-slate-700">Please confirm these details are correct.</p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-1">
+              <div>Source: {finalApprovalData.source || 'VA_SCC'}</div>
+              <div>Checked at: {finalApprovalData.checked_at || '--'}</div>
+              <div>Status (raw): {finalApprovalData.extracted?.status_raw || '--'}</div>
+              <div>Status (normalized): {finalApprovalData.extracted?.status_normalized || '--'}</div>
+              <div>License number: {finalApprovalData.extracted?.license_number || '--'}</div>
+              <div>NPN: {finalApprovalData.extracted?.npn || '--'}</div>
+              <div>Name on record: {finalApprovalData.extracted?.name_on_record || '--'}</div>
+              <div>Expires at: {finalApprovalData.extracted?.expires_at || '--'}</div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="pill-btn-ghost px-5"
+                onClick={async () => {
+                  setShowFinalApproval(false)
+                  setFinalApprovalData(null)
+                  if (finalApprovalData?.agentId) {
+                    await api.post(`/agents/${finalApprovalData.agentId}/license-decision`, { decision: 'review' })
+                  }
+                  toast.error('Verification denied. Your profile is under review.')
+                  setAgentStatus('pending')
+                  setAgentUnderReview(true)
+                  setShowReviewOverlay(true)
+                }}
+              >
+                Deny
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={async () => {
+                  if (finalApprovalData?.agentId) {
+                    await api.post(`/agents/${finalApprovalData.agentId}/license-decision`, { decision: 'approve' })
+                  }
+                  setShowFinalApproval(false)
+                  setFinalApprovalData(null)
+                  setAgentStatus('approved')
+                  setAgentUnderReview(false)
+                  setShowReviewOverlay(false)
+                  toast.success('License verified. Welcome to your dashboard!')
+                  nav('/agent/dashboard')
+                }}
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {allowOverlays && showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <h2 className="text-xl font-semibold text-slate-900">Submission received</h2>
@@ -1160,7 +1436,7 @@ export default function AgentOnboarding() {
           </div>
         </div>
       )}
-      {showReviewOverlay && agentStatus !== 'approved' && (
+      {allowOverlays && showReviewOverlay && agentStatus !== 'approved' && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <h2 className="text-xl font-semibold text-slate-900">Profile under review</h2>
@@ -1192,6 +1468,6 @@ export default function AgentOnboarding() {
           </div>
         </div>
       )}
-    </main>
+    </>
   )
 }

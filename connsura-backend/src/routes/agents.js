@@ -235,7 +235,8 @@ router.post('/:id/license-lookup', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Cannot lookup for this agent' })
   }
 
-  const { firstName, lastName, zip, state, npn, licenseNumber } = req.body || {}
+  const { firstName, lastName, zip, state, npn, licenseNumber, consent, selectionIndex } = req.body || {}
+  if (!consent) return res.status(400).json({ error: 'Consent is required for license lookup' })
   if (!npn && !licenseNumber) return res.status(400).json({ error: 'NPN is required for lookup' })
 
   try {
@@ -248,8 +249,90 @@ router.post('/:id/license-lookup', authGuard, async (req, res) => {
       state: state || '',
       npn: npnValue,
       licenseNumber: licenseValue,
+      selectionIndex,
     })
-    res.json({ results: lookup.results, detail: lookup.detail })
+
+    const normalizeStatus = (value = '') => {
+      const normalized = value.toLowerCase()
+      if (normalized.includes('suspend')) return 'SUSPENDED'
+      if (normalized.includes('revok')) return 'REVOKED'
+      if (normalized.includes('expired')) return 'EXPIRED'
+      if (normalized.includes('inactive')) return 'INACTIVE'
+      if (normalized.includes('active') || normalized.includes('approved') || normalized.includes('valid')) return 'ACTIVE'
+      return 'UNKNOWN'
+    }
+
+    const parseDate = (value) => {
+      if (!value) return null
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
+
+    const reasons = []
+    let decision = 'NEEDS_HUMAN_REVIEW'
+
+    if (!lookup.results?.length) {
+      decision = 'DENIED'
+      reasons.push({ reason_code: 'NO_MATCH', message: 'No results returned from search.' })
+    } else if (lookup.needsSelection) {
+      decision = 'NEEDS_HUMAN_REVIEW'
+      reasons.push({ reason_code: 'MULTIPLE_MATCHES', message: 'Multiple results found; select the correct match.' })
+    } else if (!lookup.detail) {
+      decision = 'NEEDS_HUMAN_REVIEW'
+      reasons.push({ reason_code: 'DETAIL_MISSING', message: 'Could not load detailed record.' })
+    } else {
+      const statusRaw = lookup.detail.status || ''
+      const statusNormalized = normalizeStatus(statusRaw)
+      const expiresAt = lookup.detail.licenseExpires || ''
+      if (['SUSPENDED', 'REVOKED', 'EXPIRED', 'INACTIVE'].includes(statusNormalized)) {
+        decision = 'DENIED'
+        reasons.push({ reason_code: statusNormalized, message: `Status indicates ${statusNormalized.toLowerCase()}.` })
+      } else if (statusNormalized === 'ACTIVE') {
+        const exp = parseDate(expiresAt)
+        if (exp && exp < new Date()) {
+          decision = 'DENIED'
+          reasons.push({ reason_code: 'EXPIRED', message: 'License expiration date is in the past.' })
+        } else {
+          decision = 'APPROVED'
+          reasons.push({ reason_code: 'ACTIVE', message: 'Status indicates active license.' })
+        }
+      } else {
+        decision = 'NEEDS_HUMAN_REVIEW'
+        reasons.push({ reason_code: 'STATUS_UNKNOWN', message: 'Unable to normalize license status.' })
+      }
+    }
+
+    const extracted = lookup.detail
+      ? {
+          status_raw: lookup.detail.status || null,
+          status_normalized: normalizeStatus(lookup.detail.status || ''),
+          license_number: lookup.detail.licenseNumber || null,
+          npn: lookup.detail.npn || null,
+          name_on_record: lookup.detail.name || null,
+          expires_at: lookup.detail.licenseExpires || null,
+        }
+      : null
+
+    const candidates = Array.isArray(lookup.results)
+      ? lookup.results.map((item) => ({
+          index: item.index,
+          display_name: item.name,
+          status: item.status,
+          city: item.city,
+          state: item.state,
+          zip_code: item.zip,
+        }))
+      : []
+
+    res.json({
+      decision,
+      reasons,
+      extracted,
+      candidates,
+      needsSelection: Boolean(lookup.needsSelection),
+      source: 'VA_SCC',
+      checked_at: new Date().toISOString(),
+    })
   } catch (err) {
     console.error('license lookup error', err)
     res.status(500).json({ error: 'License lookup failed' })

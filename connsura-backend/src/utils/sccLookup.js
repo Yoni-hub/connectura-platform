@@ -56,6 +56,7 @@ async function lookupAgentOnScc({
   insuranceType = '',
   licenseType = '',
   lastNameMode = 'starts',
+  selectionIndex,
 }) {
   const headers = {
     'User-Agent': 'Connsura/1.0 (license-check)',
@@ -105,7 +106,11 @@ async function lookupAgentOnScc({
   const results = parseAgentRows(searchHtml)
 
   if (!results.length) {
-    return { results, detail: null }
+    return { results, detail: null, needsSelection: false }
+  }
+
+  if (results.length > 1 && !selectionIndex) {
+    return { results, detail: null, needsSelection: true }
   }
 
   const detailHidden = {
@@ -116,9 +121,14 @@ async function lookupAgentOnScc({
     __EVENTVALIDATION: extractHidden(searchHtml, '__EVENTVALIDATION'),
   }
 
+  const selectedResult = selectionIndex ? results[selectionIndex - 1] : results[0]
+  if (!selectedResult) {
+    return { results, detail: null, needsSelection: true }
+  }
+
   const detailBody = new URLSearchParams({
     __EVENTTARGET: 'ctl00$MainContent$gvAgResults',
-    __EVENTARGUMENT: `Select$${results[0].index}`,
+    __EVENTARGUMENT: `Select$${selectedResult.index}`,
     __LASTFOCUS: '',
     ...detailHidden,
     'ctl00$MainContent$rblAgActive': activeOnly ? 'Y' : 'N',

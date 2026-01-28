@@ -54,9 +54,10 @@ function CustomerOnly({ children }) {
 
 function Layout() {
   const location = useLocation()
-  const hideFooter =
+  const footerHiddenOnMobile =
     location.pathname === '/client/dashboard' ||
-    location.pathname === '/dashboard'
+    location.pathname === '/dashboard' ||
+    location.pathname === '/agent/dashboard'
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -102,7 +103,13 @@ function Layout() {
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </div>
-      {!hideFooter && <Footer />}
+      {footerHiddenOnMobile ? (
+        <div className="hidden lg:block">
+          <Footer />
+        </div>
+      ) : (
+        <Footer />
+      )}
     </div>
   )
 }
