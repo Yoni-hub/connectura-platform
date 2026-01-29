@@ -2,8 +2,10 @@ import { Link } from 'react-router-dom'
 
 const links = [
   { label: 'Contact us', to: '/contact' },
-  { label: 'Privacy policy', to: '/privacy-policy' },
-  { label: 'Legal notice', to: '/legal-notice' },
+  { label: 'Terms & conditions', to: '/terms' },
+  { label: 'Privacy policy', to: '/privacy' },
+  { label: 'Data sharing', to: '/data-sharing' },
+  { label: 'Agent responsibilities', to: '/agent-responsibilities' },
 ]
 
 export default function Footer() {

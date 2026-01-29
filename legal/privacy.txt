@@ -1,0 +1,287 @@
+Connsura Terms and Conditions
+
+Effective Date: [Insert Date]
+Last Updated: [Insert Date]
+
+1. Introduction & Acceptance
+
+These Terms and Conditions (“Terms”) govern access to and use of the Connsura platform (“Connsura”, “we”, “us”, or “the Platform”).
+By accessing or using Connsura, you agree to be bound by these Terms in the role(s) you assume.
+
+Connsura operates a neutral, web-based technology platform that allows clients to organize insurance information and share it with independent insurance agents of their choosing.
+
+ACTOR-BASED TERMS
+
+Each actor below has separate responsibilities, obligations, and conditions.
+
+2. Connsura (Platform Operator)
+2.1 Role
+
+Connsura is a technology provider only.
+Connsura is not:
+
+an insurance company
+
+an insurance producer, broker, or agency
+
+a financial advisor
+
+a party to any insurance transaction
+
+2.2 Responsibilities
+
+Connsura agrees to:
+
+Provide a secure web platform for organizing insurance information
+
+Enable users to share profiles at their discretion
+
+Display agent information as submitted or verified
+
+Maintain reasonable technical and administrative safeguards
+
+Provide email-based communication only
+
+Operate on a best-effort availability basis
+
+2.3 Limitations
+
+Connsura does not:
+
+sell, quote, bind, or negotiate insurance
+
+recommend, endorse, or rank agents
+
+guarantee agent performance or suitability
+
+control agent-client communications
+
+participate in insurance contracts
+
+3. Clients (Insurance Seekers)
+3.1 Role
+
+Clients are individuals who use Connsura to:
+
+organize insurance-related information
+
+find and contact licensed agents
+
+voluntarily share profiles
+
+3.2 Client Responsibilities
+
+Clients must:
+
+Provide accurate and truthful information
+
+Keep login credentials secure
+
+Independently choose agents
+
+Verify all insurance advice independently
+
+Use the platform lawfully
+
+3.3 Client Acknowledgements
+
+Clients acknowledge that:
+
+Connsura does not give insurance advice
+
+All insurance decisions are made between client and agent
+
+Sharing data is voluntary
+
+Connsura is not responsible for agent conduct
+
+4. Agents (Licensed Insurance Professionals)
+4.1 Role
+
+Agents are independent licensed professionals using Connsura as a technology tool.
+
+Agents are not employees, partners, or representatives of Connsura.
+
+4.2 Agent Responsibilities
+
+Agents must:
+
+Maintain active, valid licenses
+
+Comply with all applicable state and federal laws
+
+Provide accurate profile information
+
+Use client data only for legitimate insurance purposes
+
+Protect client data once received or exported
+
+Maintain records as required by law
+
+4.3 Data Export (Option C – Restricted Export)
+
+Once a client voluntarily shares their information:
+
+Agents may export and store data for insurance purposes only
+
+Agents become the independent data controller
+
+Connsura is no longer responsible for data handling after export
+
+Agents may not resell, reuse, or repurpose data
+
+Agents must comply with GLBA, state privacy laws, and DOI rules
+
+4.4 Prohibited Conduct
+
+Agents must not:
+
+Claim endorsement by Connsura
+
+Misrepresent affiliation
+
+Use data for marketing without consent
+
+Circumvent platform safeguards
+
+Share client data unlawfully
+
+Agents agree to indemnify Connsura for violations.
+
+5. Regulators & Legal Authorities
+
+Connsura:
+
+Cooperates with lawful requests
+
+Provides records when legally required
+
+Does not interfere with regulatory oversight
+
+Does not replace state licensing authorities
+
+Does not monitor agent compliance beyond platform-level checks
+
+6. Service Providers (Processors)
+
+Connsura uses third parties for:
+
+Hosting
+
+Email delivery
+
+Security
+
+Monitoring
+
+Analytics
+
+These providers:
+
+Process data only on Connsura’s instructions
+
+Do not own user data
+
+Are contractually bound to confidentiality
+
+7. Third-Party Integrations (Future)
+
+If used, third-party services:
+
+Act independently
+
+Are not insurers or agents
+
+Do not control platform decisions
+
+May have separate terms
+
+8. Visitors (Non-Registered Users)
+
+Visitors may:
+
+View public content only
+
+Not access profiles or messaging
+
+Are bound by site usage rules
+
+PLATFORM-WIDE LEGAL TERMS (Applies to All Actors)
+9. Data Ownership
+
+Clients own their personal data
+
+Agents own their business data
+
+Connsura owns platform software and IP
+
+Sharing transfers responsibility, not ownership
+
+10. Suspension & Termination
+
+Connsura may suspend or terminate accounts for:
+
+violations of terms
+
+illegal activity
+
+security risks
+
+regulatory concerns
+
+11. Disclaimer of Warranties
+
+Platform provided “as is” and “as available”.
+No guarantee of uptime, accuracy, or outcomes.
+
+12. Limitation of Liability
+
+To the maximum extent permitted by law, Connsura is not liable for:
+
+agent actions
+
+insurance decisions
+
+financial losses
+
+data misuse after export
+
+indirect or consequential damages
+
+13. Indemnification
+
+Users agree to indemnify Connsura for claims arising from:
+
+misuse
+
+violations
+
+regulatory non-compliance
+
+data misuse
+
+14. Governing Law
+
+These Terms are governed by the laws of the Commonwealth of Virginia, USA.
+
+15. Arbitration & Class Action Waiver
+
+Disputes resolved by binding arbitration.
+No class actions permitted.
+
+16. Modifications
+
+Connsura may update these Terms.
+Continued use constitutes acceptance.
+
+17. Severability
+
+If any provision is invalid, the rest remain enforceable.
+
+18. Contact
+
+Legal notices: legal@connsura.com
+
+Privacy matters: privacy@connsura.com
+
+Support: support@connsura.com

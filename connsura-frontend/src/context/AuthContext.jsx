@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false)
   const [authChecking, setAuthChecking] = useState(true)
   const [lastPassword, setLastPassword] = useState('')
+  const [consentStatus, setConsentStatus] = useState(null)
 
   useEffect(() => {
     if (!token) {
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
       .get('/auth/me')
       .then((res) => {
         setUser(res.data.user)
+        setConsentStatus(res.data.consent || null)
         if (res.data.user?.role === 'AGENT') {
           const pending = res.data.user.agentStatus && res.data.user.agentStatus !== 'approved'
           const suspended = res.data.user.agentSuspended
@@ -48,6 +50,7 @@ export function AuthProvider({ children }) {
       .catch(() => {
         setUser(null)
         setToken(null)
+        setConsentStatus(null)
         clearStoredToken()
       })
       .finally(() => {
@@ -60,6 +63,9 @@ export function AuthProvider({ children }) {
     setToken(nextToken)
     setUser(nextUser)
     setStoredToken(nextToken, { persist })
+    if (options.consent !== undefined) {
+      setConsentStatus(options.consent)
+    }
     if (password) {
       setLastPassword(password)
     }
@@ -81,7 +87,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.post('/auth/login', { email, password, sessionId: getSessionId() })
       const remember = options.remember !== false
-      applyAuth(res.data.token, res.data.user, password, { persist: remember })
+      applyAuth(res.data.token, res.data.user, password, { persist: remember, consent: res.data.consent || null })
       toast.success('Logged in')
       return res.data.user
     } catch (err) {
@@ -96,7 +102,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const res = await api.post('/auth/register', payload)
-      applyAuth(res.data.token, res.data.user, payload.password, { persist: true })
+      applyAuth(res.data.token, res.data.user, payload.password, { persist: true, consent: res.data.consent || null })
       if (res.data.user.role === 'AGENT') {
         localStorage.setItem('connsura_agent_onboarding_pending', 'true')
         localStorage.removeItem('connsura_agent_onboarding_submitted')
@@ -118,6 +124,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     setToken(null)
     setLastPassword('')
+    setConsentStatus(null)
     clearStoredToken()
     localStorage.removeItem('connsura_agent_onboarding_pending')
     localStorage.removeItem('connsura_agent_onboarding_submitted')
@@ -137,6 +144,8 @@ export function AuthProvider({ children }) {
       lastPassword,
       setLastPassword,
       setUser,
+      consentStatus,
+      setConsentStatus,
     }}
     >
       {children}

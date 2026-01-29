@@ -10,6 +10,10 @@ import Contact from '../pages/Contact'
 import About from '../pages/About'
 import PrivacyPolicy from '../pages/PrivacyPolicy'
 import LegalNotice from '../pages/LegalNotice'
+import Terms from '../pages/Terms'
+import Privacy from '../pages/Privacy'
+import DataSharing from '../pages/DataSharing'
+import AgentResponsibilities from '../pages/AgentResponsibilities'
 import Admin from '../pages/Admin'
 import ShareProfile from '../pages/ShareProfile'
 import AccountRecovery from '../pages/AccountRecovery'
@@ -17,6 +21,7 @@ import AccountDeleted from '../pages/AccountDeleted'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
+import LegalConsentModal from '../components/modals/LegalConsentModal'
 
 function Protected({ children }) {
   const { user, authReady } = useAuth()
@@ -62,6 +67,7 @@ function Layout() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
+      <LegalConsentModal />
       <div className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -95,6 +101,10 @@ function Layout() {
           <Route path="/agent/onboarding" element={<AgentOnboarding />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/about" element={<About />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/data-sharing" element={<DataSharing />} />
+          <Route path="/agent-responsibilities" element={<AgentResponsibilities />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/share/:token" element={<ShareProfile />} />

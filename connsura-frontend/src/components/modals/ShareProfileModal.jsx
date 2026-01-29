@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
 import { useAgents } from '../../context/AgentContext'
@@ -75,6 +75,14 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
   const [step, setStep] = useState('sections')
   const [activeMethod, setActiveMethod] = useState(null)
   const [accessMode, setAccessMode] = useState('read')
+  const pendingActionRef = useRef(null)
+  const [showShareConsent, setShowShareConsent] = useState(false)
+  const [dataSharingConsented, setDataSharingConsented] = useState(false)
+  const [shareConsentChecks, setShareConsentChecks] = useState({
+    shareProfile: false,
+    exportData: false,
+    notResponsible: false,
+  })
   const [sections, setSections] = useState({
     household: false,
     address: false,
@@ -159,7 +167,11 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
   }, [open, activeMethod, accessMode])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setShowShareConsent(false)
+      pendingActionRef.current = null
+      return
+    }
     const nextSections = {
       household: householdAvailable,
       address: addressAvailable,
@@ -184,11 +196,25 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     defaultAgentId,
   ])
 
+  const startShareAction = (action) => {
+    if (dataSharingConsented) {
+      void action()
+      return
+    }
+    pendingActionRef.current = action
+    setShowShareConsent(true)
+  }
+
   useEffect(() => {
     if (accessMode === 'edit' && activeMethod === 'pdf') {
       setActiveMethod('link')
     }
   }, [accessMode, activeMethod])
+
+  useEffect(() => {
+    if (!showShareConsent) return
+    setShareConsentChecks({ shareProfile: false, exportData: false, notResponsible: false })
+  }, [showShareConsent])
 
   const toggleShareAll = () => {
     if (allSelected) {
@@ -234,10 +260,44 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
       const res = await api.post('/shares', payload)
       return res.data
     } catch (err) {
+      if (err.response?.data?.code === 'CONSENT_REQUIRED') {
+        setDataSharingConsented(false)
+        setShowShareConsent(true)
+        return null
+      }
       toast.error(err.response?.data?.error || 'Unable to create share link')
       return null
     } finally {
       setShareLoading(false)
+    }
+  }
+
+  const allShareConsentsChecked =
+    shareConsentChecks.shareProfile && shareConsentChecks.exportData && shareConsentChecks.notResponsible
+
+  const handleShareConsentConfirm = async () => {
+    if (!allShareConsentsChecked) {
+      toast.error('Please accept all required sharing consents.')
+      return
+    }
+    try {
+      await api.post('/legal/consent', {
+        documentType: 'data-sharing',
+        consentItems: {
+          shareProfile: true,
+          exportData: true,
+          notResponsible: true,
+        },
+      })
+      setDataSharingConsented(true)
+      setShowShareConsent(false)
+      const action = pendingActionRef.current
+      pendingActionRef.current = null
+      if (action) {
+        void action()
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Unable to save consent')
     }
   }
 
@@ -263,9 +323,11 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
       toast.error('Enter the recipient name')
       return
     }
-    if (linkShare || shareLoading) return
-    const share = await createShare()
-    if (share) setLinkShare(share)
+    startShareAction(async () => {
+      if (linkShare || shareLoading) return
+      const share = await createShare()
+      if (share) setLinkShare(share)
+    })
   }
 
   const handleSendToAgent = async () => {
@@ -274,29 +336,31 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
       toast.error('Select an agent first')
       return
     }
-    setSendingAgent(true)
-    const share = await createShare(agentId)
-    if (!share) {
-      setSendingAgent(false)
-      return
-    }
-    setAgentShare(share)
-    const shareUrl = buildShareUrl(share.share.token)
-    const messageLines = [
-      `Shared profile sections: ${selectedSectionLabels.join(', ') || 'None'}.`,
-      accessMode === 'edit' ? 'Editing is enabled for this share.' : null,
-      `Link: ${shareUrl}`,
-      `Access code: ${share.code}`,
-      'The link requires the 4-digit code from the customer.',
-    ].filter(Boolean)
-    try {
-      await api.post('/messages', { agentId, body: messageLines.join('\n') })
-      toast.success('Share sent to agent')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Unable to send to agent')
-    } finally {
-      setSendingAgent(false)
-    }
+    startShareAction(async () => {
+      setSendingAgent(true)
+      const share = await createShare(agentId)
+      if (!share) {
+        setSendingAgent(false)
+        return
+      }
+      setAgentShare(share)
+      const shareUrl = buildShareUrl(share.share.token)
+      const messageLines = [
+        `Shared profile sections: ${selectedSectionLabels.join(', ') || 'None'}.`,
+        accessMode === 'edit' ? 'Editing is enabled for this share.' : null,
+        `Link: ${shareUrl}`,
+        `Access code: ${share.code}`,
+        'The link requires the 4-digit code from the customer.',
+      ].filter(Boolean)
+      try {
+        await api.post('/messages', { agentId, body: messageLines.join('\n') })
+        toast.success('Share sent to agent')
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Unable to send to agent')
+      } finally {
+        setSendingAgent(false)
+      }
+    })
   }
 
   const renderShareDetails = (share) => {
@@ -339,270 +403,326 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
   }
 
   return (
-    <Modal
-      title="Share your profile"
-      open={open}
-      onClose={() => {
-        if (!shareLoading && !sendingAgent) onClose?.()
-      }}
-      panelClassName="max-w-4xl"
-    >
-      {step === 'sections' ? (
-        <div className="print-hidden space-y-4">
-          <div className="text-sm text-slate-600">
-            Choose which sections you want to share. You can share all sections or pick specific ones.
-          </div>
-          {!hasAvailableSections ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              No profile data available to share yet. Fill out your profile first.
+    <>
+      <Modal
+        title="Share your profile"
+        open={open}
+        onClose={() => {
+          if (!shareLoading && !sendingAgent) onClose?.()
+        }}
+        panelClassName="max-w-4xl"
+      >
+        {step === 'sections' ? (
+          <div className="print-hidden space-y-4">
+            <div className="text-sm text-slate-600">
+              Choose which sections you want to share. You can share all sections or pick specific ones.
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <label className="flex items-center gap-3 text-sm font-semibold">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={allSelected}
-                    onChange={toggleShareAll}
-                  />
-                  Share all sections
-                </label>
-                <div className="flex items-center gap-3 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="share-access"
-                      className="h-4 w-4"
-                      checked={accessMode === 'read'}
-                      onChange={() => setAccessMode('read')}
-                    />
-                    Read only
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="share-access"
-                      className="h-4 w-4"
-                      checked={accessMode === 'edit'}
-                      onChange={() => setAccessMode('edit')}
-                    />
-                    Allow edits
-                  </label>
-                </div>
+            {!hasAvailableSections ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No profile data available to share yet. Fill out your profile first.
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={sections.household}
-                    onChange={() => setSections((prev) => ({ ...prev, household: !prev.household }))}
-                    disabled={!householdAvailable}
-                  />
-                  Household information
-                </label>
-                <label className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={sections.address}
-                    onChange={() => setSections((prev) => ({ ...prev, address: !prev.address }))}
-                    disabled={!addressAvailable}
-                  />
-                  Address information
-                </label>
-              </div>
-
-              {additionalForms.length > 0 && accessMode !== 'edit' && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Additional forms
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {additionalForms.map((form, index) => (
-                      <label key={`share-form-${index}`} className="flex items-center gap-3 text-sm">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={sections.additionalIndexes.includes(index)}
-                          onChange={() => toggleAdditionalForm(index)}
-                        />
-                        {form?.name || `Additional Form ${index + 1}`}
-                      </label>
-                    ))}
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-3 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={allSelected}
+                      onChange={toggleShareAll}
+                    />
+                    Share all sections
+                  </label>
+                  <div className="flex items-center gap-3 text-sm">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="share-access"
+                        className="h-4 w-4"
+                        checked={accessMode === 'read'}
+                        onChange={() => setAccessMode('read')}
+                      />
+                      Read only
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="share-access"
+                        className="h-4 w-4"
+                        checked={accessMode === 'edit'}
+                        onChange={() => setAccessMode('edit')}
+                      />
+                      Allow edits
+                    </label>
                   </div>
                 </div>
-              )}
 
-              {additionalAvailable && accessMode === 'edit' && (
-                <label className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={sections.additional}
-                    onChange={() => setSections((prev) => ({ ...prev, additional: !prev.additional }))}
-                  />
-                  Additional information
-                </label>
-              )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={sections.household}
+                      onChange={() => setSections((prev) => ({ ...prev, household: !prev.household }))}
+                      disabled={!householdAvailable}
+                    />
+                    Household information
+                  </label>
+                  <label className="flex items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={sections.address}
+                      onChange={() => setSections((prev) => ({ ...prev, address: !prev.address }))}
+                      disabled={!addressAvailable}
+                    />
+                    Address information
+                  </label>
+                </div>
+
+                {additionalForms.length > 0 && accessMode !== 'edit' && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Additional forms
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {additionalForms.map((form, index) => (
+                        <label key={`share-form-${index}`} className="flex items-center gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={sections.additionalIndexes.includes(index)}
+                            onChange={() => toggleAdditionalForm(index)}
+                          />
+                          {form?.name || `Additional Form ${index + 1}`}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {additionalAvailable && accessMode === 'edit' && (
+                  <label className="flex items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={sections.additional}
+                      onChange={() => setSections((prev) => ({ ...prev, additional: !prev.additional }))}
+                    />
+                    Additional information
+                  </label>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className="pill-btn-ghost px-4" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={handleContinue}
+                disabled={!hasAvailableSections}
+              >
+                Continue
+              </button>
             </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <button type="button" className="pill-btn-ghost px-4" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="pill-btn-primary px-5"
-              onClick={handleContinue}
-              disabled={!hasAvailableSections}
-            >
-              Continue
-            </button>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="print-hidden flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-            <div>Choose how you want to share your profile.</div>
-            <button
-              type="button"
-              className="text-sm font-semibold text-[#006aff] hover:underline"
-              onClick={() => {
-                setStep('sections')
-                setActiveMethod(null)
-                setLinkShare(null)
-                setAgentShare(null)
-              }}
-            >
-              Change sections
-            </button>
-          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="print-hidden flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+              <div>Choose how you want to share your profile.</div>
+              <button
+                type="button"
+                className="text-sm font-semibold text-[#006aff] hover:underline"
+                onClick={() => {
+                  setStep('sections')
+                  setActiveMethod(null)
+                  setLinkShare(null)
+                  setAgentShare(null)
+                }}
+              >
+                Change sections
+              </button>
+            </div>
 
-          <div
-            className={`print-hidden grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
-          >
-            <button
-              type="button"
-              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                activeMethod === 'link'
-                  ? 'border-[#0b3b8c] bg-[#e8f0ff]'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-              onClick={handleCreateLink}
+            <div
+              className={`print-hidden grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
             >
-              Share with link
-            </button>
-            {accessMode !== 'edit' && (
               <button
                 type="button"
                 className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                  activeMethod === 'pdf'
+                  activeMethod === 'link'
                     ? 'border-[#0b3b8c] bg-[#e8f0ff]'
                     : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
-                onClick={() => handleMethodChange('pdf')}
+                onClick={handleCreateLink}
               >
-                Share as PDF
+                Share with link
               </button>
+              {accessMode !== 'edit' && (
+                <button
+                  type="button"
+                  className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                    activeMethod === 'pdf'
+                      ? 'border-[#0b3b8c] bg-[#e8f0ff]'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                  onClick={() => handleMethodChange('pdf')}
+                >
+                  Share as PDF
+                </button>
+              )}
+              <button
+                type="button"
+                className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                  activeMethod === 'agent'
+                    ? 'border-[#0b3b8c] bg-[#e8f0ff]'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+                onClick={() => handleMethodChange('agent')}
+              >
+                Share with agent
+              </button>
+            </div>
+
+            {activeMethod === 'link' && (
+              <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm text-slate-600">
+                  Create a public link with a 4-digit access code.
+                </div>
+                <label className="block text-sm">
+                  Recipient name
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={recipientName}
+                    onChange={(event) => {
+                      setRecipientName(event.target.value)
+                      if (linkShare) setLinkShare(null)
+                    }}
+                    placeholder="e.g., John Doe"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="pill-btn-primary px-5"
+                    onClick={handleGenerateLink}
+                    disabled={shareLoading}
+                  >
+                    {shareLoading ? 'Creating...' : 'Create link'}
+                  </button>
+                </div>
+                {linkShare && renderShareDetails(linkShare)}
+              </div>
             )}
-            <button
-              type="button"
-              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                activeMethod === 'agent'
-                  ? 'border-[#0b3b8c] bg-[#e8f0ff]'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-              onClick={() => handleMethodChange('agent')}
-            >
-              Share with agent
-            </button>
+
+            {activeMethod === 'agent' && (
+              <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm text-slate-600">
+                  Send a secure link and code to an agent. They will only see the sections you selected.
+                </div>
+                <label className="block text-sm">
+                  Agent
+                  <select
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+                    value={selectedAgentId}
+                    onChange={(event) => setSelectedAgentId(event.target.value)}
+                    disabled={loading}
+                  >
+                    <option value="">Select an agent</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name || agent.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="pill-btn-primary px-5"
+                    onClick={handleSendToAgent}
+                    disabled={sendingAgent || shareLoading}
+                  >
+                    {sendingAgent ? 'Sending...' : 'Send to agent'}
+                  </button>
+                </div>
+                {agentShare && renderShareDetails(agentShare)}
+              </div>
+            )}
+
+            {activeMethod === 'pdf' && accessMode !== 'edit' && (
+              <div className="print-share-shell space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="print-hidden text-sm text-slate-600">Preview your PDF before printing.</div>
+                <div className="print-share-area rounded-2xl border border-slate-200 bg-white p-4">
+                  <ShareSummary snapshot={snapshot} sections={sectionsPayload} />
+                </div>
+                <div className="print-hidden flex justify-end">
+                  <button type="button" className="pill-btn-primary px-5" onClick={() => window.print()}>
+                    Print to PDF
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+        )}
+      </Modal>
 
-          {activeMethod === 'link' && (
-            <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm text-slate-600">
-                Create a public link with a 4-digit access code.
-              </div>
-              <label className="block text-sm">
-                Recipient name
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                  value={recipientName}
-                  onChange={(event) => {
-                    setRecipientName(event.target.value)
-                    if (linkShare) setLinkShare(null)
-                  }}
-                  placeholder="e.g., John Doe"
-                />
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="pill-btn-primary px-5"
-                  onClick={handleGenerateLink}
-                  disabled={shareLoading}
-                >
-                  {shareLoading ? 'Creating...' : 'Create link'}
-                </button>
-              </div>
-              {linkShare && renderShareDetails(linkShare)}
+      {showShareConsent && (
+        <Modal title="Share consent" open={showShareConsent} showClose={false} panelClassName="max-w-lg">
+          <div className="space-y-4 text-sm text-slate-700">
+            <p>
+              Before sharing your profile, please confirm the following:
+            </p>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={shareConsentChecks.shareProfile}
+                onChange={(e) => setShareConsentChecks((prev) => ({ ...prev, shareProfile: e.target.checked }))}
+              />
+              I consent to sharing my insurance profile with this agent
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={shareConsentChecks.exportData}
+                onChange={(e) => setShareConsentChecks((prev) => ({ ...prev, exportData: e.target.checked }))}
+              />
+              I understand the agent may export and store my data
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={shareConsentChecks.notResponsible}
+                onChange={(e) => setShareConsentChecks((prev) => ({ ...prev, notResponsible: e.target.checked }))}
+              />
+              I understand Connsura is not responsible after export
+            </label>
+            <div className="text-xs text-slate-500">
+              Review the full{' '}
+              <a className="underline" href="/data-sharing" target="_blank" rel="noreferrer">
+                Data Sharing policy
+              </a>
+              .
             </div>
-          )}
-
-          {activeMethod === 'agent' && (
-            <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm text-slate-600">
-                Send a secure link and code to an agent. They will only see the sections you selected.
-              </div>
-              <label className="block text-sm">
-                Agent
-                <select
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                  value={selectedAgentId}
-                  onChange={(event) => setSelectedAgentId(event.target.value)}
-                  disabled={loading}
-                >
-                  <option value="">Select an agent</option>
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name || agent.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="pill-btn-primary px-5"
-                  onClick={handleSendToAgent}
-                  disabled={sendingAgent || shareLoading}
-                >
-                  {sendingAgent ? 'Sending...' : 'Send to agent'}
-                </button>
-              </div>
-              {agentShare && renderShareDetails(agentShare)}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="pill-btn-primary px-5"
+                onClick={handleShareConsentConfirm}
+                disabled={!allShareConsentsChecked}
+              >
+                Continue
+              </button>
             </div>
-          )}
-
-          {activeMethod === 'pdf' && accessMode !== 'edit' && (
-            <div className="print-share-shell space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="print-hidden text-sm text-slate-600">Preview your PDF before printing.</div>
-              <div className="print-share-area rounded-2xl border border-slate-200 bg-white p-4">
-                <ShareSummary snapshot={snapshot} sections={sectionsPayload} />
-              </div>
-              <div className="print-hidden flex justify-end">
-                <button type="button" className="pill-btn-primary px-5" onClick={() => window.print()}>
-                  Print to PDF
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        </Modal>
       )}
-    </Modal>
+    </>
   )
 }

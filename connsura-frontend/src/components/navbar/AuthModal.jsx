@@ -13,6 +13,17 @@ const createEmptyForm = () => ({
   languages: '',
   products: '',
   address: '',
+  consents: {
+    terms: false,
+    privacy: false,
+    emailCommunications: false,
+    platformDisclaimer: false,
+    independentAgent: false,
+    lawCompliance: false,
+    noEndorsement: false,
+    restrictedDataExport: false,
+    indemnify: false,
+  },
 })
 
 const POST_AUTH_REDIRECT_KEY = 'connsura_post_auth_redirect'
@@ -85,6 +96,24 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
       return
     }
 
+    const requiredConsentKeys =
+      roleIntent === 'AGENT'
+        ? [
+            'terms',
+            'privacy',
+            'independentAgent',
+            'lawCompliance',
+            'noEndorsement',
+            'restrictedDataExport',
+            'indemnify',
+          ]
+        : ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
+    const missingConsents = requiredConsentKeys.filter((key) => !form.consents?.[key])
+    if (missingConsents.length) {
+      alert('Please accept all required consents to continue.')
+      return
+    }
+
     const payload =
       roleIntent === 'AGENT'
         ? {
@@ -92,6 +121,7 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
             password: form.password,
             name: form.name,
             role: 'AGENT',
+            consents: form.consents,
             languages: form.languages
               ? form.languages.split(',').map((l) => l.trim()).filter(Boolean)
               : [],
@@ -109,6 +139,7 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
             password: form.password,
             name: form.name,
             role: 'CUSTOMER',
+            consents: form.consents,
           }
 
     const user = await register(payload)
@@ -239,6 +270,145 @@ export default function AuthModal({ open, onClose, intent = 'agent', startMode =
                 />
               </label>
             </div>
+          </div>
+        )}
+
+        {mode === 'create' && (
+          <div className="space-y-2 text-sm text-slate-700">
+            {roleIntent === 'AGENT' ? (
+              <>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.terms}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, terms: e.target.checked } })}
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a className="font-semibold text-slate-900 underline" href="/terms" target="_blank" rel="noreferrer">
+                      Terms & Conditions
+                    </a>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.privacy}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, privacy: e.target.checked } })}
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
+                      Privacy Policy
+                    </a>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.independentAgent}
+                    onChange={(e) =>
+                      setForm({ ...form, consents: { ...form.consents, independentAgent: e.target.checked } })
+                    }
+                  />
+                  I acknowledge I am an independent licensed agent
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.lawCompliance}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, lawCompliance: e.target.checked } })}
+                  />
+                  I am responsible for compliance with all insurance laws
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.noEndorsement}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, noEndorsement: e.target.checked } })}
+                  />
+                  I understand Connsura does not endorse or recommend me
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.restrictedDataExport}
+                    onChange={(e) =>
+                      setForm({ ...form, consents: { ...form.consents, restrictedDataExport: e.target.checked } })
+                    }
+                  />
+                  I agree to restricted data export rules
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.indemnify}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, indemnify: e.target.checked } })}
+                  />
+                  I agree to indemnify Connsura for my violations
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.terms}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, terms: e.target.checked } })}
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a className="font-semibold text-slate-900 underline" href="/terms" target="_blank" rel="noreferrer">
+                      Terms & Conditions
+                    </a>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.privacy}
+                    onChange={(e) => setForm({ ...form, consents: { ...form.consents, privacy: e.target.checked } })}
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
+                      Privacy Policy
+                    </a>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.emailCommunications}
+                    onChange={(e) =>
+                      setForm({ ...form, consents: { ...form.consents, emailCommunications: e.target.checked } })
+                    }
+                  />
+                  I consent to receive email communications from Connsura
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={form.consents.platformDisclaimer}
+                    onChange={(e) =>
+                      setForm({ ...form, consents: { ...form.consents, platformDisclaimer: e.target.checked } })
+                    }
+                  />
+                  I understand Connsura is not an insurance provider or agent
+                </label>
+              </>
+            )}
           </div>
         )}
 

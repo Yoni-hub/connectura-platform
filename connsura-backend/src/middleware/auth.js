@@ -1,5 +1,6 @@
 const prisma = require('../prisma')
 const { verifyToken } = require('../utils/token')
+const { getConsentStatus } = require('../utils/legalDocuments')
 
 const ADMIN_AUTH_COOKIE = process.env.ADMIN_AUTH_COOKIE || 'connsura_admin_session'
 
@@ -46,6 +47,23 @@ async function authGuard(req, res, next) {
       }
     }
     req.user = user
+
+    const path = req.originalUrl || req.path || ''
+    const bypassConsent =
+      path.startsWith('/auth') ||
+      path.startsWith('/legal/status') ||
+      path.startsWith('/legal/consent')
+    if (!bypassConsent) {
+      const consentStatus = await getConsentStatus(prisma, user)
+      if (consentStatus?.missing?.length) {
+        return res.status(403).json({
+          error: 'Consent required',
+          code: 'CONSENT_REQUIRED',
+          missing: consentStatus.missing,
+        })
+      }
+    }
+
     next()
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' })

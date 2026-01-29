@@ -4,6 +4,8 @@ const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { sendEmail } = require('../utils/emailClient')
+const { verifyToken } = require('../utils/token')
+const { LEGAL_DOC_TYPES, getLatestDocuments } = require('../utils/legalDocuments')
 
 const router = express.Router()
 
@@ -49,6 +51,30 @@ const normalizeBaseUrl = (value) => {
 const buildShareUrl = (token) => {
   const base = normalizeBaseUrl(process.env.FRONTEND_URL || 'http://localhost:5173')
   return `${base}/share/${token}`
+}
+
+const getOptionalUser = async (req) => {
+  const header = req.headers.authorization
+  if (!header || !header.startsWith('Bearer ')) return null
+  try {
+    const token = header.replace('Bearer ', '')
+    const decoded = verifyToken(token)
+    if (!decoded?.id) return null
+    return await prisma.user.findUnique({ where: { id: decoded.id } })
+  } catch {
+    return null
+  }
+}
+
+const requireLatestConsent = async (userId, documentType) => {
+  const latestDocs = await getLatestDocuments(prisma, [documentType])
+  const latest = latestDocs[documentType]
+  if (!latest) return { ok: true, latest: null }
+  const consent = await prisma.userConsent.findFirst({
+    where: { userId, documentType, version: latest.version },
+    orderBy: { consentedAt: 'desc' },
+  })
+  return { ok: Boolean(consent), latest }
 }
 
 const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code, editable, agentName }) => {
@@ -139,6 +165,15 @@ router.post('/', authGuard, async (req, res) => {
   if (!req.user.emailVerified) {
     return res.status(403).json({ error: 'Email not verified' })
   }
+  const consentCheck = await requireLatestConsent(req.user.id, LEGAL_DOC_TYPES.DATA_SHARING)
+  if (!consentCheck.ok) {
+    return res.status(403).json({
+      error: 'Consent required',
+      code: 'CONSENT_REQUIRED',
+      documentType: LEGAL_DOC_TYPES.DATA_SHARING,
+      version: consentCheck.latest?.version || null,
+    })
+  }
   const customer = await prisma.customer.findUnique({
     where: { userId: req.user.id },
     include: { user: true },
@@ -214,6 +249,18 @@ router.post('/:token/verify', async (req, res) => {
   const shouldTouch = req.body?.touch !== false
   if (!token) return res.status(400).json({ error: 'Share token is required' })
   if (!code) return res.status(400).json({ error: 'Verification code is required' })
+  const optionalUser = await getOptionalUser(req)
+  if (optionalUser?.role === 'AGENT') {
+    const consentCheck = await requireLatestConsent(optionalUser.id, LEGAL_DOC_TYPES.DATA_SHARING)
+    if (!consentCheck.ok) {
+      return res.status(403).json({
+        error: 'Consent required',
+        code: 'CONSENT_REQUIRED',
+        documentType: LEGAL_DOC_TYPES.DATA_SHARING,
+        version: consentCheck.latest?.version || null,
+      })
+    }
+  }
   let share = await prisma.profileShare.findUnique({
     where: { token },
     include: { customer: true },

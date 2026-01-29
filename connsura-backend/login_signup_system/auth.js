@@ -8,6 +8,13 @@ const { sendEmail } = require('../src/utils/emailClient')
 const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
 const { logClientAudit } = require('../src/utils/auditLog')
 const {
+  LEGAL_DOC_TYPES,
+  getLatestDocuments,
+  getRequiredDocTypes,
+  getConsentStatus,
+  buildConsentItems,
+} = require('../src/utils/legalDocuments')
+const {
   encryptSecret,
   decryptSecret,
   generateTotpSecret,
@@ -281,6 +288,7 @@ router.post('/register', async (req, res) => {
       address = '',
       zip = '',
       products = [],
+      consents = {},
     } = req.body
     const isCustomer = role === 'CUSTOMER'
     const auditTarget = normalizeEmail(email) || 'unknown'
@@ -292,6 +300,24 @@ router.post('/register', async (req, res) => {
         await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'missing_fields' })
       }
       return res.status(400).json({ error: 'Email, password, and name are required' })
+    }
+    const requiredConsentKeys = isCustomer
+      ? ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
+      : [
+          'terms',
+          'privacy',
+          'independentAgent',
+          'lawCompliance',
+          'noEndorsement',
+          'restrictedDataExport',
+          'indemnify',
+        ]
+    const missingConsents = requiredConsentKeys.filter((key) => !consents?.[key])
+    if (missingConsents.length) {
+      if (isCustomer) {
+        await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'missing_consents', missingConsents })
+      }
+      return res.status(400).json({ error: 'Consent required', code: 'CONSENT_REQUIRED', missingConsents })
     }
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
@@ -343,6 +369,59 @@ router.post('/register', async (req, res) => {
       },
       include: { agent: true, customer: true },
     })
+    const requiredDocTypes = getRequiredDocTypes(role)
+    if (requiredDocTypes.length) {
+      const latestDocs = await getLatestDocuments(prisma, requiredDocTypes)
+      const ip = getRequestIp(req)
+      const userAgent = String(req.headers['user-agent'] || '')
+      const consentRecords = []
+      if (latestDocs[LEGAL_DOC_TYPES.TERMS]) {
+        consentRecords.push({
+          userId: user.id,
+          role: user.role,
+          documentType: LEGAL_DOC_TYPES.TERMS,
+          version: latestDocs[LEGAL_DOC_TYPES.TERMS].version,
+          ipAddress: ip,
+          userAgent,
+          consentItems: buildConsentItems({
+            platformDisclaimer: Boolean(consents?.platformDisclaimer),
+          }),
+        })
+      }
+      if (latestDocs[LEGAL_DOC_TYPES.PRIVACY]) {
+        consentRecords.push({
+          userId: user.id,
+          role: user.role,
+          documentType: LEGAL_DOC_TYPES.PRIVACY,
+          version: latestDocs[LEGAL_DOC_TYPES.PRIVACY].version,
+          ipAddress: ip,
+          userAgent,
+          consentItems: buildConsentItems({
+            emailCommunications: Boolean(consents?.emailCommunications),
+          }),
+        })
+      }
+      if (user.role === 'AGENT' && latestDocs[LEGAL_DOC_TYPES.AGENT_TERMS]) {
+        consentRecords.push({
+          userId: user.id,
+          role: user.role,
+          documentType: LEGAL_DOC_TYPES.AGENT_TERMS,
+          version: latestDocs[LEGAL_DOC_TYPES.AGENT_TERMS].version,
+          ipAddress: ip,
+          userAgent,
+          consentItems: buildConsentItems({
+            independentAgent: Boolean(consents?.independentAgent),
+            lawCompliance: Boolean(consents?.lawCompliance),
+            noEndorsement: Boolean(consents?.noEndorsement),
+            restrictedDataExport: Boolean(consents?.restrictedDataExport),
+            indemnify: Boolean(consents?.indemnify),
+          }),
+        })
+      }
+      if (consentRecords.length) {
+        await prisma.userConsent.createMany({ data: consentRecords })
+      }
+    }
     if (isCustomer) {
       try {
         const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
@@ -355,7 +434,8 @@ router.post('/register', async (req, res) => {
       }
     }
     const token = generateToken({ id: user.id, role: user.role })
-    return res.status(201).json({ token, user: sanitizeUser(user) })
+    const consentStatus = await getConsentStatus(prisma, user)
+    return res.status(201).json({ token, user: sanitizeUser(user), consent: consentStatus })
   } catch (err) {
     console.error('register error', err)
     const auditTarget = normalizeEmail(req.body?.email || '') || 'unknown'
@@ -1112,7 +1192,8 @@ router.post('/login', async (req, res) => {
       })
     }
     const token = generateToken({ id: user.id, role: user.role })
-    res.json({ token, user: sanitizeUser(user) })
+    const consentStatus = await getConsentStatus(prisma, user)
+    res.json({ token, user: sanitizeUser(user), consent: consentStatus })
   } catch (err) {
     console.error('login error', err)
     res.status(500).json({ error: 'Failed to login' })
@@ -1379,7 +1460,8 @@ router.get('/me', authGuard, async (req, res) => {
     where: { id: req.user.id },
     include: { agent: true, customer: true },
   })
-  res.json({ user: sanitizeUser(user) })
+  const consentStatus = await getConsentStatus(prisma, user)
+  res.json({ user: sanitizeUser(user), consent: consentStatus })
 })
 
 module.exports = router

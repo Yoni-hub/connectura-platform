@@ -848,14 +848,27 @@ router.get('/:id/consent-history', authGuard, async (req, res) => {
   if (customer.userId !== req.user.id) {
     return res.status(403).json({ error: 'Cannot access this customer' })
   }
-  const profileData = parseJson(customer.profileData, {})
-  const consents = Array.isArray(profileData.consents) ? profileData.consents : []
+  const consents = await prisma.userConsent.findMany({
+    where: { userId: customer.userId },
+    orderBy: { consentedAt: 'desc' },
+  })
   await logClientAudit(customerId, 'CLIENT_CONSENT_HISTORY_VIEWED', {
     session_id: req.query?.sessionId ? String(req.query.sessionId) : null,
     ip: getRequestIp(req),
     user_agent: String(req.headers['user-agent'] || ''),
   })
-  res.json({ consents })
+  res.json({
+    consents: consents.map((row) => ({
+      id: row.id,
+      documentType: row.documentType,
+      version: row.version,
+      role: row.role,
+      ipAddress: row.ipAddress,
+      userAgent: row.userAgent,
+      consentedAt: row.consentedAt,
+      consentItems: row.consentItems ? parseJson(row.consentItems, null) : null,
+    })),
+  })
 })
 
 router.post('/:id/delete-account/click', authGuard, async (req, res) => {

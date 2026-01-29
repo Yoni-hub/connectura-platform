@@ -29,6 +29,7 @@ model User {
   updatedAt DateTime  @updatedAt
   agent     Agent?
   customer  Customer?
+  consents  UserConsent[]
 }
 
 model Agent {
@@ -255,4 +256,35 @@ model EmailOtpRequest {
 
   @@index([email, createdAt])
   @@index([ip, createdAt])
+}
+
+model LegalDocument {
+  id          Int      @id @default(autoincrement())
+  type        String
+  version     String
+  contentHash String
+  content     String
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([type, version])
+  @@index([type, publishedAt])
+}
+
+model UserConsent {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  role         String
+  documentType String
+  version      String
+  ipAddress    String?
+  userAgent    String?
+  consentedAt  DateTime @default(now())
+  consentItems String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([documentType, version])
 }

@@ -196,6 +196,15 @@ export default function AgentOnboarding({
     accountPassword: '',
     accountPasswordConfirm: '',
     licenseConsent: false,
+    agentConsents: {
+      terms: false,
+      privacy: false,
+      independentAgent: false,
+      lawCompliance: false,
+      noEndorsement: false,
+      restrictedDataExport: false,
+      indemnify: false,
+    },
   })
 
   useEffect(() => {
@@ -240,6 +249,15 @@ export default function AgentOnboarding({
           accountEmail: agent?.email || '',
           accountPassword: '',
           accountPasswordConfirm: '',
+          agentConsents: {
+            terms: false,
+            privacy: false,
+            independentAgent: false,
+            lawCompliance: false,
+            noEndorsement: false,
+            restrictedDataExport: false,
+            indemnify: false,
+          },
         })
         const status = agent?.status || 'pending'
         const underReviewFlag = Boolean(agent?.underReview)
@@ -443,6 +461,7 @@ export default function AgentOnboarding({
       password: form.accountPassword,
       name: displayName.trim(),
       role: 'AGENT',
+      consents: form.agentConsents,
       languages: splitList(form.languages),
       states: form.state ? [form.state] : [],
       specialty: form.specialty || splitList(form.products)[0] || 'Auto',
@@ -550,6 +569,21 @@ export default function AgentOnboarding({
       toast.error(`Please fill the required fields: ${missing.map((m) => m.label).join(', ')}.`)
       return
     }
+    const requiredAgentConsents = [
+      'terms',
+      'privacy',
+      'independentAgent',
+      'lawCompliance',
+      'noEndorsement',
+      'restrictedDataExport',
+      'indemnify',
+    ]
+    const missingAgentConsents = requiredAgentConsents.filter((key) => !form.agentConsents?.[key])
+    if (!user && missingAgentConsents.length) {
+      setActiveIndex(0)
+      toast.error('Please accept all required consents to continue.')
+      return
+    }
     if (!form.licenseConsent) {
       setActiveIndex(1)
       setLicenseConsentError('')
@@ -623,6 +657,22 @@ export default function AgentOnboarding({
       toast.error('Passwords must match.')
       focusField('account-password')
       return false
+    }
+    if (stepIndex === 0 && !user) {
+      const requiredConsents = [
+        'terms',
+        'privacy',
+        'independentAgent',
+        'lawCompliance',
+        'noEndorsement',
+        'restrictedDataExport',
+        'indemnify',
+      ]
+      const missingConsents = requiredConsents.filter((key) => !form.agentConsents?.[key])
+      if (missingConsents.length) {
+        toast.error('Please accept all required consents to continue.')
+        return false
+      }
     }
     const requiredFields = getStepRequirements(stepIndex)
     const missing = requiredFields.filter(({ key }) => !form[key]?.toString().trim())
@@ -767,6 +817,101 @@ export default function AgentOnboarding({
                   id="account-password-confirm"
                 />
               </label>
+              {!user && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700 space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Required consents</div>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.terms}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, terms: e.target.checked } })
+                      }
+                    />
+                    <span>
+                      I agree to the{' '}
+                      <a className="font-semibold text-slate-900 underline" href="/terms" target="_blank" rel="noreferrer">
+                        Terms & Conditions
+                      </a>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.privacy}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, privacy: e.target.checked } })
+                      }
+                    />
+                    <span>
+                      I agree to the{' '}
+                      <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
+                        Privacy Policy
+                      </a>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.independentAgent}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, independentAgent: e.target.checked } })
+                      }
+                    />
+                    I acknowledge I am an independent licensed agent
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.lawCompliance}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, lawCompliance: e.target.checked } })
+                      }
+                    />
+                    I am responsible for compliance with all insurance laws
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.noEndorsement}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, noEndorsement: e.target.checked } })
+                      }
+                    />
+                    I understand Connsura does not endorse or recommend me
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.restrictedDataExport}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          agentConsents: { ...form.agentConsents, restrictedDataExport: e.target.checked },
+                        })
+                      }
+                    />
+                    I agree to restricted data export rules
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={form.agentConsents.indemnify}
+                      onChange={(e) =>
+                        setForm({ ...form, agentConsents: { ...form.agentConsents, indemnify: e.target.checked } })
+                      }
+                    />
+                    I agree to indemnify Connsura for my violations
+                  </label>
+                </div>
+              )}
             </fieldset>
             {!isReadOnly && !showAll && (
               <div className="flex items-center justify-end gap-3 pt-4 mt-auto">

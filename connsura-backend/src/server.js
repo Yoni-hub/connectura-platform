@@ -17,8 +17,10 @@ const shareRoutes = require('./routes/shares')
 const siteContentRoutes = require('./routes/siteContent')
 const formSchemaRoutes = require('./routes/formSchema')
 const productRoutes = require('./routes/products')
+const legalRoutes = require('./routes/legal')
 const prisma = require('./prisma')
 const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
+const { ensureLegalDocuments } = require('./utils/legalDocuments')
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -47,6 +49,7 @@ app.use('/admin', adminRoutes)
 app.use('/messages', messageRoutes)
 app.use('/questions', questionRoutes)
 app.use('/shares', shareRoutes)
+app.use('/legal', legalRoutes)
 app.use('/site-content', siteContentRoutes)
 app.use('/form-schema', formSchemaRoutes)
 app.use('/products', productRoutes)
@@ -92,7 +95,7 @@ async function ensureQuestionBank() {
   console.log(`Seeded ${records.length} system questions.`)
 }
 
-Promise.all([ensureAdminSeed(), ensureQuestionBank()])
+Promise.all([ensureAdminSeed(), ensureQuestionBank(), ensureLegalDocuments(prisma)])
   .catch((err) => console.error('Startup seed error', err))
   .finally(() => {
     app.listen(PORT, HOST, () => {
