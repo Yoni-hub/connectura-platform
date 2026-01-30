@@ -1,54 +1,24 @@
-const escapeHtml = (value = '') =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+import MarkdownIt from 'markdown-it'
+
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: false,
+})
+
+const hasHtmlTag = (value = '') => /<\/?[a-z][\s\S]*>/i.test(value)
+
+const normalizeMarkdown = (value = '') => {
+  if (!value) return ''
+  return String(value)
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*•\s+/gm, '- ')
+}
 
 export const renderSiteContent = (value = '') => {
   if (!value) return ''
-  if (value.includes('<')) return value
+  if (hasHtmlTag(value)) return value
 
-  const lines = String(value).split('\n')
-  let html = ''
-  let inList = false
-
-  const closeList = () => {
-    if (inList) {
-      html += '</ul>'
-      inList = false
-    }
-  }
-
-  lines.forEach((line) => {
-    const trimmed = line.trim()
-    if (!trimmed) {
-      closeList()
-      return
-    }
-    if (trimmed.startsWith('### ')) {
-      closeList()
-      html += `<h3>${escapeHtml(trimmed.slice(4))}</h3>`
-      return
-    }
-    if (trimmed.startsWith('## ')) {
-      closeList()
-      html += `<h2>${escapeHtml(trimmed.slice(3))}</h2>`
-      return
-    }
-    if (trimmed.startsWith('- ')) {
-      if (!inList) {
-        html += '<ul>'
-        inList = true
-      }
-      html += `<li>${escapeHtml(trimmed.slice(2))}</li>`
-      return
-    }
-    closeList()
-    html += `<p>${escapeHtml(trimmed)}</p>`
-  })
-
-  closeList()
-  return html
+  const normalized = normalizeMarkdown(value)
+  return md.render(normalized)
 }

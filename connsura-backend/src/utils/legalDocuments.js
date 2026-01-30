@@ -14,12 +14,12 @@ const REQUIRED_DOCS_BY_ROLE = {
   AGENT: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY, LEGAL_DOC_TYPES.AGENT_TERMS],
 }
 
-const LEGAL_SOURCE_PATH = path.resolve(__dirname, '..', '..', '..', 'legal', 'tc.txt')
+const LEGAL_SOURCE_PATH = path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md')
 const LEGAL_SOURCE_MAP = {
-  [LEGAL_DOC_TYPES.TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.txt'),
-  [LEGAL_DOC_TYPES.PRIVACY]: path.resolve(__dirname, '..', '..', '..', 'legal', 'privacy.txt'),
-  [LEGAL_DOC_TYPES.DATA_SHARING]: path.resolve(__dirname, '..', '..', '..', 'legal', 'data-sharing.txt'),
-  [LEGAL_DOC_TYPES.AGENT_TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'agent-terms.txt'),
+  [LEGAL_DOC_TYPES.TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md'),
+  [LEGAL_DOC_TYPES.PRIVACY]: path.resolve(__dirname, '..', '..', '..', 'legal', 'privacy.md'),
+  [LEGAL_DOC_TYPES.DATA_SHARING]: path.resolve(__dirname, '..', '..', '..', 'legal', 'data-sharing.md'),
+  [LEGAL_DOC_TYPES.AGENT_TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'agent-terms.md'),
 }
 
 const readLegalSource = (type) => {
