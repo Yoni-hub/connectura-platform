@@ -262,6 +262,8 @@ export default function ClientDashboard() {
   const [sharedActivityPage, setSharedActivityPage] = useState(1)
   const [consentHistory, setConsentHistory] = useState([])
   const [consentLoading, setConsentLoading] = useState(false)
+  const [consentHistoryOpen, setConsentHistoryOpen] = useState(false)
+  const [consentHistoryPage, setConsentHistoryPage] = useState(1)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [deactivatePassword, setDeactivatePassword] = useState('')
   const [deactivating, setDeactivating] = useState(false)
@@ -1482,11 +1484,21 @@ export default function ClientDashboard() {
         params: { sessionId },
       })
       setConsentHistory(res.data?.consents || [])
+      setConsentHistoryPage(1)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Unable to load consent history')
     } finally {
       setConsentLoading(false)
     }
+  }
+
+  const toggleConsentHistory = async () => {
+    if (consentHistoryOpen) {
+      setConsentHistoryOpen(false)
+      return
+    }
+    await loadConsentHistory()
+    setConsentHistoryOpen(true)
   }
 
   const logInappNotice = async (type) => {
@@ -1661,9 +1673,11 @@ export default function ClientDashboard() {
   const loginActivityTotalPages = Math.max(1, Math.ceil(loginActivity.length / activityPageSize))
   const sessionsTotalPages = Math.max(1, Math.ceil(sessions.length / activityPageSize))
   const sharedActivityTotalPages = Math.max(1, Math.ceil(sharedActivity.length / activityPageSize))
+  const consentHistoryTotalPages = Math.max(1, Math.ceil(consentHistory.length / activityPageSize))
   const loginActivityPageSafe = Math.min(loginActivityPage, loginActivityTotalPages)
   const sessionsPageSafe = Math.min(sessionsPage, sessionsTotalPages)
   const sharedActivityPageSafe = Math.min(sharedActivityPage, sharedActivityTotalPages)
+  const consentHistoryPageSafe = Math.min(consentHistoryPage, consentHistoryTotalPages)
   const pagedLoginActivity = loginActivity.slice(
     (loginActivityPageSafe - 1) * activityPageSize,
     loginActivityPageSafe * activityPageSize,
@@ -1675,6 +1689,10 @@ export default function ClientDashboard() {
   const pagedSharedActivity = sharedActivity.slice(
     (sharedActivityPageSafe - 1) * activityPageSize,
     sharedActivityPageSafe * activityPageSize,
+  )
+  const pagedConsentHistory = consentHistory.slice(
+    (consentHistoryPageSafe - 1) * activityPageSize,
+    consentHistoryPageSafe * activityPageSize,
   )
   const termsVersion = client?.profileData?.terms_version || client?.profileData?.termsVersion || ''
   const termsAcceptedAt =
@@ -2955,24 +2973,49 @@ export default function ClientDashboard() {
                       <button
                         type="button"
                         className="text-xs font-semibold text-[#0b3b8c] hover:underline"
-                        onClick={loadConsentHistory}
+                        onClick={toggleConsentHistory}
                         disabled={consentLoading}
                       >
-                        {consentLoading ? 'Loading...' : 'View'}
+                        {consentLoading ? 'Loading...' : consentHistoryOpen ? 'Hide' : 'View'}
                       </button>
                     </div>
-                    {consentHistory.length === 0 && !consentLoading && (
+                    {consentHistoryOpen && consentHistory.length === 0 && !consentLoading && (
                       <div className="text-sm text-slate-700">No consent history recorded yet.</div>
                     )}
-                    {consentHistory.length > 0 && (
+                    {consentHistoryOpen && consentHistory.length > 0 && (
                       <div className="space-y-2 text-xs text-slate-600">
-                        {consentHistory.map((entry, index) => (
+                        {pagedConsentHistory.map((entry, index) => (
                           <div key={`${entry.type || 'consent'}-${index}`} className="rounded-lg border border-slate-100 px-2 py-1.5">
                             <div className="font-semibold text-slate-800">{entry.type || 'Consent'}</div>
                             {entry.version && <div className="text-slate-500">Version {entry.version}</div>}
                             {entry.acceptedAt && <div className="text-slate-400">{formatTimestamp(entry.acceptedAt)}</div>}
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {consentHistoryOpen && consentHistory.length > activityPageSize && (
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() => setConsentHistoryPage((page) => Math.max(1, page - 1))}
+                          disabled={consentHistoryPageSafe <= 1}
+                        >
+                          Back
+                        </button>
+                        <span>
+                          Page {consentHistoryPageSafe} of {consentHistoryTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
+                          onClick={() =>
+                            setConsentHistoryPage((page) => Math.min(consentHistoryTotalPages, page + 1))
+                          }
+                          disabled={consentHistoryPageSafe >= consentHistoryTotalPages}
+                        >
+                          Next
+                        </button>
                       </div>
                     )}
                   </div>
@@ -3001,7 +3044,7 @@ export default function ClientDashboard() {
                   </div>
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:col-span-2">
                     <div className="text-sm text-slate-500">Privacy policy</div>
-                    <Link to="/privacy-policy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                    <Link to="/privacy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
                       Read privacy policy
                     </Link>
                   </div>
