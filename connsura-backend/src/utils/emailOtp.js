@@ -26,13 +26,39 @@ const generateCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0')
 const VERIFY_EMAIL_SUBJECT = 'Verify your email'
 const VERIFY_EMAIL_REPLY_TO = 'security@connsura.com'
 
-const buildOtpText = ({ code, expiresMinutes }) => {
+const OTP_TEMPLATES = {
+  email_verify: {
+    subject: VERIFY_EMAIL_SUBJECT,
+    heading: 'Verify your email',
+    intro: 'Use this one-time verification code to confirm your email address:',
+  },
+  name_change: {
+    subject: 'Confirm your name change',
+    heading: 'Confirm your name change',
+    intro:
+      'A name change was requested for your Connsura account. Enter the code below in your app to confirm:',
+  },
+}
+
+const resolveTemplate = (template) => {
+  if (!template) return OTP_TEMPLATES.email_verify
+  if (typeof template === 'string' && OTP_TEMPLATES[template]) return OTP_TEMPLATES[template]
+  if (typeof template === 'object') {
+    return {
+      ...OTP_TEMPLATES.email_verify,
+      ...template,
+    }
+  }
+  return OTP_TEMPLATES.email_verify
+}
+
+const buildOtpText = ({ code, expiresMinutes, heading, intro }) => {
   return `CONNSURA
 ================
 
-Verify your email
+${heading}
 
-Use this one-time verification code to confirm your email address:
+${intro}
 
 ${code}
 
@@ -44,21 +70,21 @@ Thanks,
 The Connsura Team`
 }
 
-const buildOtpHtml = ({ code, expiresMinutes }) => {
+const buildOtpHtml = ({ code, expiresMinutes, heading, intro }) => {
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-      <h2 style="margin: 0 0 12px 0;">Verify your email</h2>
-      <p style="margin: 0 0 16px 0;">Use this one-time verification code to confirm your email address:</p>
+      <h2 style="margin: 0 0 12px 0;">${heading}</h2>
+      <p style="margin: 0 0 16px 0;">${intro}</p>
       <p style="font-size: 20px; font-weight: 700; letter-spacing: 0.2em; margin: 0 0 16px 0;">${code}</p>
       <p style="margin: 0 0 12px 0; color: #6b7280;">This code expires in ${expiresMinutes} minutes.</p>
     </div>
   `
 }
 
-const deliverEmail = async (email, code, { subject } = {}) => {
+const deliverEmail = async (email, code, { subject, heading, intro } = {}) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
-  const text = buildOtpText({ code, expiresMinutes })
-  const html = buildOtpHtml({ code, expiresMinutes })
+  const text = buildOtpText({ code, expiresMinutes, heading, intro })
+  const html = buildOtpHtml({ code, expiresMinutes, heading, intro })
   const delivery = await sendEmail({
     to: email,
     subject: subject || VERIFY_EMAIL_SUBJECT,
@@ -126,7 +152,7 @@ const checkRateLimit = async (email, ip) => {
   prisma.emailOtpRequest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => {})
 }
 
-const sendEmailOtp = async (email, { ip, subject } = {}) => {
+const sendEmailOtp = async (email, { ip, subject, template } = {}) => {
   const normalized = normalizeEmail(email)
   await checkRateLimit(normalized, ip)
 
@@ -165,7 +191,12 @@ const sendEmailOtp = async (email, { ip, subject } = {}) => {
     },
   })
 
-  const delivery = await deliverEmail(normalized, code, { subject })
+  const resolvedTemplate = resolveTemplate(template)
+  const delivery = await deliverEmail(normalized, code, {
+    subject: subject || resolvedTemplate.subject,
+    heading: resolvedTemplate.heading,
+    intro: resolvedTemplate.intro,
+  })
   return { delivery: delivery.delivery }
 }
 

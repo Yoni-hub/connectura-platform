@@ -287,6 +287,8 @@ export default function ClientDashboard() {
   const [verificationCode, setVerificationCode] = useState('')
   const [verificationError, setVerificationError] = useState('')
   const [verificationConfirming, setVerificationConfirming] = useState(false)
+  const [verificationPurpose, setVerificationPurpose] = useState('email')
+  const [pendingNameChange, setPendingNameChange] = useState(null)
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
@@ -834,7 +836,11 @@ export default function ClientDashboard() {
   const hasPendingEmail = Boolean(user?.emailPending)
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
   const needsEmailVerification = Boolean(user) && !isEmailVerified
-  const verificationTargetEmail = user?.emailPending || user?.email || ''
+  const verificationTargetEmail =
+    verificationPurpose === 'name' ? user?.email || '' : user?.emailPending || user?.email || ''
+  const verificationTitle = verificationPurpose === 'name' ? 'Verify name change' : 'Verify email'
+  const verificationConfirmLabel =
+    verificationPurpose === 'name' ? 'Verify name change' : 'Verify email'
   const formsStarted = Boolean(client?.profileData?.forms_started)
   const formsCompleted = client?.profileData?.profile_status === 'completed'
   const formsCurrentSection = useMemo(
@@ -1035,6 +1041,7 @@ export default function ClientDashboard() {
       toast.error('Email not available for verification')
       return
     }
+    setVerificationPurpose('email')
     setVerificationSending(true)
     setVerificationError('')
     try {
@@ -1056,6 +1063,39 @@ export default function ClientDashboard() {
     }
   }
 
+  const requestNameChangeVerification = async () => {
+    if (!user?.customerId) {
+      toast.error('Customer profile not found')
+      return
+    }
+    if (!pendingNameChange?.firstName || !pendingNameChange?.lastName) {
+      toast.error('Name change details not available')
+      return
+    }
+    setVerificationPurpose('name')
+    setVerificationSending(true)
+    setVerificationError('')
+    try {
+      const res = await api.post(`/customers/${user.customerId}/name-change/request`, {
+        ...pendingNameChange,
+        sessionId,
+      })
+      if (res.data?.profile) {
+        setClient(res.data.profile)
+      }
+      setVerificationSent(true)
+      setVerificationCode('')
+      setVerificationOpen(true)
+      toast.success('Verification email sent.')
+    } catch (err) {
+      const message = err.response?.data?.error || 'Could not send verification code'
+      setVerificationError(message)
+      toast.error(message)
+    } finally {
+      setVerificationSending(false)
+    }
+  }
+
   const handleVerifyCodeConfirm = async () => {
     const trimmed = verificationCode.trim()
     if (!trimmed) {
@@ -1063,18 +1103,42 @@ export default function ClientDashboard() {
       return
     }
     if (verificationConfirming) return
+    if (verificationPurpose === 'name' && !user?.customerId) {
+      setVerificationError('Customer profile not found.')
+      return
+    }
     setVerificationConfirming(true)
     setVerificationError('')
     try {
-      const res = await api.post('/auth/email-otp/confirm', { code: trimmed, sessionId })
-      if (res.data?.user) {
-        setUser(res.data.user)
-        setEmailDraft(res.data.user.email || '')
+      if (verificationPurpose === 'name') {
+        const res = await api.post(`/customers/${user.customerId}/name-change/confirm`, {
+          code: trimmed,
+          sessionId,
+        })
+        if (res.data?.profile) {
+          setClient(res.data.profile)
+          setUser((prev) =>
+            prev ? { ...prev, name: res.data.profile?.name || prev.name } : prev
+          )
+        }
+        setPendingNameChange(null)
+        setVerificationOpen(false)
+        setVerificationPurpose('email')
+        setNameMessage({
+          type: 'success',
+          text: 'Name changed successfully. Name changes can only be done once in 24 hours.',
+        })
       } else {
-        setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+        const res = await api.post('/auth/email-otp/confirm', { code: trimmed, sessionId })
+        if (res.data?.user) {
+          setUser(res.data.user)
+          setEmailDraft(res.data.user.email || '')
+        } else {
+          setUser((prev) => (prev ? { ...prev, emailVerified: true } : prev))
+        }
+        setVerificationOpen(false)
+        toast.success('Email verified')
       }
-      setVerificationOpen(false)
-      toast.success('Email verified')
     } catch (err) {
       const message = err.response?.data?.error || 'Verification failed'
       setVerificationError(message)
@@ -1294,13 +1358,21 @@ export default function ClientDashboard() {
     setNameSaving(true)
     setNameMessage(null)
     try {
-      const res = await api.patch(`/customers/${user.customerId}/name`, payload)
+      const res = await api.post(`/customers/${user.customerId}/name-change/request`, payload)
       if (res.data?.profile) {
         setClient(res.data.profile)
       }
-      setUser((prev) => (prev ? { ...prev, name: res.data?.profile?.name || prev.name } : prev))
+      setPendingNameChange({
+        firstName: payload.firstName,
+        middleName: payload.middleName,
+        lastName: payload.lastName,
+      })
       setNameEditing(false)
-      setNameMessage({ type: 'success', text: 'Saved' })
+      setVerificationPurpose('name')
+      setVerificationSent(true)
+      setVerificationCode('')
+      setVerificationOpen(true)
+      setNameMessage({ type: 'success', text: 'Verification code sent. Check your email.' })
     } catch (err) {
       setNameMessage({
         type: 'error',
@@ -1341,6 +1413,7 @@ export default function ClientDashboard() {
         setUser(res.data.user)
       }
       setEmailEditing(false)
+      setVerificationPurpose('email')
       setVerificationSent(true)
       setVerificationCode('')
       setVerificationOpen(true)
@@ -3261,7 +3334,7 @@ export default function ClientDashboard() {
         onApprove={() => handleApproveEdits(reviewShare?.token)}
         onDecline={() => handleDeclineEdits(reviewShare?.token)}
       />
-      <Modal title="Verify email" open={verificationOpen} onClose={() => setVerificationOpen(false)}>
+      <Modal title={verificationTitle} open={verificationOpen} onClose={() => setVerificationOpen(false)}>
         <div className="space-y-4">
           <div className="space-y-1">
             <h3 className="text-lg font-semibold">Enter verification code</h3>
@@ -3289,7 +3362,7 @@ export default function ClientDashboard() {
             <button
               type="button"
               className="pill-btn-ghost px-4"
-              onClick={requestEmailVerification}
+              onClick={verificationPurpose === 'name' ? requestNameChangeVerification : requestEmailVerification}
               disabled={verificationSending}
             >
               {verificationSending ? 'Sending...' : 'Resend code'}
@@ -3300,7 +3373,7 @@ export default function ClientDashboard() {
               onClick={handleVerifyCodeConfirm}
               disabled={verificationConfirming}
             >
-              {verificationConfirming ? 'Verifying...' : 'Verify email'}
+              {verificationConfirming ? 'Verifying...' : verificationConfirmLabel}
             </button>
           </div>
         </div>

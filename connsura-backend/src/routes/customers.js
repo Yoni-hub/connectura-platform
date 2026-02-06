@@ -4,6 +4,7 @@ const path = require('path')
 const multer = require('multer')
 const crypto = require('crypto')
 const { sendEmail } = require('../utils/emailClient')
+const { sendEmailOtp, verifyEmailOtp, RateLimitError } = require('../utils/emailOtp')
 const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
@@ -49,6 +50,26 @@ const buildNotificationHash = (prefs) =>
   crypto.createHash('sha256').update(JSON.stringify(prefs)).digest('hex')
 
 const buildFullName = (first, middle, last) => [first, middle, last].filter(Boolean).join(' ').trim()
+
+const NAME_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000
+
+const parseDateValue = (value) => {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
+const handleOtpSendError = (err, res) => {
+  if (err instanceof RateLimitError || err?.code === 'RATE_LIMIT') {
+    if (err.retryAfterSeconds) {
+      res.set('Retry-After', String(err.retryAfterSeconds))
+    }
+    return res.status(429).json({ error: err.message || 'Too many requests' })
+  }
+  console.error('email otp send error', err)
+  return res.status(500).json({ error: 'Failed to send verification code' })
+}
 
 const parseAuditDiff = (value) => {
   if (!value) return {}
@@ -319,6 +340,124 @@ router.patch('/:id/name', authGuard, async (req, res) => {
     user_agent: String(req.headers['user-agent'] || ''),
   })
   res.json({ profile: formatCustomerProfile(updated) })
+})
+
+router.post('/:id/name-change/request', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+  if (!req.user.email) {
+    return res.status(400).json({ error: 'Email is required to verify name changes' })
+  }
+  const firstName = String(req.body?.firstName || '').trim()
+  const middleName = String(req.body?.middleName || '').trim()
+  const lastName = String(req.body?.lastName || '').trim()
+  const fullName = buildFullName(firstName, middleName, lastName)
+  if (!fullName) {
+    return res.status(400).json({ error: 'Name is required' })
+  }
+  const currentProfileData = parseJson(customer.profileData, {})
+  const lastChangedAt = parseDateValue(
+    currentProfileData.nameChangedAt || currentProfileData.name_changed_at
+  )
+  if (lastChangedAt && Date.now() - lastChangedAt.getTime() < NAME_CHANGE_COOLDOWN_MS) {
+    return res.status(400).json({ error: 'Name can only be changed once every 24 hours.' })
+  }
+  const ip = getRequestIp(req)
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const userAgent = String(req.headers['user-agent'] || '')
+  try {
+    const result = await sendEmailOtp(req.user.email, { ip, template: 'name_change' })
+    const updatedProfileData = {
+      ...currentProfileData,
+      nameChangePending: {
+        firstName,
+        middleName,
+        lastName,
+        requestedAt: new Date().toISOString(),
+      },
+    }
+    const updated = await prisma.customer.update({
+      where: { id: customerId },
+      data: {
+        profileData: JSON.stringify(updatedProfileData),
+      },
+      include: { drivers: true, vehicles: true },
+    })
+    await logClientAudit(customerId, 'CLIENT_NAME_CHANGE_REQUESTED', {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+    })
+    return res.json({ sent: true, delivery: result.delivery, profile: formatCustomerProfile(updated) })
+  } catch (err) {
+    return handleOtpSendError(err, res)
+  }
+})
+
+router.post('/:id/name-change/confirm', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit this customer' })
+  }
+  if (!req.user.email) {
+    return res.status(400).json({ error: 'Email is required to verify name changes' })
+  }
+  const code = String(req.body?.code || '').trim()
+  if (!code) {
+    return res.status(400).json({ error: 'Verification code is required' })
+  }
+  const currentProfileData = parseJson(customer.profileData, {})
+  const lastChangedAt = parseDateValue(
+    currentProfileData.nameChangedAt || currentProfileData.name_changed_at
+  )
+  if (lastChangedAt && Date.now() - lastChangedAt.getTime() < NAME_CHANGE_COOLDOWN_MS) {
+    return res.status(400).json({ error: 'Name can only be changed once every 24 hours.' })
+  }
+  const pending = currentProfileData.nameChangePending || {}
+  const firstName = String(pending.firstName || '').trim()
+  const middleName = String(pending.middleName || '').trim()
+  const lastName = String(pending.lastName || '').trim()
+  const fullName = buildFullName(firstName, middleName, lastName)
+  if (!fullName) {
+    return res.status(400).json({ error: 'No pending name change found.' })
+  }
+  const result = await verifyEmailOtp(req.user.email, code)
+  if (!result.valid) {
+    return res.status(400).json({ error: result.error || 'Invalid code' })
+  }
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const updatedProfileData = {
+    ...currentProfileData,
+    firstName,
+    middleName,
+    lastName,
+    nameChangedAt: new Date().toISOString(),
+  }
+  delete updatedProfileData.nameChangePending
+  const updated = await prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      name: fullName,
+      profileData: JSON.stringify(updatedProfileData),
+    },
+    include: { drivers: true, vehicles: true },
+  })
+  await logClientAudit(customerId, 'CLIENT_NAME_UPDATED', {
+    session_id: sessionId,
+    ip: getRequestIp(req),
+    user_agent: String(req.headers['user-agent'] || ''),
+  })
+  return res.json({ profile: formatCustomerProfile(updated) })
 })
 
 router.patch('/:id/preferences', authGuard, async (req, res) => {
