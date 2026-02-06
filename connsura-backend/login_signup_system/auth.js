@@ -28,6 +28,58 @@ const {
 
 const router = express.Router()
 
+const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'connsura_session'
+const SESSION_COOKIE_PATH = process.env.SESSION_COOKIE_PATH || '/'
+const SESSION_COOKIE_SAMESITE = process.env.SESSION_COOKIE_SAMESITE || 'lax'
+const SESSION_COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN || ''
+const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE || ''
+const SESSION_COOKIE_MAX_AGE = process.env.SESSION_COOKIE_MAX_AGE || '7d'
+
+const parseDurationMs = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  if (/^\d+$/.test(raw)) {
+    return Number(raw) * 1000
+  }
+  const match = raw.match(/^(\d+)(s|m|h|d)$/i)
+  if (!match) return null
+  const amount = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 }
+  return amount * multipliers[unit]
+}
+
+const getSessionCookieOptions = () => {
+  const rawSameSite = String(SESSION_COOKIE_SAMESITE || '').toLowerCase()
+  const sameSite = ['lax', 'strict', 'none'].includes(rawSameSite) ? rawSameSite : 'lax'
+  const domain = String(SESSION_COOKIE_DOMAIN || '').trim()
+  const secureFromEnv = String(SESSION_COOKIE_SECURE || '').toLowerCase() === 'true'
+  const secure = secureFromEnv || process.env.NODE_ENV === 'production' || sameSite === 'none'
+  const options = {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: SESSION_COOKIE_PATH || '/',
+  }
+  if (domain) {
+    options.domain = domain
+  }
+  return options
+}
+
+const getSessionCookieMaxAge = () => parseDurationMs(SESSION_COOKIE_MAX_AGE) || 7 * 24 * 60 * 60 * 1000
+
+const setSessionCookie = (res, token) => {
+  if (!token) return
+  const options = getSessionCookieOptions()
+  res.cookie(SESSION_COOKIE_NAME, token, { ...options, maxAge: getSessionCookieMaxAge() })
+}
+
+const clearSessionCookie = (res) => {
+  const options = getSessionCookieOptions()
+  res.clearCookie(SESSION_COOKIE_NAME, options)
+}
+
 const sanitizeUser = (user) => ({
   id: user.id,
   email: user.email,
@@ -438,6 +490,7 @@ router.post('/register', async (req, res) => {
     }
     const token = generateToken({ id: user.id, role: user.role })
     const consentStatus = await getConsentStatus(prisma, user)
+    setSessionCookie(res, token)
     return res.status(201).json({ token, user: sanitizeUser(user), consent: consentStatus })
   } catch (err) {
     console.error('register error', err)
@@ -1134,6 +1187,7 @@ router.post('/password/confirm', authGuard, async (req, res) => {
       include: { agent: true, customer: true },
     })
     const token = generateToken({ id: updated.id, role: updated.role })
+    setSessionCookie(res, token)
 
     let emailDelivery = 'disabled'
     try {
@@ -1248,6 +1302,7 @@ router.post('/password', authGuard, async (req, res) => {
       include: { agent: true, customer: true },
     })
     const token = generateToken({ id: updated.id, role: updated.role })
+    setSessionCookie(res, token)
 
     let emailDelivery = 'disabled'
     try {
@@ -1359,6 +1414,7 @@ router.post('/recovery/reset', async (req, res) => {
     })
     recoveryAttempts.delete(attemptKey)
     const token = generateToken({ id: updated.id, role: updated.role })
+    setSessionCookie(res, token)
     return res.json({ token, user: sanitizeUser(updated) })
   } catch (err) {
     console.error('recovery reset error', err)
@@ -1392,11 +1448,17 @@ router.post('/login', async (req, res) => {
     }
     const token = generateToken({ id: user.id, role: user.role })
     const consentStatus = await getConsentStatus(prisma, user)
+    setSessionCookie(res, token)
     res.json({ token, user: sanitizeUser(user), consent: consentStatus })
   } catch (err) {
     console.error('login error', err)
     res.status(500).json({ error: 'Failed to login' })
   }
+})
+
+router.post('/logout', (req, res) => {
+  clearSessionCookie(res)
+  res.json({ ok: true })
 })
 
 router.post('/account/delete', authGuard, async (req, res) => {
@@ -1647,6 +1709,7 @@ router.post('/sessions/revoke-others', authGuard, async (req, res) => {
         })
       }
     }
+    setSessionCookie(res, token)
     return res.json({ revoked: true, token, user: sanitizeUser(updated) })
   } catch (err) {
     console.error('revoke sessions error', err)

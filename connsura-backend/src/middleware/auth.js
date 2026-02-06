@@ -3,6 +3,7 @@ const { verifyToken } = require('../utils/token')
 const { getConsentStatus } = require('../utils/legalDocuments')
 
 const ADMIN_AUTH_COOKIE = process.env.ADMIN_AUTH_COOKIE || 'connsura_admin_session'
+const USER_AUTH_COOKIE = process.env.SESSION_COOKIE_NAME || 'connsura_session'
 
 const getCookieValue = (req, name) => {
   const header = req.headers?.cookie
@@ -21,13 +22,20 @@ const getCookieValue = (req, name) => {
   return null
 }
 
-async function authGuard(req, res, next) {
+const getAuthToken = (req) => {
   const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) {
+  if (header && header.startsWith('Bearer ')) {
+    return header.replace('Bearer ', '')
+  }
+  const cookieToken = getCookieValue(req, USER_AUTH_COOKIE)
+  return cookieToken || null
+}
+
+async function authGuard(req, res, next) {
+  const token = getAuthToken(req)
+  if (!token) {
     return res.status(401).json({ error: 'Missing auth token' })
   }
-
-  const token = header.replace('Bearer ', '')
   try {
     const decoded = verifyToken(token)
     const user = await prisma.user.findUnique({ where: { id: decoded.id } })
@@ -97,4 +105,4 @@ async function adminGuard(req, res, next) {
   }
 }
 
-module.exports = { authGuard, adminGuard, ADMIN_AUTH_COOKIE }
+module.exports = { authGuard, adminGuard, ADMIN_AUTH_COOKIE, getAuthToken }

@@ -57,11 +57,6 @@ const resolveSettingsLabel = (id = '') => {
   return match?.label || 'Settings'
 }
 
-const resolveLegalLabel = (type = '') => {
-  const match = LEGAL_DOC_META.find((item) => item.type === type)
-  return match?.label || type
-}
-
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
   const value = params.get('tab')
@@ -153,9 +148,6 @@ export default function AgentDashboard() {
   const [notificationSaving, setNotificationSaving] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState('')
   const notificationSaveRef = useRef(0)
-  const [cookiePref, setCookiePref] = useState('all')
-  const [cookieSaving, setCookieSaving] = useState(false)
-  const [cookieMessage, setCookieMessage] = useState('')
   const [legalDocs, setLegalDocs] = useState([])
   const [legalLoading, setLegalLoading] = useState(false)
   const [legalError, setLegalError] = useState('')
@@ -223,7 +215,6 @@ export default function AgentDashboard() {
     if (typeof window === 'undefined') return
     const keySuffix = user?.id ? String(user.id) : 'anon'
     const notificationKey = `connsura_agent_notification_prefs_${keySuffix}`
-    const cookieKey = `connsura_agent_cookie_pref_${keySuffix}`
     setNotificationLoading(true)
     setNotificationMessage('')
     try {
@@ -235,17 +226,10 @@ export default function AgentDashboard() {
     } finally {
       setNotificationLoading(false)
     }
-    try {
-      const storedCookie = localStorage.getItem(cookieKey)
-      setCookiePref(storedCookie || 'all')
-      setCookieMessage('')
-    } catch {
-      setCookiePref('all')
-    }
   }, [activeTab, user?.id])
 
   useEffect(() => {
-    if (settingsView !== 'terms') return
+    if (settingsView !== 'terms' && settingsView !== 'privacy') return
     let active = true
     setLegalLoading(true)
     setLegalError('')
@@ -660,23 +644,6 @@ export default function AgentDashboard() {
     }
   }
 
-  const handleCookiePreferenceChange = (nextPref) => {
-    if (typeof window === 'undefined') return
-    const keySuffix = user?.id ? String(user.id) : 'anon'
-    const cookieKey = `connsura_agent_cookie_pref_${keySuffix}`
-    setCookieSaving(true)
-    setCookieMessage('')
-    setCookiePref(nextPref)
-    try {
-      localStorage.setItem(cookieKey, nextPref)
-      setCookieMessage('Saved')
-    } catch {
-      setCookieMessage('Unable to save')
-    } finally {
-      setCookieSaving(false)
-    }
-  }
-
   const initials = agent?.name ? agent.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'AG'
   const previewAgent = {
     id: agent?.id || 0,
@@ -733,6 +700,7 @@ export default function AgentDashboard() {
   ]
   const currentNotificationPrefs = notificationPrefs || DEFAULT_AGENT_NOTIFICATION_PREFS
   const missingConsents = consentStatus?.missing || []
+  const consentUpToDate = missingConsents.length === 0
   const legalDocsByType = useMemo(() => {
     const map = {}
     legalDocs.forEach((doc) => {
@@ -1282,53 +1250,30 @@ export default function AgentDashboard() {
 
                 {settingsView === 'privacy' && (
                   <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      We only use essential cookies for sign-in, security, and session management. No ads or tracking.
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="text-sm text-slate-500">Consent status</div>
-                        {missingConsents.length ? (
-                          <div className="text-xs text-amber-700">
-                            Updates required: {missingConsents.map((entry) => resolveLegalLabel(entry.type || entry.documentType)).join(', ')}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-emerald-600">All required legal documents are up to date.</div>
-                        )}
-                        <button
-                          type="button"
-                          className="pill-btn-ghost px-3 text-xs"
-                          onClick={() => setSettingsView('terms')}
+                        <div
+                          className={`text-xs font-semibold ${
+                            consentUpToDate ? 'text-emerald-600' : 'text-amber-600'
+                          }`}
                         >
-                          Review terms
-                        </button>
+                          {consentUpToDate ? 'Up to date' : 'Action required'}
+                        </div>
                       </div>
-                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                        <div className="text-sm text-slate-500">Cookies preferences</div>
-                        <div className="text-xs text-slate-500">Choose how Connsura uses cookies.</div>
-                        <select
-                          className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                          value={cookiePref}
-                          onChange={(event) => handleCookiePreferenceChange(event.target.value)}
-                          disabled={cookieSaving}
-                        >
-                          <option value="all">All cookies</option>
-                          <option value="essential">Essential only</option>
-                          <option value="none">No cookies</option>
-                        </select>
-                        {cookieMessage && (
-                          <div
-                            className={`text-xs font-semibold ${
-                              cookieMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
-                            }`}
-                          >
-                            {cookieMessage}
-                          </div>
-                        )}
+                      <div className="text-sm text-slate-700">
+                        {`Version ${legalDocsByType.privacy?.version || '1.4'} • ${
+                          legalDocsByType.privacy?.publishedAt
+                            ? new Date(legalDocsByType.privacy.publishedAt).toLocaleDateString('en-US')
+                            : '1/29/2026'
+                        }`}
                       </div>
-                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:col-span-2">
-                        <div className="text-sm text-slate-500">Privacy policy</div>
-                        <Link to="/privacy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
-                          Read privacy policy
-                        </Link>
-                      </div>
+                      <Link to="/privacy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                        View document
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -1494,20 +1439,10 @@ export default function AgentDashboard() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         {LEGAL_DOC_META.map((doc) => {
                           const latest = legalDocsByType[doc.type]
-                          const missing = missingConsents.some((entry) => entry.type === doc.type)
                           return (
                             <div key={doc.type} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                  {doc.label}
-                                </div>
-                                <div
-                                  className={`text-xs font-semibold ${
-                                    missing ? 'text-amber-600' : 'text-emerald-600'
-                                  }`}
-                                >
-                                  {missing ? 'Action required' : 'Up to date'}
-                                </div>
+                              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                {doc.label}
                               </div>
                               <div className="text-sm text-slate-700">
                                 {latest?.version ? `Version ${latest.version}` : 'Latest version'}

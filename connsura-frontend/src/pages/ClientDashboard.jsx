@@ -3039,6 +3039,9 @@ export default function ClientDashboard() {
                   <h3 className="text-lg font-semibold">Privacy</h3>
                   <p className="text-xs text-slate-500">Consent history and policy details.</p>
                 </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  We only use essential cookies for sign-in, security, and session management. No ads or tracking.
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                     <div className="flex items-center justify-between gap-2">

@@ -1,7 +1,7 @@
 const express = require('express')
 const crypto = require('crypto')
 const prisma = require('../prisma')
-const { authGuard } = require('../middleware/auth')
+const { authGuard, getAuthToken } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { sendEmail } = require('../utils/emailClient')
 const { verifyToken } = require('../utils/token')
@@ -54,10 +54,9 @@ const buildShareUrl = (token) => {
 }
 
 const getOptionalUser = async (req) => {
-  const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) return null
+  const token = getAuthToken(req)
+  if (!token) return null
   try {
-    const token = header.replace('Bearer ', '')
     const decoded = verifyToken(token)
     if (!decoded?.id) return null
     return await prisma.user.findUnique({ where: { id: decoded.id } })

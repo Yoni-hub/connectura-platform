@@ -1,16 +1,15 @@
 const express = require('express')
 const prisma = require('../prisma')
 const { buildCustomerQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
-const { authGuard } = require('../middleware/auth')
+const { authGuard, getAuthToken } = require('../middleware/auth')
 const { verifyToken } = require('../utils/token')
 
 const router = express.Router()
 
 const resolveCustomerId = async (req) => {
-  const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) return null
+  const token = getAuthToken(req)
+  if (!token) return null
   try {
-    const token = header.replace('Bearer ', '')
     const decoded = verifyToken(token)
     const customer = await prisma.customer.findUnique({ where: { userId: decoded.id } })
     return customer?.id || null

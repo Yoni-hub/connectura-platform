@@ -422,7 +422,7 @@ function QuestionAutocomplete({
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
         const res = await fetch(
           `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8${productParam}`,
-          { signal: controller.signal, headers }
+          { signal: controller.signal, headers, credentials: 'include' }
         )
         if (!res.ok) return
         const data = await res.json()
@@ -670,7 +670,10 @@ export default function CreateProfile({
     try {
       const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, { headers })
+      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, {
+        headers,
+        credentials: 'include',
+      })
       if (!res.ok) return
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
@@ -694,7 +697,10 @@ export default function CreateProfile({
     const controller = new AbortController()
     const loadSchema = async () => {
       try {
-        const res = await fetch(`${API_URL}/form-schema/create-profile`, { signal: controller.signal })
+        const res = await fetch(`${API_URL}/form-schema/create-profile`, {
+          signal: controller.signal,
+          credentials: 'include',
+        })
         if (!res.ok) return
         const data = await res.json()
         if (data?.schema?.schema) {
@@ -714,7 +720,7 @@ export default function CreateProfile({
     const controller = new AbortController()
     const loadProducts = async () => {
       try {
-        const res = await fetch(`${API_URL}/products`, { signal: controller.signal })
+        const res = await fetch(`${API_URL}/products`, { signal: controller.signal, credentials: 'include' })
         if (!res.ok) return
         const data = await res.json()
         const items = Array.isArray(data.products) ? data.products : []
@@ -1170,6 +1176,7 @@ export default function CreateProfile({
       fetch(`${API_URL}/customers/${user.customerId}/forms/additional/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
+        credentials: 'include',
         body: JSON.stringify({ formName, index }),
       }).catch((error) => {
         console.warn('Failed to log additional form removal', error)
@@ -1208,6 +1215,7 @@ export default function CreateProfile({
       await fetch(`${API_URL}/questions/customer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
+        credentials: 'include',
         body: JSON.stringify({ questions: cleaned, ...(productId ? { productId } : {}), formName: formName || '' }),
       })
     } catch (error) {
@@ -1285,7 +1293,10 @@ export default function CreateProfile({
     try {
       const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, { headers })
+      const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, {
+        headers,
+        credentials: 'include',
+      })
       if (!res.ok) return
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []

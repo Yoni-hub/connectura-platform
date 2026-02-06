@@ -25,14 +25,12 @@ export function AuthProvider({ children }) {
   const [consentStatus, setConsentStatus] = useState(null)
 
   useEffect(() => {
-    if (!token) {
-      setAuthChecking(false)
-      return
-    }
+    let active = true
     setAuthChecking(true)
     api
       .get('/auth/me')
       .then((res) => {
+        if (!active) return
         setUser(res.data.user)
         setConsentStatus(res.data.consent || null)
         if (res.data.user?.role === 'AGENT') {
@@ -48,14 +46,20 @@ export function AuthProvider({ children }) {
         }
       })
       .catch(() => {
+        if (!active) return
         setUser(null)
         setToken(null)
         setConsentStatus(null)
         clearStoredToken()
       })
       .finally(() => {
-        setAuthChecking(false)
+        if (active) {
+          setAuthChecking(false)
+        }
       })
+    return () => {
+      active = false
+    }
   }, [token])
 
   const applyAuth = (nextToken, nextUser, password, options = {}) => {
@@ -120,7 +124,12 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Ignore logout failures; still clear local state.
+    }
     setUser(null)
     setToken(null)
     setLastPassword('')
