@@ -19,6 +19,8 @@ model User {
   passwordChangedAt DateTime?
   emailPending String?
   emailPendingRequestedAt DateTime?
+  passwordPendingHash String?
+  passwordPendingRequestedAt DateTime?
   sessionsRevokedAt DateTime?
   totpEnabled Boolean @default(false)
   totpSecret String?

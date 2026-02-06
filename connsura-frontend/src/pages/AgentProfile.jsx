@@ -170,6 +170,7 @@ export default function AgentProfile() {
             <div className="text-sm text-slate-500">Languages: {agent.languages.join(', ')}</div>
             <div className="text-sm text-slate-500">States: {agent.states.join(', ')}</div>
             <div className="text-sm text-slate-500">Specialty: {agent.specialty}</div>
+            <div className="text-sm text-slate-500">Appointed carriers: {Array.isArray(agent.appointedCarriers) ? agent.appointedCarriers.length ? agent.appointedCarriers.join(', ') : '—' : agent.appointedCarriers || '—'}</div>
             <div className="text-sm text-slate-500">Products: {agent.products?.join(', ') || '—'}</div>
             <div className="text-sm text-slate-500">Producer #: {agent.producerNumber || '—'}</div>
             <div className="text-sm text-slate-500">Email: {agent.email || '—'}</div>
@@ -225,3 +226,4 @@ export default function AgentProfile() {
     </main>
   )
 }
+

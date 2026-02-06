@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { API_URL, api } from '../services/api'
@@ -8,7 +8,59 @@ import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 
-const navItems = ['Overview', 'Profile', 'Onboarding', 'Clients', 'Messages', 'Settings']
+const navItems = ['Overview', 'Onboarding', 'Clients', 'Messages', 'Settings']
+
+const DEFAULT_AGENT_NOTIFICATION_PREFS = {
+  email: 'all',
+  inapp: true,
+  loginAlerts: true,
+  groups: {
+    leads: true,
+    messages: true,
+    system: true,
+  },
+}
+
+const normalizeAgentNotificationPrefs = (value = {}) => {
+  const prefs = value && typeof value === 'object' ? value : {}
+  const groups = prefs.groups && typeof prefs.groups === 'object' ? prefs.groups : {}
+  const email = ['all', 'important', 'none'].includes(prefs.email) ? prefs.email : 'all'
+  return {
+    email,
+    inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
+    loginAlerts: true,
+    groups: {
+      leads: typeof groups.leads === 'boolean' ? groups.leads : true,
+      messages: typeof groups.messages === 'boolean' ? groups.messages : true,
+      system: typeof groups.system === 'boolean' ? groups.system : true,
+    },
+  }
+}
+
+const LEGAL_DOC_META = [
+  { type: 'terms', label: 'Terms & Conditions', href: '/terms' },
+  { type: 'privacy', label: 'Privacy Policy', href: '/privacy' },
+  { type: 'agent-terms', label: 'Agent Responsibilities', href: '/agent-responsibilities' },
+  { type: 'data-sharing', label: 'Data Sharing', href: '/data-sharing' },
+]
+
+const SETTINGS_ITEMS = [
+  { id: 'account', label: 'Account' },
+  { id: 'security', label: 'Security' },
+  { id: 'privacy', label: 'Privacy' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'terms', label: 'Terms and conditions' },
+]
+
+const resolveSettingsLabel = (id = '') => {
+  const match = SETTINGS_ITEMS.find((item) => item.id === id)
+  return match?.label || 'Settings'
+}
+
+const resolveLegalLabel = (type = '') => {
+  const match = LEGAL_DOC_META.find((item) => item.type === type)
+  return match?.label || type
+}
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -87,19 +139,39 @@ const renderSummaryDetails = (details = []) => {
 }
 
 export default function AgentDashboard() {
-  const { user, lastPassword, setLastPassword, setUser, completeAuth } = useAuth()
+  const { user, lastPassword, setLastPassword, setUser, completeAuth, consentStatus, setConsentStatus } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [agent, setAgent] = useState(null)
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
+  const [settingsView, setSettingsView] = useState(null)
+  const [settingsReturnTab, setSettingsReturnTab] = useState('Overview')
+  const [notificationPrefs, setNotificationPrefs] = useState(DEFAULT_AGENT_NOTIFICATION_PREFS)
+  const [notificationLoading, setNotificationLoading] = useState(false)
+  const [notificationSaving, setNotificationSaving] = useState(false)
+  const [notificationMessage, setNotificationMessage] = useState('')
+  const notificationSaveRef = useRef(0)
+  const [cookiePref, setCookiePref] = useState('all')
+  const [cookieSaving, setCookieSaving] = useState(false)
+  const [cookieMessage, setCookieMessage] = useState('')
+  const [legalDocs, setLegalDocs] = useState([])
+  const [legalLoading, setLegalLoading] = useState(false)
+  const [legalError, setLegalError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordUpdating, setPasswordUpdating] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordOtpSent, setPasswordOtpSent] = useState(false)
+  const [passwordOtpCode, setPasswordOtpCode] = useState('')
+  const [passwordOtpError, setPasswordOtpError] = useState('')
+  const [passwordOtpConfirming, setPasswordOtpConfirming] = useState(false)
+  const [passwordOtpMessage, setPasswordOtpMessage] = useState('')
+  const [passwordOtpCooldown, setPasswordOtpCooldown] = useState(0)
+  const [passwordOtpResending, setPasswordOtpResending] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -123,6 +195,7 @@ export default function AgentDashboard() {
     availability: 'online',
     phone: '',
     email: user?.email || '',
+    bio: '',
   })
 
   useEffect(() => {
@@ -131,11 +204,87 @@ export default function AgentDashboard() {
   }, [location.search])
 
   const updateTab = (nextTab) => {
+    if (nextTab === 'Settings') {
+      if (activeTab !== 'Settings') {
+        setSettingsReturnTab(activeTab || 'Overview')
+      }
+      setSettingsView(null)
+    } else {
+      setSettingsView(null)
+    }
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
     nav(`/agent/dashboard?${params.toString()}`, { replace: true })
   }
+
+  useEffect(() => {
+    if (activeTab !== 'Settings') return
+    if (typeof window === 'undefined') return
+    const keySuffix = user?.id ? String(user.id) : 'anon'
+    const notificationKey = `connsura_agent_notification_prefs_${keySuffix}`
+    const cookieKey = `connsura_agent_cookie_pref_${keySuffix}`
+    setNotificationLoading(true)
+    setNotificationMessage('')
+    try {
+      const stored = localStorage.getItem(notificationKey)
+      const parsed = stored ? JSON.parse(stored) : {}
+      setNotificationPrefs(normalizeAgentNotificationPrefs(parsed))
+    } catch {
+      setNotificationPrefs(DEFAULT_AGENT_NOTIFICATION_PREFS)
+    } finally {
+      setNotificationLoading(false)
+    }
+    try {
+      const storedCookie = localStorage.getItem(cookieKey)
+      setCookiePref(storedCookie || 'all')
+      setCookieMessage('')
+    } catch {
+      setCookiePref('all')
+    }
+  }, [activeTab, user?.id])
+
+  useEffect(() => {
+    if (settingsView !== 'terms') return
+    let active = true
+    setLegalLoading(true)
+    setLegalError('')
+    api
+      .get('/legal')
+      .then((res) => {
+        if (!active) return
+        setLegalDocs(res.data?.documents || [])
+      })
+      .catch((err) => {
+        if (!active) return
+        setLegalError(err.response?.data?.error || 'Unable to load legal documents')
+      })
+      .finally(() => {
+        if (active) setLegalLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [settingsView])
+
+  useEffect(() => {
+    if (!user) return
+    if (settingsView !== 'privacy' && settingsView !== 'terms') return
+    let active = true
+    api
+      .get('/legal/status/me')
+      .then((res) => {
+        if (!active) return
+        setConsentStatus({
+          required: res.data?.required || [],
+          missing: res.data?.missing || [],
+        })
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [settingsView, user, setConsentStatus])
 
   useEffect(() => {
     const fetchAgent = async () => {
@@ -155,6 +304,7 @@ export default function AgentDashboard() {
           availability: current.availability || 'online',
           phone: current.phone || '',
           email: current.email || user?.email || '',
+          bio: current.bio || '',
         })
       } catch {
         toast.error('Could not load your agent profile')
@@ -294,6 +444,14 @@ export default function AgentDashboard() {
     }
   }, [photoPreview])
 
+  useEffect(() => {
+    if (passwordOtpCooldown <= 0) return undefined
+    const timer = setInterval(() => {
+      setPasswordOtpCooldown((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [passwordOtpCooldown])
+
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -342,11 +500,12 @@ export default function AgentDashboard() {
         states: form.state ? [form.state] : [],
         phone: form.phone,
         email: form.email,
+        bio: form.bio,
       }
       const res = await api.put(`/agents/${agent.id}`, payload)
       const updated = res.data.agent
       const photoValue = uploadedPhoto || updated.photo
-      setAgent({ ...updated, phone: form.phone, email: form.email, photo: photoValue })
+      setAgent({ ...updated, phone: form.phone, email: form.email, bio: form.bio, photo: photoValue })
       if (setUser && user) {
         setUser({ ...user, email: form.email })
       }
@@ -361,6 +520,7 @@ export default function AgentDashboard() {
         availability: updated.availability || 'online',
         phone: form.phone,
         email: form.email,
+        bio: updated.bio || form.bio || '',
       })
       toast.success('Agent profile updated')
     } catch (err) {
@@ -372,6 +532,8 @@ export default function AgentDashboard() {
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
+    setPasswordOtpError('')
+    setPasswordOtpMessage('')
     if (!currentPassword) {
       toast.error('Enter your current password')
       return
@@ -386,29 +548,73 @@ export default function AgentDashboard() {
     }
     setPasswordUpdating(true)
     try {
-      const res = await api.post('/auth/password', {
+      await api.post('/auth/password/request', {
         currentPassword,
         newPassword,
       })
-      if (res.data?.token && completeAuth) {
-        const persist = typeof window !== 'undefined' && localStorage.getItem('connsura_token')
-        completeAuth(res.data.token, res.data.user || user, newPassword, { persist: Boolean(persist) })
-      } else {
-        if (res.data?.user) {
-          setUser(res.data.user)
-        }
-        setLastPassword(newPassword)
-      }
+      setPasswordOtpSent(true)
+      setPasswordOtpCode('')
+      setPasswordOtpMessage('Code sent to your email.')
+      setPasswordOtpCooldown(3)
       setChangingPassword(false)
       setShowPassword(false)
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      toast.success('Password updated')
+      toast.success('Verification code sent. Check your email.')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update password')
     } finally {
       setPasswordUpdating(false)
+    }
+  }
+
+  const handlePasswordOtpConfirm = async () => {
+    const trimmed = passwordOtpCode.trim()
+    if (!trimmed) {
+      setPasswordOtpError('Enter the code from your email.')
+      return
+    }
+    if (passwordOtpConfirming) return
+    setPasswordOtpConfirming(true)
+    setPasswordOtpError('')
+    try {
+      const res = await api.post('/auth/password/confirm', { code: trimmed })
+      if (res.data?.token && completeAuth) {
+        const persist = typeof window !== 'undefined' && localStorage.getItem('connsura_token')
+        completeAuth(res.data.token, res.data.user || user, null, { persist: Boolean(persist) })
+      } else if (res.data?.user) {
+        setUser(res.data.user)
+      }
+      setLastPassword('')
+      setPasswordOtpCode('')
+      setPasswordOtpMessage('')
+      setPasswordOtpSent(false)
+      toast.success('Password updated')
+    } catch (err) {
+      const message = err.response?.data?.error || 'Verification failed'
+      setPasswordOtpError(message)
+      toast.error(message)
+    } finally {
+      setPasswordOtpConfirming(false)
+    }
+  }
+
+  const handlePasswordOtpResend = async () => {
+    setPasswordOtpError('')
+    setPasswordOtpMessage('')
+    try {
+      setPasswordOtpResending(true)
+      await api.post('/auth/password/resend')
+      setPasswordOtpMessage('Code sent to your email.')
+      setPasswordOtpCooldown(3)
+      toast.success('Verification code sent')
+    } catch (err) {
+      const message = err.response?.data?.error || 'Could not resend code'
+      setPasswordOtpError(message)
+      toast.error(message)
+    } finally {
+      setPasswordOtpResending(false)
     }
   }
 
@@ -429,6 +635,45 @@ export default function AgentDashboard() {
       toast.error(err.response?.data?.error || 'Failed to delete account')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const saveAgentNotificationPreferences = (nextPrefs) => {
+    if (typeof window === 'undefined') return
+    const keySuffix = user?.id ? String(user.id) : 'anon'
+    const notificationKey = `connsura_agent_notification_prefs_${keySuffix}`
+    const saveId = notificationSaveRef.current + 1
+    notificationSaveRef.current = saveId
+    setNotificationSaving(true)
+    setNotificationMessage('')
+    try {
+      localStorage.setItem(notificationKey, JSON.stringify(nextPrefs))
+      if (notificationSaveRef.current !== saveId) return
+      setNotificationMessage('Saved')
+    } catch {
+      if (notificationSaveRef.current !== saveId) return
+      setNotificationMessage('Unable to save changes')
+    } finally {
+      if (notificationSaveRef.current === saveId) {
+        setNotificationSaving(false)
+      }
+    }
+  }
+
+  const handleCookiePreferenceChange = (nextPref) => {
+    if (typeof window === 'undefined') return
+    const keySuffix = user?.id ? String(user.id) : 'anon'
+    const cookieKey = `connsura_agent_cookie_pref_${keySuffix}`
+    setCookieSaving(true)
+    setCookieMessage('')
+    setCookiePref(nextPref)
+    try {
+      localStorage.setItem(cookieKey, nextPref)
+      setCookieMessage('Saved')
+    } catch {
+      setCookieMessage('Unable to save')
+    } finally {
+      setCookieSaving(false)
     }
   }
 
@@ -486,6 +731,17 @@ export default function AgentDashboard() {
     { label: 'Appointed carriers', value: Array.isArray(agent?.appointedCarriers) ? agent.appointedCarriers : [] },
     { label: 'Bio', value: agent?.bio },
   ]
+  const currentNotificationPrefs = notificationPrefs || DEFAULT_AGENT_NOTIFICATION_PREFS
+  const missingConsents = consentStatus?.missing || []
+  const legalDocsByType = useMemo(() => {
+    const map = {}
+    legalDocs.forEach((doc) => {
+      if (doc?.type) {
+        map[doc.type] = doc
+      }
+    })
+    return map
+  }, [legalDocs])
 
   const renderMessageBody = (body = '') => {
     const lines = String(body).split('\n')
@@ -614,325 +870,662 @@ export default function AgentDashboard() {
                 )}
               </div>
               ) : activeTab === 'Settings' ? (
-              <div className="surface p-4 space-y-2 max-w-md w-full">
-                <h2 className="text-xl font-semibold">Settings</h2>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-sm text-slate-500">Email</div>
-                    <div className="font-semibold">{user?.email || 'Not set'}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-sm text-slate-500">Name</div>
-                    <div className="font-semibold">{agent?.name || 'Not set'}</div>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <span>Password</span>
+              <div className="space-y-6">
+                {!settingsView && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold">Settings</h2>
                       <button
                         type="button"
-                        className="text-slate-500 hover:text-slate-800"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        onClick={() => setShowPassword((v) => !v)}
+                        className="pill-btn-ghost px-4"
+                        onClick={() => updateTab(settingsReturnTab || 'Overview')}
                       >
-                        {showPassword ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18m-4.5-4.5A7 7 0 017 12m7 7a7 7 0 01-7-7m0 0a7 7 0 0111.667-5M12 9a3 3 0 013 3" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
+                        Back
                       </button>
                     </div>
-                    <div className="font-semibold">
-                      {showPassword ? lastPassword || 'No password captured this session' : '••••••••'}
-                    </div>
-                  </div>
-                    <button
-                      type="button"
-                      className="pill-btn-ghost text-sm px-4"
-                      onClick={() => {
-                        if (changingPassword) {
-                          setCurrentPassword('')
-                          setNewPassword('')
-                          setConfirmPassword('')
-                        }
-                        setChangingPassword((v) => !v)
-                      }}
-                    >
-                      {changingPassword ? 'Cancel' : 'Change'}
-                    </button>
-                </div>
-                  {changingPassword && (
-                    <form className="space-y-2" onSubmit={handlePasswordSubmit}>
-                      <label className="block text-sm">
-                        Current password
-                        <input
-                          type="password"
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                        />
-                      </label>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <label className="block text-sm">
-                          New password
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                        />
-                      </label>
-                      <label className="block text-sm">
-                        Confirm password
-                        <input
-                          type="password"
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                      <div className="flex justify-end gap-2">
-                        <button type="submit" className="pill-btn-primary px-5" disabled={passwordUpdating}>
-                          {passwordUpdating ? 'Saving...' : 'Save password'}
+                    <div className="space-y-3">
+                      {SETTINGS_ITEMS.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                          onClick={() => setSettingsView(item.id)}
+                        >
+                          {item.label}
                         </button>
-                      </div>
-                    </form>
-                  )}
-                  <div className="pt-2">
-                    <AuthenticatorPanel />
+                      ))}
+                    </div>
                   </div>
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
-                  <div className="text-sm font-semibold text-rose-700">Delete account</div>
-                  <p className="text-xs text-rose-700">
-                    This permanently deletes your account, profile, and messages. This cannot be undone.
-                  </p>
-                  {!deleteOpen ? (
+                )}
+
+                {settingsView && (
+                  <div className="flex items-center justify-between gap-3">
                     <button
                       type="button"
-                      className="pill-btn-ghost text-rose-700 border-rose-200 hover:border-rose-300"
-                      onClick={() => setDeleteOpen(true)}
+                      className="pill-btn-ghost px-4"
+                      onClick={() => setSettingsView(null)}
                     >
-                      Delete account
+                      Back
                     </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <label className="block text-sm text-rose-800">
-                        Password
+                    <div className="text-sm font-semibold text-slate-700">{resolveSettingsLabel(settingsView)}</div>
+                  </div>
+                )}
+
+                {settingsView === 'account' && (
+                  <div className="grid gap-6 lg:grid-cols-[420px,1fr]">
+                    <form className="surface p-4 space-y-2 max-w-md w-full" onSubmit={handleSave}>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-semibold">Profile & availability</h2>
+                        <Badge label="Visible to customers" tone="green" />
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
+                          {photoPreview ? (
+                            <img src={photoPreview} alt="Agent profile" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-lg font-semibold">{initials}</span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <label
+                            className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
+                              photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                            }`}
+                          >
+                            Upload photo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handlePhotoChange}
+                              disabled={photoUploading || saving}
+                            />
+                          </label>
+                          <div className="text-xs text-slate-500">JPG or PNG, up to 2MB.</div>
+                        </div>
+                      </div>
+
+                      <label className="block text-sm">
+                        Agent/Agency name
                         <input
-                          type="password"
-                          className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5"
-                          value={deletePassword}
-                          onChange={(e) => setDeletePassword(e.target.value)}
-                          placeholder="Enter your password"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={form.name}
+                          onChange={(e) => setForm({ ...form, name: e.target.value })}
                         />
                       </label>
-                      <label className="block text-sm text-rose-800">
-                        Type DELETE to confirm
+
+                      <label className="block text-sm">
+                        Email
                         <input
-                          type="text"
-                          className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5 uppercase tracking-widest"
-                          value={deleteConfirm}
-                          onChange={(e) => setDeleteConfirm(e.target.value)}
-                          placeholder="DELETE"
+                          type="email"
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={form.email}
+                          onChange={(e) => setForm({ ...form, email: e.target.value })}
                         />
                       </label>
-                      <div className="flex justify-end gap-2">
+
+                      <label className="block text-sm">
+                        Phone number
+                        <input
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={form.phone}
+                          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                          placeholder="e.g., (555) 123-4567"
+                        />
+                      </label>
+
+                      <label className="block text-sm">
+                        Address
+                        <input
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                          value={form.address}
+                          onChange={(e) => setForm({ ...form, address: e.target.value })}
+                        />
+                      </label>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="block text-sm">
+                          ZIP
+                          <input
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                            value={form.zip}
+                            onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          State
+                          <input
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                            value={form.state}
+                            onChange={(e) => setForm({ ...form, state: e.target.value })}
+                          />
+                        </label>
+                      </div>
+
+                            <label className="block text-sm">
+                              Availability
+                              <select
+                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                                value={form.availability}
+                                onChange={(e) => setForm({ ...form, availability: e.target.value })}
+                              >
+                                <option value="online">Online</option>
+                                <option value="busy">Busy</option>
+                                <option value="offline">Offline</option>
+                              </select>
+                            </label>
+
+                            <label className="block text-sm">
+                              Bio
+                              <textarea
+                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                rows={4}
+                                value={form.bio}
+                                onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                                placeholder="Share a short description of your experience."
+                              />
+                            </label>
+
+                      <div className="flex justify-end gap-3 pt-2">
                         <button
                           type="button"
                           className="pill-btn-ghost"
                           onClick={() => {
-                            setDeleteOpen(false)
-                            setDeletePassword('')
-                            setDeleteConfirm('')
+                            if (!agent) return
+                                  setForm({
+                                    name: agent.name || '',
+                                    address: agent.address || '',
+                                    zip: agent.zip || '',
+                                    state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
+                                    availability: agent.availability || 'online',
+                                    phone: agent.phone || '',
+                                    email: agent.email || user?.email || '',
+                                    bio: agent.bio || '',
+                                  })
+                            setPhotoFile(null)
+                            setPhotoPreview(resolvePhotoUrl(agent.photo))
                           }}
                         >
                           Cancel
                         </button>
-                        <button
-                          type="button"
-                          className="pill-btn-primary px-5"
-                          onClick={handleDeleteAccount}
-                          disabled={deleting}
-                        >
-                          {deleting ? 'Deleting...' : 'Delete account'}
+                        <button type="submit" disabled={saving || photoUploading} className="pill-btn-primary px-8">
+                          {saving || photoUploading ? 'Saving...' : 'Save changes'}
                         </button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              ) : activeTab === 'Profile' ? (
-                <div className="grid gap-6 lg:grid-cols-[420px,1fr]">
-                  <form className="surface p-4 space-y-2 max-w-md w-full" onSubmit={handleSave}>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-semibold">Profile & availability</h2>
-                      <Badge label="Visible to customers" tone="green" />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
-                        {photoPreview ? (
-                          <img src={photoPreview} alt="Agent profile" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-lg font-semibold">{initials}</span>
-                        )}
+                    </form>
+                    <div className="surface p-4 space-y-3 min-h-[420px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-lg font-semibold">What clients see</h3>
+                        <Badge label="Preview" tone="blue" />
                       </div>
-                      <div className="space-y-1">
-                        <label
-                          className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
-                            photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                          }`}
-                        >
-                          Upload photo
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handlePhotoChange}
-                            disabled={photoUploading || saving}
-                          />
-                        </label>
-                        <div className="text-xs text-slate-500">JPG or PNG, up to 2MB.</div>
-                      </div>
-                    </div>
-
-                    <label className="block text-sm">
-                      Agent/Agency name
-                      <input
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      />
-                    </label>
-
-                    <label className="block text-sm">
-                      Email
-                      <input
-                        type="email"
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      />
-                    </label>
-
-                    <label className="block text-sm">
-                      Phone number
-                      <input
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={form.phone}
-                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                        placeholder="e.g., (555) 123-4567"
-                      />
-                    </label>
-
-                    <label className="block text-sm">
-                      Address
-                      <input
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={form.address}
-                        onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      />
-                    </label>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="block text-sm">
-                        ZIP
-                        <input
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={form.zip}
-                          onChange={(e) => setForm({ ...form, zip: e.target.value })}
-                        />
-                      </label>
-                      <label className="block text-sm">
-                        State
-                        <input
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                          value={form.state}
-                          onChange={(e) => setForm({ ...form, state: e.target.value })}
-                        />
-                      </label>
-                    </div>
-
-                    <label className="block text-sm">
-                      Availability
-                      <select
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
-                        value={form.availability}
-                        onChange={(e) => setForm({ ...form, availability: e.target.value })}
-                      >
-                        <option value="online">Online</option>
-                        <option value="busy">Busy</option>
-                        <option value="offline">Offline</option>
-                      </select>
-                    </label>
-
-                    <div className="flex justify-end gap-3 pt-2">
-                      <button
-                        type="button"
-                        className="pill-btn-ghost"
-                        onClick={() => {
-                          if (!agent) return
-                          setForm({
-                            name: agent.name || '',
-                            address: agent.address || '',
-                            zip: agent.zip || '',
-                            state: Array.isArray(agent.states) ? agent.states[0] || '' : '',
-                            availability: agent.availability || 'online',
-                            phone: agent.phone || '',
-                            email: agent.email || user?.email || '',
-                          })
-                          setPhotoFile(null)
-                          setPhotoPreview(resolvePhotoUrl(agent.photo))
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button type="submit" disabled={saving || photoUploading} className="pill-btn-primary px-8">
-                        {saving || photoUploading ? 'Saving...' : 'Save changes'}
-                      </button>
-                    </div>
-                  </form>
-                  <div className="surface p-4 space-y-3 min-h-[420px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-lg font-semibold">What clients see</h3>
-                      <Badge label="Preview" tone="blue" />
-                    </div>
-                    <p className="text-sm text-slate-500">
-                      This is the public profile card customers see when they search for agents.
-                    </p>
-                    <AgentCard agent={previewAgent} />
-                    <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
-                      <div className="grid gap-2 text-sm text-slate-600">
-                        <div>
-                          <span className="text-slate-500">Producer #:</span> {previewProducerNumber}
+                      <p className="text-sm text-slate-500">
+                        This is the public profile card customers see when they search for agents.
+                      </p>
+                      <AgentCard agent={previewAgent} />
+                      <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
+                        <div className="grid gap-2 text-sm text-slate-600">
+                          <div>
+                            <span className="text-slate-500">Producer #:</span> {previewProducerNumber}
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Products:</span> {previewProducts}
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Email:</span> {previewEmail}
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Phone:</span> {previewPhone}
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Address:</span> {previewAddress}
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-slate-500">Products:</span> {previewProducts}
+                        <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                          <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Bio</div>
+                          <p>{previewBio}</p>
                         </div>
-                        <div>
-                          <span className="text-slate-500">Email:</span> {previewEmail}
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Phone:</span> {previewPhone}
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Address:</span> {previewAddress}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                        <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">Bio</div>
-                        <p>{previewBio}</p>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {settingsView === 'security' && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <span>Password</span>
+                            <button
+                              type="button"
+                              className="text-slate-500 hover:text-slate-800"
+                              aria-label={showPassword ? 'Hide password' : 'Show password'}
+                              onClick={() => setShowPassword((v) => !v)}
+                            >
+                              {showPassword ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18m-4.5-4.5A7 7 0 017 12m7 7a7 7 0 01-7-7m0 0a7 7 0 0111.667-5M12 9a3 3 0 013 3" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                          <div className="font-semibold">
+                            {showPassword ? lastPassword || 'No password captured this session' : '••••••••'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost text-sm px-4"
+                          onClick={() => {
+                            if (changingPassword) {
+                              setCurrentPassword('')
+                              setNewPassword('')
+                              setConfirmPassword('')
+                            }
+                            setChangingPassword((v) => !v)
+                          }}
+                        >
+                          {changingPassword ? 'Cancel' : 'Change password'}
+                        </button>
+                      </div>
+                      {changingPassword && (
+                        <form className="space-y-2" onSubmit={handlePasswordSubmit}>
+                          <label className="block text-sm">
+                            Current password
+                            <input
+                              type="password"
+                              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                            />
+                          </label>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="block text-sm">
+                              New password
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                              />
+                            </label>
+                            <label className="block text-sm">
+                              Confirm password
+                              <input
+                                type="password"
+                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                              />
+                            </label>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button type="submit" className="pill-btn-primary px-5" disabled={passwordUpdating}>
+                              {passwordUpdating ? 'Saving...' : 'Save password'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                    {passwordOtpSent && (
+                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                        <div className="text-sm font-semibold text-slate-900">Verify password change</div>
+                        <p className="text-xs text-slate-500">
+                          Enter the 6-digit code sent to {user?.email || 'your email'}.
+                        </p>
+                        <input
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          value={passwordOtpCode}
+                          onChange={(event) => {
+                            const next = event.target.value.replace(/\D/g, '').slice(0, 6)
+                            setPasswordOtpCode(next)
+                          }}
+                          placeholder="Enter 6-digit code"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                        />
+                        {passwordOtpMessage && (
+                          <div className="text-xs font-semibold text-emerald-600">{passwordOtpMessage}</div>
+                        )}
+                        {passwordOtpError && (
+                          <div className="text-xs font-semibold text-rose-600">{passwordOtpError}</div>
+                        )}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-4"
+                            onClick={handlePasswordOtpResend}
+                            disabled={passwordOtpResending || passwordOtpCooldown > 0}
+                          >
+                            {passwordOtpCooldown > 0 ? `Resend in ${passwordOtpCooldown}s` : 'Resend code'}
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn-primary px-5"
+                            onClick={handlePasswordOtpConfirm}
+                            disabled={passwordOtpConfirming}
+                          >
+                            {passwordOtpConfirming ? 'Verifying...' : 'Verify password'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <AuthenticatorPanel />
+
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
+                      <div className="text-sm font-semibold text-rose-700">Delete account</div>
+                      <p className="text-xs text-rose-700">
+                        This permanently deletes your account, profile, and messages. This cannot be undone.
+                      </p>
+                      {!deleteOpen ? (
+                        <button
+                          type="button"
+                          className="pill-btn-ghost text-rose-700 border-rose-200 hover:border-rose-300"
+                          onClick={() => setDeleteOpen(true)}
+                        >
+                          Delete account
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className="block text-sm text-rose-800">
+                            Password
+                            <input
+                              type="password"
+                              className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5"
+                              value={deletePassword}
+                              onChange={(e) => setDeletePassword(e.target.value)}
+                              placeholder="Enter your password"
+                            />
+                          </label>
+                          <label className="block text-sm text-rose-800">
+                            Type DELETE to confirm
+                            <input
+                              type="text"
+                              className="mt-1 w-full rounded-xl border border-rose-200 px-3 py-1.5 uppercase tracking-widest"
+                              value={deleteConfirm}
+                              onChange={(e) => setDeleteConfirm(e.target.value)}
+                              placeholder="DELETE"
+                            />
+                          </label>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              className="pill-btn-ghost"
+                              onClick={() => {
+                                setDeleteOpen(false)
+                                setDeletePassword('')
+                                setDeleteConfirm('')
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="pill-btn-primary px-5"
+                              onClick={handleDeleteAccount}
+                              disabled={deleting}
+                            >
+                              {deleting ? 'Deleting...' : 'Delete account'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {settingsView === 'privacy' && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                        <div className="text-sm text-slate-500">Consent status</div>
+                        {missingConsents.length ? (
+                          <div className="text-xs text-amber-700">
+                            Updates required: {missingConsents.map((entry) => resolveLegalLabel(entry.type || entry.documentType)).join(', ')}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-emerald-600">All required legal documents are up to date.</div>
+                        )}
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-3 text-xs"
+                          onClick={() => setSettingsView('terms')}
+                        >
+                          Review terms
+                        </button>
+                      </div>
+                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                        <div className="text-sm text-slate-500">Cookies preferences</div>
+                        <div className="text-xs text-slate-500">Choose how Connsura uses cookies.</div>
+                        <select
+                          className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                          value={cookiePref}
+                          onChange={(event) => handleCookiePreferenceChange(event.target.value)}
+                          disabled={cookieSaving}
+                        >
+                          <option value="all">All cookies</option>
+                          <option value="essential">Essential only</option>
+                          <option value="none">No cookies</option>
+                        </select>
+                        {cookieMessage && (
+                          <div
+                            className={`text-xs font-semibold ${
+                              cookieMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                            }`}
+                          >
+                            {cookieMessage}
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:col-span-2">
+                        <div className="text-sm text-slate-500">Privacy policy</div>
+                        <Link to="/privacy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                          Read privacy policy
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {settingsView === 'notifications' && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Notifications</h3>
+                      <p className="text-xs text-slate-500">Control how we keep you updated.</p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-slate-500">Changes save automatically.</div>
+                        {notificationSaving && <div className="text-xs text-slate-500">Saving...</div>}
+                        {!notificationSaving && notificationMessage && (
+                          <div
+                            className={`text-xs font-semibold ${
+                              notificationMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                            }`}
+                          >
+                            {notificationMessage}
+                          </div>
+                        )}
+                      </div>
+
+                      <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Email notifications</div>
+                          <div className="text-xs text-slate-500">Updates about messages and new leads.</div>
+                        </div>
+                        <select
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                          value={currentNotificationPrefs.email}
+                          onChange={(event) => {
+                            const next = normalizeAgentNotificationPrefs({
+                              ...currentNotificationPrefs,
+                              email: event.target.value,
+                            })
+                            setNotificationPrefs(next)
+                            saveAgentNotificationPreferences(next)
+                          }}
+                          disabled={notificationLoading}
+                        >
+                          <option value="all">All</option>
+                          <option value="important">Important only</option>
+                          <option value="none">None</option>
+                        </select>
+                      </label>
+
+                      <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">In-app notifications</div>
+                          <div className="text-xs text-slate-500">Badges and reminders in your dashboard.</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={currentNotificationPrefs.inapp}
+                          onChange={(event) => {
+                            const next = normalizeAgentNotificationPrefs({
+                              ...currentNotificationPrefs,
+                              inapp: event.target.checked,
+                            })
+                            setNotificationPrefs(next)
+                            saveAgentNotificationPreferences(next)
+                          }}
+                          disabled={notificationLoading}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-left"
+                        disabled
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Login alerts</div>
+                          <div className="text-xs text-slate-500">Enabled (required for security)</div>
+                        </div>
+                        <input type="checkbox" className="h-4 w-4" checked readOnly disabled />
+                      </button>
+
+                      <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                        <div className="text-sm font-semibold text-slate-900">Notification groups</div>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                            New leads
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={currentNotificationPrefs.groups.leads}
+                              onChange={(event) => {
+                                const next = normalizeAgentNotificationPrefs({
+                                  ...currentNotificationPrefs,
+                                  groups: {
+                                    ...currentNotificationPrefs.groups,
+                                    leads: event.target.checked,
+                                  },
+                                })
+                                setNotificationPrefs(next)
+                                saveAgentNotificationPreferences(next)
+                              }}
+                              disabled={notificationLoading}
+                            />
+                          </label>
+                          <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                            Messages
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={currentNotificationPrefs.groups.messages}
+                              onChange={(event) => {
+                                const next = normalizeAgentNotificationPrefs({
+                                  ...currentNotificationPrefs,
+                                  groups: {
+                                    ...currentNotificationPrefs.groups,
+                                    messages: event.target.checked,
+                                  },
+                                })
+                                setNotificationPrefs(next)
+                                saveAgentNotificationPreferences(next)
+                              }}
+                              disabled={notificationLoading}
+                            />
+                          </label>
+                          <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                            System
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={currentNotificationPrefs.groups.system}
+                              onChange={(event) => {
+                                const next = normalizeAgentNotificationPrefs({
+                                  ...currentNotificationPrefs,
+                                  groups: {
+                                    ...currentNotificationPrefs.groups,
+                                    system: event.target.checked,
+                                  },
+                                })
+                                setNotificationPrefs(next)
+                                saveAgentNotificationPreferences(next)
+                              }}
+                              disabled={notificationLoading}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {settingsView === 'terms' && (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Terms & Conditions</h3>
+                      <p className="text-xs text-slate-500">Accepted policy versions for your agent account.</p>
+                    </div>
+                    {legalLoading && <div className="text-sm text-slate-600">Loading legal documents...</div>}
+                    {!legalLoading && legalError && (
+                      <div className="text-sm font-semibold text-rose-600">{legalError}</div>
+                    )}
+                    {!legalLoading && !legalError && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {LEGAL_DOC_META.map((doc) => {
+                          const latest = legalDocsByType[doc.type]
+                          const missing = missingConsents.some((entry) => entry.type === doc.type)
+                          return (
+                            <div key={doc.type} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  {doc.label}
+                                </div>
+                                <div
+                                  className={`text-xs font-semibold ${
+                                    missing ? 'text-amber-600' : 'text-emerald-600'
+                                  }`}
+                                >
+                                  {missing ? 'Action required' : 'Up to date'}
+                                </div>
+                              </div>
+                              <div className="text-sm text-slate-700">
+                                {latest?.version ? `Version ${latest.version}` : 'Latest version'}
+                                {latest?.publishedAt
+                                  ? ` • ${new Date(latest.publishedAt).toLocaleDateString()}`
+                                  : ''}
+                              </div>
+                              <Link to={doc.href} className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                                View document
+                              </Link>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               ) : activeTab === 'Messages' ? (
                 <div className="surface p-5 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1093,3 +1686,5 @@ export default function AgentDashboard() {
     </main>
   )
 }
+
+

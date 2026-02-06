@@ -45,6 +45,9 @@ const sanitizeUser = (user) => ({
 })
 
 const normalizeEmail = (value = '') => String(value || '').trim().toLowerCase()
+const PASSWORD_PENDING_TTL_MS = Number(
+  process.env.PASSWORD_CHANGE_TTL_MS || process.env.EMAIL_OTP_TTL_MS || 10 * 60 * 1000
+)
 const RECOVERY_WINDOW_MS = Number(process.env.RECOVERY_WINDOW_MS || 15 * 60 * 1000)
 const RECOVERY_MAX_ATTEMPTS = Number(process.env.RECOVERY_MAX_ATTEMPTS || 5)
 const RECOVERY_ERROR = 'Unable to recover account. Check your details and try again.'
@@ -994,6 +997,202 @@ router.post('/totp/disable', authGuard, async (req, res) => {
   } catch (err) {
     console.error('totp disable error', err)
     return res.status(500).json({ error: 'Failed to disable authenticator' })
+  }
+})
+
+router.post('/password/request', authGuard, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '')
+  const newPassword = String(req.body?.newPassword || '')
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { agent: true, customer: true },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    const auditTarget = user.customer?.id || user.id
+    const auditMeta = {
+      session_id: sessionId,
+      ip,
+      user_agent: userAgent,
+    }
+    if (user.role === 'CUSTOMER') {
+      await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_STARTED', auditMeta)
+    }
+    if (!currentPassword || !newPassword) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+          ...auditMeta,
+          result: 'failed',
+          reason: 'missing_fields',
+        })
+      }
+      return res.status(400).json({ error: 'Current and new password are required' })
+    }
+    const match = await bcrypt.compare(currentPassword, user.password)
+    if (!match) {
+      if (user.role === 'CUSTOMER') {
+        await logClientAudit(auditTarget, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+          ...auditMeta,
+          result: 'failed',
+          reason: 'invalid_current_password',
+        })
+      }
+      return res.status(400).json({ error: 'Invalid current password' })
+    }
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordPendingHash: hashed,
+        passwordPendingRequestedAt: new Date(),
+      },
+    })
+    const result = await sendEmailOtp(user.email, { ip, template: 'password_change' })
+    return res.json({ sent: true, delivery: result.delivery })
+  } catch (err) {
+    console.error('password change request error', err)
+    return handleOtpSendError(err, res)
+  }
+})
+
+router.post('/password/resend', authGuard, async (req, res) => {
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { agent: true, customer: true },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    if (!user.passwordPendingHash || !user.passwordPendingRequestedAt) {
+      return res.status(400).json({ error: 'No pending password change found' })
+    }
+    const requestedAt = new Date(user.passwordPendingRequestedAt)
+    if (Number.isNaN(requestedAt.getTime()) || Date.now() - requestedAt.getTime() > PASSWORD_PENDING_TTL_MS) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordPendingHash: null, passwordPendingRequestedAt: null },
+      })
+      return res.status(400).json({ error: 'Password change request expired. Please start again.' })
+    }
+    const result = await sendEmailOtp(user.email, { ip, template: 'password_change' })
+    return res.json({ sent: true, delivery: result.delivery })
+  } catch (err) {
+    console.error('password change resend error', err)
+    return handleOtpSendError(err, res)
+  }
+})
+
+router.post('/password/confirm', authGuard, async (req, res) => {
+  const code = String(req.body?.code || '').trim()
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  if (!code) {
+    return res.status(400).json({ error: 'Verification code is required' })
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { agent: true, customer: true },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    if (!user.passwordPendingHash || !user.passwordPendingRequestedAt) {
+      return res.status(400).json({ error: 'No pending password change found' })
+    }
+    const requestedAt = new Date(user.passwordPendingRequestedAt)
+    if (Number.isNaN(requestedAt.getTime()) || Date.now() - requestedAt.getTime() > PASSWORD_PENDING_TTL_MS) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordPendingHash: null, passwordPendingRequestedAt: null },
+      })
+      return res.status(400).json({ error: 'Password change request expired. Please start again.' })
+    }
+    const result = await verifyEmailOtp(user.email, code)
+    if (!result.valid) {
+      return res.status(400).json({ error: result.error || 'Invalid code' })
+    }
+    const passwordChangedAt = new Date()
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: user.passwordPendingHash,
+        passwordChangedAt,
+        passwordPendingHash: null,
+        passwordPendingRequestedAt: null,
+      },
+      include: { agent: true, customer: true },
+    })
+    const token = generateToken({ id: updated.id, role: updated.role })
+
+    let emailDelivery = 'disabled'
+    try {
+      const emailResult = await sendPasswordChangeEmail(updated.email)
+      emailDelivery = emailResult?.delivery || 'smtp'
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: 'password_changed_receipt',
+          result: 'success',
+          delivery: emailDelivery,
+        })
+      }
+    } catch (err) {
+      console.error('password change email error', err)
+      if (updated.role === 'CUSTOMER') {
+        await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
+          session_id: sessionId,
+          ip,
+          user_agent: userAgent,
+          type: 'password_changed_receipt',
+          result: 'failed',
+          reason: 'email_send_failed',
+        })
+      }
+    }
+
+    if (updated.role === 'CUSTOMER') {
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_PASSWORD_CHANGE_SUCCESS', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+        email_delivery: emailDelivery,
+      })
+      await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_SESSIONS_REVOKED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'success',
+        mode: 'password_changed_at',
+      })
+    }
+
+    return res.json({ updated: true, user: sanitizeUser(updated), token })
+  } catch (err) {
+    console.error('password change confirm error', err)
+    if (req.user?.role === 'CUSTOMER') {
+      await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_PASSWORD_CHANGE_FAILED', {
+        session_id: sessionId,
+        ip,
+        user_agent: userAgent,
+        result: 'failed',
+        reason: 'server_error',
+      })
+    }
+    return res.status(500).json({ error: 'Failed to update password' })
   }
 })
 

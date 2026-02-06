@@ -38,6 +38,12 @@ const OTP_TEMPLATES = {
     intro:
       'A name change was requested for your Connsura account. Enter the code below in your app to confirm:',
   },
+  password_change: {
+    subject: 'Confirm your password change',
+    heading: 'Confirm your password change',
+    intro:
+      'There is a password change request for your Connsura account. If this is you, enter the code below in your dashboard. If not, contact security@connsura.com immediately.',
+  },
 }
 
 const resolveTemplate = (template) => {
