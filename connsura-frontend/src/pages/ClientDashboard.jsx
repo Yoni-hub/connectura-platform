@@ -13,6 +13,7 @@ import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import ShareSummary from '../components/share/ShareSummary'
 import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
+import Messages from './Messages'
 
 const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Settings']
 
@@ -190,11 +191,6 @@ export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
-  const focusAgentId = useMemo(() => {
-    const params = new URLSearchParams(location.search)
-    const value = Number(params.get('agent'))
-    return Number.isFinite(value) && value > 0 ? value : null
-  }, [location.search])
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState(null)
@@ -212,18 +208,9 @@ export default function ClientDashboard() {
   const formsSaveRef = useRef(null)
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
-  const [threads, setThreads] = useState([])
-  const [threadsLoading, setThreadsLoading] = useState(false)
   const [savedAgents, setSavedAgents] = useState([])
   const [savedAgentsLoading, setSavedAgentsLoading] = useState(false)
   const [savedAgentIdOverrides, setSavedAgentIdOverrides] = useState([])
-  const [focusAgent, setFocusAgent] = useState(null)
-  const [focusAgentLoading, setFocusAgentLoading] = useState(false)
-  const [activeThread, setActiveThread] = useState(null)
-  const [threadMessages, setThreadMessages] = useState([])
-  const [threadLoading, setThreadLoading] = useState(false)
-  const [replyBody, setReplyBody] = useState('')
-  const [sendingReply, setSendingReply] = useState(false)
   const [rateOpen, setRateOpen] = useState(false)
   const [rateAgent, setRateAgent] = useState(null)
   const [settingsModal, setSettingsModal] = useState(null)
@@ -334,6 +321,12 @@ export default function ClientDashboard() {
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
+    if (nextTab !== 'Messages') {
+      params.delete('conversationId')
+      params.delete('agent')
+      params.delete('client')
+      params.delete('customer')
+    }
     nav(`/client/dashboard?${params.toString()}`, { replace: true })
   }
 
@@ -370,19 +363,6 @@ export default function ClientDashboard() {
   useEffect(() => {
     fetchProfile()
   }, [user?.customerId, user?.email])
-
-  const loadThreads = async () => {
-    if (!user?.customerId) return
-    setThreadsLoading(true)
-    try {
-      const res = await api.get(`/messages/customer/${user.customerId}/threads`)
-      setThreads(res.data.threads || [])
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Could not load messages')
-    } finally {
-      setThreadsLoading(false)
-    }
-  }
 
   const loadSavedAgents = async () => {
     if (!user?.customerId) return
@@ -422,64 +402,17 @@ export default function ClientDashboard() {
     }
   }
 
-  const loadThread = async (agentId) => {
-    if (!user?.customerId || !agentId) return
-    setThreadLoading(true)
-    try {
-      const res = await api.get(`/messages/customer/${user.customerId}/thread/${agentId}`)
-      setThreadMessages(res.data.messages || [])
-      setThreads((prev) =>
-        prev.map((thread) => (thread.agent?.id === agentId ? { ...thread, unreadCount: 0 } : thread))
-      )
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Could not load conversation')
-    } finally {
-      setThreadLoading(false)
-    }
-  }
-
-  const handleSendReply = async () => {
-    const trimmed = replyBody.trim()
-    if (!trimmed) {
-      toast.error('Message cannot be empty')
-      return
-    }
-    if (!activeThread?.agent?.id) {
-      toast.error('Select an agent to message')
-      return
-    }
-    setSendingReply(true)
-    try {
-      await api.post('/messages', { agentId: activeThread.agent.id, body: trimmed })
-      setReplyBody('')
-      await loadThread(activeThread.agent.id)
-      await loadThreads()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send message')
-    } finally {
-      setSendingReply(false)
-    }
-  }
-
   const handleRemoveAgent = async (agentId) => {
     if (!user?.customerId) {
       toast.error('Customer profile not found')
       return
     }
-    const confirmed = window.confirm(
-      'Remove this agent? All messages with this agent will also be deleted.'
-    )
+    const confirmed = window.confirm('Remove this agent from your list?')
     if (!confirmed) return
     try {
       await api.delete(`/customers/${user.customerId}/saved-agents/${agentId}`)
-      await api.delete(`/messages/customer/${user.customerId}/thread/${agentId}`)
       toast.success('Agent removed')
       await loadSavedAgents()
-      await loadThreads()
-      if (activeThread?.agent?.id === agentId) {
-        setActiveThread(null)
-        setThreadMessages([])
-      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to remove agent')
     }
@@ -518,7 +451,7 @@ export default function ClientDashboard() {
       toast.error('Only customers can message agents')
       return
     }
-    nav(`/client/dashboard?tab=messages&agent=${agent.id}`)
+    nav(`/messages?agent=${agent.id}`)
   }
 
   const handleRateAgent = (agent) => {
@@ -631,57 +564,8 @@ export default function ClientDashboard() {
   }
 
   useEffect(() => {
-    if (activeTab !== 'Messages') return
-    loadThreads()
-    loadSavedAgents()
-  }, [activeTab, user?.customerId])
-
-  useEffect(() => {
-    if (activeTab !== 'Messages') return
-    if (!focusAgentId) {
-      setFocusAgent(null)
-      setFocusAgentLoading(false)
-      return
-    }
-    if (focusAgent?.id === focusAgentId) return
-    if (threads.some((thread) => thread.agent?.id === focusAgentId)) {
-      setFocusAgent(null)
-      return
-    }
-    if (savedAgents.some((agent) => agent.id === focusAgentId)) {
-      setFocusAgent(null)
-      return
-    }
-    let isActive = true
-    const loadFocusAgent = async () => {
-      setFocusAgentLoading(true)
-      try {
-        const res = await api.get(`/agents/${focusAgentId}`)
-        if (!isActive) return
-        setFocusAgent(res.data?.agent || null)
-      } catch {
-        if (!isActive) return
-        setFocusAgent(null)
-      } finally {
-        if (isActive) {
-          setFocusAgentLoading(false)
-        }
-      }
-    }
-    loadFocusAgent()
-    return () => {
-      isActive = false
-    }
-  }, [activeTab, focusAgentId, focusAgent?.id, threads, savedAgents])
-
-  useEffect(() => {
     if (!user?.customerId) return
-    loadThreads()
     loadSavedAgents()
-    const interval = setInterval(() => {
-      loadThreads()
-    }, 12000)
-    return () => clearInterval(interval)
   }, [user?.customerId])
 
   useEffect(() => {
@@ -741,62 +625,6 @@ export default function ClientDashboard() {
       isActive = false
     }
   }, [activeTab, user?.customerId, sessionId])
-
-  useEffect(() => {
-    if (activeTab !== 'Messages') return
-    if (!threads.length) {
-      if (!focusAgentId) {
-        setActiveThread(null)
-        setThreadMessages([])
-      }
-      return
-    }
-    if (focusAgentId) return
-    if (activeThread?.agent?.id) {
-      const match = threads.find((thread) => thread.agent?.id === activeThread.agent?.id)
-      if (match) {
-        setActiveThread(match)
-      }
-    }
-  }, [threads, activeTab, activeThread, focusAgentId])
-
-  useEffect(() => {
-    if (activeTab !== 'Messages') return
-    if (focusAgentId) return
-    setActiveThread(null)
-    setThreadMessages([])
-  }, [activeTab, focusAgentId])
-
-  useEffect(() => {
-    if (activeTab !== 'Messages') return
-    if (!focusAgentId) return
-    const match = threads.find((thread) => thread.agent?.id === focusAgentId)
-    if (match) {
-      setActiveThread(match)
-      return
-    }
-    const savedMatch = savedAgents.find((agent) => agent.id === focusAgentId)
-    if (savedMatch) {
-      setActiveThread({ agent: savedMatch, lastMessage: null, unreadCount: 0 })
-      setThreadMessages([])
-      return
-    }
-    if (focusAgent) {
-      setActiveThread({ agent: focusAgent, lastMessage: null, unreadCount: 0 })
-      setThreadMessages([])
-    }
-  }, [activeTab, focusAgentId, threads, savedAgents, focusAgent])
-
-  useEffect(() => {
-    if (activeTab !== 'Messages') return
-    if (activeThread?.agent?.id) {
-      loadThread(activeThread.agent.id)
-    }
-  }, [activeTab, activeThread?.agent?.id])
-
-  useEffect(() => {
-    setReplyBody('')
-  }, [activeThread?.agent?.id])
 
   useEffect(() => {
     return () => {
@@ -880,23 +708,6 @@ export default function ClientDashboard() {
     savedAgentIdOverrides.forEach((id) => ids.add(id))
     return ids
   }, [savedAgents, savedAgentIdOverrides])
-  const totalUnread = useMemo(
-    () => threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0),
-    [threads]
-  )
-  const hasAgentReply = useMemo(
-    () => threads.some((thread) => thread.lastMessage?.senderRole === 'AGENT'),
-    [threads]
-  )
-  const waitingOnAgentReply = useMemo(
-    () => threads.some((thread) => thread.lastMessage?.senderRole === 'CUSTOMER'),
-    [threads]
-  )
-  const displayThreads = useMemo(() => {
-    if (!focusAgent) return threads
-    if (threads.some((thread) => thread.agent?.id === focusAgent.id)) return threads
-    return [{ agent: focusAgent, lastMessage: null, unreadCount: 0 }, ...threads]
-  }, [threads, focusAgent])
   const passportForms = formsDraft || client?.profileData?.forms || {}
   const householdForms = passportForms.household || {}
   const namedInsured = householdForms.namedInsured || {}
@@ -1800,11 +1611,6 @@ export default function ClientDashboard() {
                 }`}
               >
                 <span>{item}</span>
-                {item === 'Messages' && totalUnread > 0 && (
-                  <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {totalUnread}
-                  </span>
-                )}
               </button>
             ))}
           </div>
@@ -1844,7 +1650,6 @@ export default function ClientDashboard() {
               {activeTab === 'Agents' && (
                 <p className="text-slate-600">Manage the agents you have saved for quick access.</p>
               )}
-              {activeTab === 'Messages' && <p className="text-slate-600">Messages</p>}
               {activeShares.length > 0 && (
                 <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                   <div className="font-semibold">Sharing in progress</div>
@@ -1896,50 +1701,6 @@ export default function ClientDashboard() {
           {!loading && activeTab === 'Overview' && (
             <div className="surface p-5">
               <p className="text-slate-600">Stay on top of your insurance profile and forms.</p>
-              {totalUnread > 0 && (
-                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
-                  <div className="text-sm font-semibold text-rose-800">
-                    You have {totalUnread} unread {totalUnread === 1 ? 'message' : 'messages'}.{' '}
-                    <button
-                      type="button"
-                      className={reminderLinkClass}
-                      onClick={() => updateTab('Messages')}
-                    >
-                      View messages
-                    </button>
-                  </div>
-                </div>
-              )}
-              {!threadsLoading && threads.length === 0 && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-900">Talk to an agent</div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Browse agents and start a conversation when you are ready.{' '}
-                    <button
-                      type="button"
-                      className={reminderLinkClass}
-                      onClick={() => nav('/agents')}
-                    >
-                      Find agents
-                    </button>
-                  </p>
-                </div>
-              )}
-              {(hasAgentReply || waitingOnAgentReply) && (
-                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
-                  <div className="text-sm font-semibold text-rose-800">Continue your conversation</div>
-                  <p className="mt-1 text-sm text-rose-700">
-                    {hasAgentReply ? 'Agent replied - continue conversation.' : 'Waiting for agent reply.'}{' '}
-                    <button
-                      type="button"
-                      className={reminderLinkClass}
-                      onClick={() => updateTab('Messages')}
-                    >
-                      View messages
-                    </button>
-                  </p>
-                </div>
-              )}
               {savedAgentIds.size > 0 && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="text-sm font-semibold text-slate-900">You have a saved agent</div>
@@ -2003,6 +1764,8 @@ export default function ClientDashboard() {
               </div>
             </div>
           )}
+
+          {!loading && activeTab === 'Messages' && <Messages embedded />}
 
           {!loading && activeTab === 'My Insurance Passport' && (
             <div className="space-y-4">
@@ -2117,202 +1880,6 @@ export default function ClientDashboard() {
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {!loading && activeTab === 'Messages' && (
-            <div className="surface p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  className="pill-btn-ghost px-4"
-                  onClick={loadThreads}
-                  disabled={threadsLoading}
-                >
-                  {threadsLoading ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
-                <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agents</div>
-                  {threadsLoading && <Skeleton className="h-20" />}
-                  {!threadsLoading && focusAgentLoading && displayThreads.length === 0 && (
-                    <div className="text-sm text-slate-500">Loading agent...</div>
-                  )}
-                  {!threadsLoading && displayThreads.length === 0 && (
-                    <div className="text-sm text-slate-500">No messages yet.</div>
-                  )}
-                  {!threadsLoading && displayThreads.length > 0 && (
-                    <div className="space-y-2">
-                      {displayThreads.map((thread) => {
-                        const agentLabel = thread.agent?.name || thread.agent?.email || 'Agent'
-                        const previewPrefix = thread.lastMessage?.senderRole === 'CUSTOMER' ? 'You: ' : ''
-                        const preview = `${previewPrefix}${thread.lastMessage?.body || ''}`.trim()
-                        const isActive = activeThread?.agent?.id === thread.agent?.id
-                        const showRemove = savedAgentIds.has(thread.agent?.id)
-                        return (
-                          <button
-                            key={thread.agent.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveThread(thread)
-                              setThreadMessages([])
-                              if (thread.agent?.id && focusAgentId !== thread.agent.id) {
-                                const params = new URLSearchParams(location.search)
-                                params.set('tab', 'messages')
-                                params.set('agent', String(thread.agent.id))
-                                nav(`/client/dashboard?${params.toString()}`)
-                              }
-                            }}
-                            className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                              isActive
-                                ? 'border-[#0b3b8c] bg-[#e8f0ff]'
-                                : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-600 grid place-items-center font-semibold overflow-hidden">
-                                  {thread.agent?.photo ? (
-                                    <img src={thread.agent.photo} alt={agentLabel} className="h-full w-full object-cover" />
-                                  ) : (
-                                    getInitials(agentLabel)
-                                  )}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-slate-900 truncate">{agentLabel}</div>
-                                  <div className="text-xs text-slate-500 truncate">
-                                    {preview || 'Start a conversation'}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                                {thread.unreadCount > 0 && (
-                                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-                                    {thread.unreadCount}
-                                  </span>
-                                )}
-                                {showRemove && (
-                                  <button
-                                    type="button"
-                                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      handleRemoveAgent(thread.agent.id)
-                                    }}
-                                  >
-                                    Remove
-                                  </button>
-                                )}
-                                {formatTimestamp(thread.lastMessage?.createdAt)}
-                              </div>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-slate-100 bg-white p-4 flex flex-col min-h-[360px]">
-                  {!activeThread && (
-                    <div className="text-sm text-slate-500">Select an agent to start chatting.</div>
-                  )}
-                  {activeThread && (
-                    <>
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                        <div>
-                          <div className="font-semibold text-slate-900">
-                            {activeThread.agent?.name || activeThread.agent?.email || 'Agent'}
-                          </div>
-                          {activeThread.agent?.email && (
-                            <div className="text-xs text-slate-500">{activeThread.agent.email}</div>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                          {activeThread.agent?.id && (
-                            <button
-                              type="button"
-                              className="pill-btn-ghost px-3 text-xs"
-                              onClick={() => handleViewProfile(activeThread.agent)}
-                            >
-                              View profile
-                            </button>
-                          )}
-                          {activeThread.agent?.id && (
-                            <button
-                              type="button"
-                              className={`pill-btn-ghost px-3 text-xs ${
-                                savedAgentIds.has(activeThread.agent.id) ? 'opacity-60 cursor-default' : ''
-                              }`}
-                              onClick={() => handleSaveAgent(activeThread.agent)}
-                              disabled={savedAgentIds.has(activeThread.agent.id)}
-                            >
-                              {savedAgentIds.has(activeThread.agent.id) ? 'Saved' : 'Save agent'}
-                            </button>
-                          )}
-                          <div>{formatTimestamp(activeThread.lastMessage?.createdAt)}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 space-y-3 overflow-y-auto py-4">
-                        {threadLoading && <Skeleton className="h-24" />}
-                        {!threadLoading && threadMessages.length === 0 && (
-                          <div className="text-sm text-slate-500">
-                            {activeThread.lastMessage
-                              ? 'No messages in this conversation.'
-                              : 'Introduce yourself to start the conversation.'}
-                          </div>
-                        )}
-                        {!threadLoading &&
-                          threadMessages.map((message) => {
-                            const isCustomer = message.senderRole === 'CUSTOMER'
-                            return (
-                              <div
-                                key={message.id}
-                                className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}
-                              >
-                                <div
-                                  className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-                                    isCustomer
-                                      ? 'bg-[#0b3b8c] text-white'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
-                                >
-                                  {message.body}
-                                  <div
-                                    className={`mt-1 text-[11px] ${
-                                      isCustomer ? 'text-white/70' : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {formatTimestamp(message.createdAt)}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                      </div>
-
-                      <div className="flex gap-3 border-t border-slate-100 pt-3">
-                        <textarea
-                          className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[44px]"
-                          value={replyBody}
-                          onChange={(e) => setReplyBody(e.target.value)}
-                          placeholder="Write a message..."
-                        />
-                        <button
-                          type="button"
-                          className="pill-btn-primary px-5"
-                          onClick={handleSendReply}
-                          disabled={sendingReply}
-                        >
-                          {sendingReply ? 'Sending...' : 'Send'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           )}
 

@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "migrate": "prisma db push && prisma generate",
     "seed": "prisma db seed",
+    "test": "node --test",
     "postinstall": "prisma generate"
   },
   "keywords": [],
@@ -31,10 +32,13 @@
     "nodemailer": "^7.0.11",
     "otplib": "^12.0.1",
     "playwright": "^1.47.2",
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.11",
-    "prisma": "^4.16.2"
+    "prisma": "^4.16.2",
+    "socket.io-client": "^4.7.5",
+    "supertest": "^7.0.0"
   }
 }

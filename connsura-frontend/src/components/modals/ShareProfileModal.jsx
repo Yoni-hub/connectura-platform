@@ -353,7 +353,14 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
         'The link requires the 4-digit code from the customer.',
       ].filter(Boolean)
       try {
-        await api.post('/messages', { agentId, body: messageLines.join('\n') })
+        const convoRes = await api.post('/api/messages/conversations', { agentId })
+        const conversationId = convoRes.data?.conversationId
+        if (!conversationId) {
+          throw new Error('No conversation id')
+        }
+        await api.post(`/api/messages/conversations/${conversationId}/messages`, {
+          body: messageLines.join('\n'),
+        })
         toast.success('Share sent to agent')
       } catch (err) {
         toast.error(err.response?.data?.error || 'Unable to send to agent')

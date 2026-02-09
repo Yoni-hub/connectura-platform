@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import Home from '../pages/Home'
 import AgentResults from '../pages/AgentResults'
 import AgentProfile from '../pages/AgentProfile'
@@ -57,12 +57,31 @@ function CustomerOnly({ children }) {
   return children
 }
 
+function MessagesRedirect() {
+  const { user, authReady } = useAuth()
+  const location = useLocation()
+  const params = useParams()
+  if (!authReady) return null
+  if (!user) return <Navigate to="/" replace />
+
+  const searchParams = new URLSearchParams(location.search)
+  if (params.conversationId) {
+    searchParams.set('conversationId', params.conversationId)
+  }
+  searchParams.set('tab', 'messages')
+
+  const target =
+    user.role === 'AGENT' ? '/agent/dashboard' : user.role === 'CUSTOMER' ? '/client/dashboard' : '/dashboard'
+  return <Navigate to={`${target}?${searchParams.toString()}`} replace />
+}
+
 function Layout() {
   const location = useLocation()
   const footerHiddenOnMobile =
     location.pathname === '/client/dashboard' ||
     location.pathname === '/dashboard' ||
-    location.pathname === '/agent/dashboard'
+    location.pathname === '/agent/dashboard' ||
+    location.pathname.startsWith('/messages')
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -96,6 +115,22 @@ function Layout() {
               <AgentApprovedOnly>
                 <AgentDashboard />
               </AgentApprovedOnly>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <Protected>
+                <MessagesRedirect />
+              </Protected>
+            }
+          />
+          <Route
+            path="/messages/:conversationId"
+            element={
+              <Protected>
+                <MessagesRedirect />
+              </Protected>
             }
           />
           <Route path="/agent/onboarding" element={<AgentOnboarding />} />

@@ -74,7 +74,7 @@ export default function AgentProfile() {
       toast.error('Only customers can message agents')
       return
     }
-    nav(`/client/dashboard?tab=messages&agent=${agent.id}`)
+    nav(`/messages?agent=${agent.id}`)
   }
 
   const handleSaveAgent = async () => {

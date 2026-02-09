@@ -3,6 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const path = require('path')
 const bcrypt = require('bcrypt')
+const http = require('http')
 
 const authRoutes = require('../login_signup_system/auth')
 const agentRoutes = require('./routes/agents')
@@ -19,49 +20,54 @@ const formSchemaRoutes = require('./routes/formSchema')
 const productRoutes = require('./routes/products')
 const legalRoutes = require('./routes/legal')
 const prisma = require('./prisma')
+const { initSocket } = require('./socket')
 const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
 const { ensureLegalDocuments } = require('./utils/legalDocuments')
 
-const app = express()
 const PORT = process.env.PORT || 8000
 const HOST = process.env.HOST || '127.0.0.1'
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true,
+const createApp = () => {
+  const app = express()
+  app.use(
+    cors({
+      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      credentials: true,
+    })
+  )
+  app.use(express.json({ limit: '2mb' }))
+  app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
+
+  app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Connsura API' })
   })
-)
-app.use(express.json({ limit: '2mb' }))
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Connsura API' })
-})
+  app.use('/auth', authRoutes)
+  app.use('/agents', agentRoutes)
+  app.use('/customers', customerRoutes)
+  app.use('/search', searchRoutes)
+  app.use('/', quoteRoutes)
+  app.use('/contact', contactRoutes)
+  app.use('/admin', adminRoutes)
+  app.use('/api/messages', messageRoutes)
+  app.use('/questions', questionRoutes)
+  app.use('/shares', shareRoutes)
+  app.use('/legal', legalRoutes)
+  app.use('/site-content', siteContentRoutes)
+  app.use('/form-schema', formSchemaRoutes)
+  app.use('/products', productRoutes)
 
-app.use('/auth', authRoutes)
-app.use('/agents', agentRoutes)
-app.use('/customers', customerRoutes)
-app.use('/search', searchRoutes)
-app.use('/', quoteRoutes)
-app.use('/contact', contactRoutes)
-app.use('/admin', adminRoutes)
-app.use('/messages', messageRoutes)
-app.use('/questions', questionRoutes)
-app.use('/shares', shareRoutes)
-app.use('/legal', legalRoutes)
-app.use('/site-content', siteContentRoutes)
-app.use('/form-schema', formSchemaRoutes)
-app.use('/products', productRoutes)
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' })
+  })
 
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' })
-})
+  app.use((err, req, res, next) => {
+    console.error('API error', err)
+    res.status(500).json({ error: 'Internal server error', detail: err.message })
+  })
 
-app.use((err, req, res, next) => {
-  console.error('API error', err)
-  res.status(500).json({ error: 'Internal server error', detail: err.message })
-})
+  return app
+}
 
 async function ensureAdminSeed() {
   const email = process.env.ADMIN_EMAIL
@@ -95,10 +101,23 @@ async function ensureQuestionBank() {
   console.log(`Seeded ${records.length} system questions.`)
 }
 
-Promise.all([ensureAdminSeed(), ensureQuestionBank(), ensureLegalDocuments(prisma)])
-  .catch((err) => console.error('Startup seed error', err))
-  .finally(() => {
-    app.listen(PORT, HOST, () => {
-      console.log(`Connsura API running on http://${HOST}:${PORT}`)
+const createServer = () => {
+  const app = createApp()
+  const server = http.createServer(app)
+  const io = initSocket(server)
+  app.set('io', io)
+  return { app, server, io }
+}
+
+if (require.main === module) {
+  const { server } = createServer()
+  Promise.all([ensureAdminSeed(), ensureQuestionBank(), ensureLegalDocuments(prisma)])
+    .catch((err) => console.error('Startup seed error', err))
+    .finally(() => {
+      server.listen(PORT, HOST, () => {
+        console.log(`Connsura API running on http://${HOST}:${PORT}`)
+      })
     })
-  })
+}
+
+module.exports = { createApp, createServer }

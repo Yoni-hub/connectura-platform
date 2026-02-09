@@ -33,7 +33,12 @@ export default function MessageAgentModal({ open, agent, onClose, onSent }) {
     }
     setSending(true)
     try {
-      await api.post('/messages', { agentId: agent.id, body })
+      const convoRes = await api.post('/api/messages/conversations', { agentId: agent.id })
+      const conversationId = convoRes.data?.conversationId
+      if (!conversationId) {
+        throw new Error('No conversation id')
+      }
+      await api.post(`/api/messages/conversations/${conversationId}/messages`, { body })
       toast.success('Message sent')
       setMessageBody('')
       onSent?.(agent)
