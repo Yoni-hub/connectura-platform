@@ -527,6 +527,42 @@ const normalizeQuestionText = (value = '') =>
     .toLowerCase()
     .replace(/\s+/g, ' ')
 
+const normalizeSelectOptionsList = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean)
+  }
+  if (!value) return []
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => String(entry || '').trim()).filter(Boolean)
+      }
+    } catch {
+      // Fall back to comma-separated parsing.
+    }
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+const resolveQuestionInputConfig = (inputType, selectOptions) => {
+  const normalized = String(inputType || '').trim().toLowerCase()
+  if (normalized === 'select') {
+    return { type: 'select', options: normalizeSelectOptionsList(selectOptions) }
+  }
+  if (normalized === 'yes/no') {
+    return { type: 'select', options: yesNoOptions }
+  }
+  if (['number', 'date', 'text'].includes(normalized)) {
+    return { type: normalized, options: undefined }
+  }
+  return { type: 'text', options: undefined }
+}
+
 const hasNamedInsuredData = (person) =>
   Object.entries(person || {}).some(([key, value]) => key !== 'relation' && hasNonEmptyValue(value))
 
@@ -706,6 +742,8 @@ export default function CreateProfile({
         .map((question) => ({
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
+          inputType: question?.inputType || 'general',
+          selectOptions: normalizeSelectOptionsList(question?.selectOptions),
         }))
         .filter((entry) => entry.key)
       setSectionBankQuestions((prev) => ({
@@ -1157,10 +1195,12 @@ export default function CreateProfile({
         const keySuffix = valueKeyPrefix ? `${valueKeyPrefix}-${normalized}` : normalized
         const key = `qb-${keySuffix}`
         if (!text || key === 'qb-' || excludeKeys.has(normalized)) return null
+        const { type, options } = resolveQuestionInputConfig(question?.inputType, question?.selectOptions)
         return {
           id: `${idPrefix}-${index}`,
           label: text,
-          type: 'text',
+          type,
+          options,
           value: customFieldValues?.[sectionKey]?.[key] ?? '',
           onChange: (event) => setCustomFieldValue(sectionKey, key, event.target.value),
         }
@@ -1446,6 +1486,8 @@ export default function CreateProfile({
         .map((question) => ({
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
+          inputType: question?.inputType || 'general',
+          selectOptions: normalizeSelectOptionsList(question?.selectOptions),
         }))
         .filter((entry) => entry.key)
       const customerList = customerQuestions
@@ -1470,17 +1512,23 @@ export default function CreateProfile({
         question: entry.text,
         input: existingMap.has(entry.key) ? existingMap.get(entry.key)?.input ?? '' : '',
         source: 'SYSTEM',
+        inputType: entry.inputType || 'general',
+        selectOptions: entry.selectOptions || [],
       }))
       const customerEntries = customerList.map((entry) => ({
         question: entry.text,
         input: existingMap.has(entry.key) ? existingMap.get(entry.key)?.input ?? '' : '',
         source: 'CUSTOMER',
+        inputType: 'general',
+        selectOptions: [],
       }))
       const extraEntries = additionalQuestions
         .map((question) => ({
           question: question?.question || '',
           input: question?.input ?? '',
           source: 'CUSTOMER',
+          inputType: question?.inputType || 'general',
+          selectOptions: normalizeSelectOptionsList(question?.selectOptions),
           key: normalizeQuestionText(question?.question || ''),
         }))
         .filter(
@@ -1918,6 +1966,8 @@ export default function CreateProfile({
         id: `addr-bank-custom-${index}`,
         label,
         customKey: `qb-${normalized}`,
+        inputType: question?.inputType || 'general',
+        selectOptions: normalizeSelectOptionsList(question?.selectOptions),
       })
     })
 
@@ -2891,11 +2941,14 @@ export default function CreateProfile({
 
                           if (row.type === 'custom') {
                             const value = customFieldValues?.address?.[row.customKey] ?? ''
+                            const config = resolveQuestionInputConfig(row.inputType, row.selectOptions)
                             return (
                               <div key={row.id} className="contents">
                                 <FieldRow
                                   id={row.id}
                                   label={row.label}
+                                  type={config.type}
+                                  options={config.options}
                                   value={value}
                                   onChange={(event) => setCustomFieldValue('address', row.customKey, event.target.value)}
                                 />
@@ -3197,13 +3250,40 @@ export default function CreateProfile({
                                     </div>
                                   )
                                 ) : (
-                                  <input
-                                    className={inputClass}
-                                    placeholder="Answer"
-                                    aria-label="Answer"
-                                    value={question.input}
-                                    onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
-                                  />
+                                  (() => {
+                                    const config = resolveQuestionInputConfig(
+                                      question?.inputType,
+                                      question?.selectOptions
+                                    )
+                                    if (config.type === 'select') {
+                                      return (
+                                        <select
+                                          className={inputClass}
+                                          value={question.input}
+                                          onChange={(event) =>
+                                            updateAdditionalQuestion(index, 'input', event.target.value)
+                                          }
+                                        >
+                                          <option value="">- Select -</option>
+                                          {(config.options || []).map((option) => (
+                                            <option key={`${option}-${index}`} value={option}>
+                                              {option}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      )
+                                    }
+                                    return (
+                                      <input
+                                        className={inputClass}
+                                        placeholder="Answer"
+                                        aria-label="Answer"
+                                        type={config.type || 'text'}
+                                        value={question.input}
+                                        onChange={(event) => updateAdditionalQuestion(index, 'input', event.target.value)}
+                                      />
+                                    )
+                                  })()
                                 )}
                               </div>
                             ))}

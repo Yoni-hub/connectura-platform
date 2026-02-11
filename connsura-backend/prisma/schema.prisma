@@ -33,6 +33,7 @@ model User {
   customer  Customer?
   consents  UserConsent[]
   readStates ReadState[]
+  errorEvents ErrorEvent[]
 }
 
 model Agent {
@@ -255,6 +256,8 @@ model QuestionBank {
   normalized String         @unique
   sortOrder  Int?
   source     QuestionSource @default(SYSTEM)
+  inputType  String         @default("general")
+  selectOptions String      @default("[]")
   productId  Int?
   customerId Int?
   createdAt  DateTime       @default(now())

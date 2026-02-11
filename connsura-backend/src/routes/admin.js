@@ -710,6 +710,22 @@ const resolveFormProductId = (value) => {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+const QUESTION_INPUT_TYPES = new Set(['general', 'select', 'yes/no', 'number', 'date', 'text'])
+const normalizeQuestionInputType = (value) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (QUESTION_INPUT_TYPES.has(normalized)) return normalized
+  if (normalized === 'yesno' || normalized === 'yes-no' || normalized === 'yes_no') return 'yes/no'
+  return 'general'
+}
+
+const normalizeSelectOptions = (value) => {
+  if (!value) return []
+  const list = Array.isArray(value) ? value : String(value).split(',')
+  return list
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean)
+}
+
 const resolveFormName = (form, fallbackName) => {
   const name = String(form?.name || form?.productName || fallbackName || '').trim()
   return name
@@ -837,6 +853,8 @@ router.get('/questions', adminGuard, async (req, res) => {
       text: row.text,
       source: 'SYSTEM',
       productId: row.productId,
+      inputType: row.inputType || 'general',
+      selectOptions: parseJson(row.selectOptions, []),
       customerId: null,
       customerName: null,
       customerEmail: null,
@@ -847,6 +865,8 @@ router.get('/questions', adminGuard, async (req, res) => {
       text: row.text,
       source: 'CUSTOMER',
       productId: row.productId,
+      inputType: 'general',
+      selectOptions: [],
       customerId: row.customerId,
       customerName: row.customer?.name || null,
       customerEmail: row.customer?.user?.email || null,
@@ -954,6 +974,8 @@ router.post('/questions', adminGuard, async (req, res) => {
         text: question.text,
         source: question.source,
         productId: question.productId,
+        inputType: question.inputType || 'general',
+        selectOptions: parseJson(question.selectOptions, []),
       })),
     })
   }
@@ -999,7 +1021,9 @@ router.post('/questions', adminGuard, async (req, res) => {
         id: question.id,
         text: question.text,
         source: question.source,
-      productId: question.productId,
+        productId: question.productId,
+        inputType: question.inputType || 'general',
+        selectOptions: parseJson(question.selectOptions, []),
     })),
   }
 
@@ -1037,11 +1061,11 @@ router.delete('/questions/:id', adminGuard, async (req, res) => {
 
 router.put('/questions/:id', adminGuard, async (req, res) => {
   const id = Number(req.params.id)
-  const text = String(req.body?.text || '').trim()
   if (!id) return res.status(400).json({ error: 'Question id required' })
-  if (!text) return res.status(400).json({ error: 'Question text is required' })
   const source = String(req.body?.source || req.query.source || '').toUpperCase()
   if (source === 'CUSTOMER') {
+    const text = String(req.body?.text || '').trim()
+    if (!text) return res.status(400).json({ error: 'Question text is required' })
     const existing = await prisma.customerQuestion.findUnique({ where: { id } })
     if (!existing) return res.status(404).json({ error: 'Question not found' })
     const normalized = normalizeQuestion(text)
@@ -1061,31 +1085,46 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
         source: 'CUSTOMER',
         productId: updated.productId,
         formName: updated.formName,
+        inputType: 'general',
+        selectOptions: [],
       },
     })
   }
 
   const existing = await prisma.questionBank.findUnique({ where: { id } })
   if (!existing) return res.status(404).json({ error: 'Question not found' })
-  if (existing.source !== 'CUSTOMER') {
-    return res.status(400).json({ error: 'Only customer questions can be edited' })
+  const nextInputType = normalizeQuestionInputType(req.body?.inputType ?? existing.inputType)
+  const hasSelectOptions = Object.prototype.hasOwnProperty.call(req.body || {}, 'selectOptions')
+  const nextSelectOptions = hasSelectOptions
+    ? normalizeSelectOptions(req.body?.selectOptions)
+    : parseJson(existing.selectOptions, [])
+  const nextText = String(req.body?.text || '').trim()
+  const data = {
+    inputType: nextInputType,
+    selectOptions: JSON.stringify(nextSelectOptions),
   }
-  const normalized = normalizeQuestion(text)
-  if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+  if (nextText) {
+    const normalized = normalizeQuestion(nextText)
+    if (!normalized) return res.status(400).json({ error: 'Invalid question text' })
+    data.text = nextText
+    data.normalized = normalized
+  }
   const updated = await prisma.questionBank.update({
     where: { id },
-    data: {
-      text,
-      normalized,
-    },
+    data,
   })
-  await logAudit(req.admin.id, 'QuestionBank', id, 'update', { text })
+  await logAudit(req.admin.id, 'QuestionBank', id, 'update', {
+    text: nextText || updated.text,
+    inputType: nextInputType,
+  })
   res.json({
     question: {
       id: updated.id,
       text: updated.text,
       source: updated.source,
       productId: updated.productId,
+      inputType: updated.inputType || 'general',
+      selectOptions: parseJson(updated.selectOptions, []),
     },
   })
 })

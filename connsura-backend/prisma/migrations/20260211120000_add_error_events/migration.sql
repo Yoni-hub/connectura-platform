@@ -1,4 +1,4 @@
-﻿-- Create error events
+-- Create error events
 CREATE TABLE "ErrorEvent" (
     "id" SERIAL NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

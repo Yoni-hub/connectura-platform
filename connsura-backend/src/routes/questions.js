@@ -1,6 +1,7 @@
 const express = require('express')
 const prisma = require('../prisma')
 const { buildCustomerQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
+const { parseJson } = require('../utils/transform')
 const { authGuard, getAuthToken } = require('../middleware/auth')
 const { verifyToken } = require('../utils/token')
 
@@ -37,8 +38,20 @@ router.get('/product', async (req, res) => {
       : []
     return res.json({
       questions: [
-        ...systemQuestions.map((row) => ({ id: row.id, text: row.text, source: 'SYSTEM' })),
-        ...customerQuestions.map((row) => ({ id: row.id, text: row.text, source: 'CUSTOMER' })),
+        ...systemQuestions.map((row) => ({
+          id: row.id,
+          text: row.text,
+          source: 'SYSTEM',
+          inputType: row.inputType || 'general',
+          selectOptions: parseJson(row.selectOptions, []),
+        })),
+        ...customerQuestions.map((row) => ({
+          id: row.id,
+          text: row.text,
+          source: 'CUSTOMER',
+          inputType: 'general',
+          selectOptions: [],
+        })),
       ],
     })
   } catch (error) {
