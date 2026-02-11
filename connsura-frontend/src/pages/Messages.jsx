@@ -50,14 +50,14 @@ const linkifyText = (text, keyPrefix = '') => {
           href={part}
           target="_blank"
           rel="noreferrer"
-          className="text-[#0b3b8c] underline break-words"
+          className="text-[#0b3b8c] underline break-words [overflow-wrap:anywhere]"
         >
           {part}
         </a>
       )
     }
     return (
-      <span key={`${keyPrefix}-text-${index}`} className="break-words">
+      <span key={`${keyPrefix}-text-${index}`} className="break-words [overflow-wrap:anywhere]">
         {part}
       </span>
     )
@@ -457,7 +457,7 @@ export default function Messages({ embedded = false }) {
 
       <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
           <div
-            className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${
+            className={`min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm ${
               hideListOnMobile ? 'hidden lg:block' : ''
             }`}
           >
@@ -521,7 +521,7 @@ export default function Messages({ embedded = false }) {
           </div>
 
           <div
-            className={`rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col ${threadHeightClass} ${
+            className={`min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col ${threadHeightClass} ${
               threadVisible ? '' : 'hidden lg:flex'
             }`}
           >
@@ -551,7 +551,7 @@ export default function Messages({ embedded = false }) {
                 </div>
 
                 <div
-                  className="flex-1 overflow-y-auto bg-slate-50 px-4 py-4"
+                  className="flex-1 w-full max-w-full min-w-0 overflow-y-auto overflow-x-hidden bg-slate-50 px-4 py-4"
                   ref={scrollRef}
                   onScroll={handleScroll}
                 >
@@ -574,13 +574,13 @@ export default function Messages({ embedded = false }) {
                                   {formatTimestamp(message.createdAt)}
                                 </div>
                               )}
-                              <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`flex w-full min-w-0 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                                 <div
-                                  className={`max-w-[78%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap shadow-sm ${
+                                  className={`max-w-[85%] sm:max-w-[78%] min-w-0 overflow-hidden rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] break-words shadow-sm ${
                                     isOwn ? 'bg-[#0b3b8c] text-white' : 'bg-white text-slate-800 border border-slate-100'
                                   }`}
                                 >
-                                  <div className="space-y-1 break-words">
+                                  <div className="min-w-0 space-y-1 break-words [overflow-wrap:anywhere]">
                                     {String(displayBody || '')
                                       .split('\n')
                                       .map((line, lineIndex) => (

@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
 import LegalConsentModal from '../components/modals/LegalConsentModal'
+import ErrorBoundary from '../components/ui/ErrorBoundary'
 
 function Protected({ children }) {
   const { user, authReady } = useAuth()
@@ -97,7 +98,9 @@ function Layout() {
             path="/dashboard"
             element={
               <Protected>
-                <ClientDashboard />
+                <ErrorBoundary>
+                  <ClientDashboard />
+                </ErrorBoundary>
               </Protected>
             }
           />
@@ -105,7 +108,19 @@ function Layout() {
             path="/client/dashboard"
             element={
               <CustomerOnly>
-                <ClientDashboard />
+                <ErrorBoundary>
+                  <ClientDashboard />
+                </ErrorBoundary>
+              </CustomerOnly>
+            }
+          />
+          <Route
+            path="/passport/forms/edit/:section"
+            element={
+              <CustomerOnly>
+                <ErrorBoundary>
+                  <ClientDashboard />
+                </ErrorBoundary>
               </CustomerOnly>
             }
           />
@@ -146,6 +161,7 @@ function Layout() {
           <Route path="/recover" element={<AccountRecovery />} />
           <Route path="/account-deleted" element={<AccountDeleted />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/errors" element={<Admin initialView="errors" />} />
         </Routes>
       </div>
       {footerHiddenOnMobile ? (

@@ -60,6 +60,48 @@ const parseDateValue = (value) => {
   return parsed
 }
 
+const sanitizeJsonValue = (value, maxDepth = 50) => {
+  const seen = new WeakMap()
+  const normalizePrimitive = (val) => {
+    if (typeof val === 'bigint') {
+      const asNumber = Number(val)
+      return Number.isSafeInteger(asNumber) ? asNumber : val.toString()
+    }
+    if (typeof val === 'function' || typeof val === 'symbol') return undefined
+    return val
+  }
+  const buildClone = (input, depth) => {
+    if (input === null || input === undefined) return input
+    const primitive = normalizePrimitive(input)
+    if (primitive !== input) return primitive
+    if (typeof input !== 'object') return input
+    if (depth >= maxDepth) return undefined
+    if (seen.has(input)) return undefined
+    const output = Array.isArray(input) ? [] : {}
+    seen.set(input, output)
+    if (Array.isArray(input)) {
+      input.forEach((item) => {
+        const next = buildClone(item, depth + 1)
+        if (next !== undefined) output.push(next)
+      })
+      return output
+    }
+    Object.entries(input).forEach(([key, val]) => {
+      const next = buildClone(val, depth + 1)
+      if (next !== undefined) {
+        output[key] = next
+      }
+    })
+    return output
+  }
+  return buildClone(value, 0)
+}
+
+const safeStringify = (value) => {
+  const sanitized = sanitizeJsonValue(value)
+  return JSON.stringify(sanitized ?? {})
+}
+
 const handleOtpSendError = (err, res) => {
   if (err instanceof RateLimitError || err?.code === 'RATE_LIMIT') {
     if (err.retryAfterSeconds) {
@@ -558,10 +600,21 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
     forms_started: true,
   }
 
+  let serializedProfileData = ''
+  try {
+    serializedProfileData = safeStringify(updatedProfileData)
+  } catch (error) {
+    console.error('forms section-save serialization error', error)
+    return res.status(400).json({
+      error: 'Invalid profile data payload',
+      detail: process.env.NODE_ENV === 'production' ? undefined : error?.message,
+    })
+  }
+
   try {
     const updated = await prisma.customer.update({
       where: { id: customerId },
-      data: { profileData: JSON.stringify(updatedProfileData) },
+      data: { profileData: serializedProfileData },
       include: { drivers: true, vehicles: true },
     })
     await logClientAudit(customerId, 'CLIENT_FORM_SECTION_SAVED', {
@@ -576,11 +629,15 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
     }
     return res.json({ profile: formatCustomerProfile(updated) })
   } catch (error) {
+    console.error('forms section-save update error', error)
     await logClientAudit(customerId, 'CLIENT_FORM_SECTION_SAVED', {
       section,
       result: 'FAILED',
     })
-    return res.status(500).json({ error: 'Failed to save profile section' })
+    return res.status(500).json({
+      error: 'Failed to save profile section',
+      detail: process.env.NODE_ENV === 'production' ? undefined : error?.message,
+    })
   }
 })
 

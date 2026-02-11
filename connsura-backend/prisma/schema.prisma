@@ -193,6 +193,29 @@ model AuditLog {
   createdAt  DateTime  @default(now())
 }
 
+model ErrorEvent {
+  id             Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  level          String   @default("error")
+  source         String   @default("frontend")
+  message        String
+  stack          String?
+  url            String?
+  userAgent      String?
+  componentStack String?
+  release        String?
+  sessionId      String?
+  fingerprint    String?
+  metadata       String?
+  userId         Int?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([level])
+  @@index([source])
+  @@index([userId])
+}
+
 model SiteContent {
   id          Int      @id @default(autoincrement())
   slug        String   @unique

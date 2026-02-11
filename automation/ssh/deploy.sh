@@ -74,6 +74,8 @@ if [[ -z "${JWT_SECRET:-}" ]]; then
   JWT_SECRET="$(openssl rand -hex 32)"
 fi
 
+ERROR_LOG_PATH="${ERROR_LOG_PATH:-/opt/connsura/error-events.log}"
+
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
 umask 077
@@ -89,6 +91,7 @@ DB_PASSWORD=${DB_PASSWORD}
 DATABASE_URL=${DATABASE_URL}
 JWT_SECRET=${JWT_SECRET}
 FRONTEND_URL=https://${DOMAIN}
+ERROR_LOG_PATH=${ERROR_LOG_PATH}
 EOF
 
 if [[ -n "${ADMIN_EMAIL:-}" && -n "${ADMIN_PASSWORD:-}" ]]; then

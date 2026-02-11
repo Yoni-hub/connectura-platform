@@ -19,6 +19,7 @@ const siteContentRoutes = require('./routes/siteContent')
 const formSchemaRoutes = require('./routes/formSchema')
 const productRoutes = require('./routes/products')
 const legalRoutes = require('./routes/legal')
+const errorRoutes = require('./routes/errors')
 const prisma = require('./prisma')
 const { initSocket } = require('./socket')
 const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
@@ -56,6 +57,7 @@ const createApp = () => {
   app.use('/site-content', siteContentRoutes)
   app.use('/form-schema', formSchemaRoutes)
   app.use('/products', productRoutes)
+  app.use('/errors', errorRoutes)
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' })

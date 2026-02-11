@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { API_URL, api } from '../services/api'
@@ -191,6 +191,10 @@ export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
+  const params = useParams()
+  const formsEditSection = resolveFormsSectionKey(params.section || '')
+  const isFormsEditRoute =
+    location.pathname.startsWith('/passport/forms/edit') && Boolean(formsEditSection)
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState(null)
@@ -283,11 +287,48 @@ export default function ClientDashboard() {
     email: user?.email || '',
   })
   const sessionId = useMemo(() => getSessionId(), [])
+  const formsEditContext = useMemo(() => {
+    if (!isFormsEditRoute) return null
+    const params = new URLSearchParams(location.search)
+    const parseIndex = (key) => {
+      const raw = params.get(key)
+      if (!raw) return null
+      if (raw === 'primary') return 'primary'
+      if (raw === 'new') return 'new'
+      const num = Number(raw)
+      return Number.isFinite(num) ? num : null
+    }
+    return {
+      householdIndex: parseIndex('household'),
+      addressIndex: parseIndex('address'),
+      additionalFormIndex: (() => {
+        const raw = params.get('additionalForm')
+        if (!raw) return null
+        const num = Number(raw)
+        return Number.isFinite(num) ? num : null
+      })(),
+    }
+  }, [isFormsEditRoute, location.search])
 
   useEffect(() => {
+    if (isFormsEditRoute) {
+      setActiveTab('Forms')
+      return
+    }
     const nextTab = resolveTabFromSearch(location.search)
     setActiveTab(nextTab)
-  }, [location.search])
+  }, [location.search, isFormsEditRoute])
+
+  useEffect(() => {
+    if (isFormsEditRoute) return
+    const nextTab = resolveTabFromSearch(location.search)
+    if (nextTab !== 'Forms') return
+    const params = new URLSearchParams(location.search)
+    const sectionParam = resolveFormsSectionKey(params.get('section') || '')
+    if (!sectionParam) return
+    setFormsStartSection(sectionParam)
+    setFormsStartKey((prev) => prev + 1)
+  }, [location.search, isFormsEditRoute])
 
   useEffect(() => {
     if (user?.email) {
@@ -967,6 +1008,54 @@ export default function ClientDashboard() {
     setShareOpen(true)
   }
 
+  const formsBasePath =
+    location.pathname.startsWith('/dashboard') && !location.pathname.startsWith('/client/dashboard')
+      ? '/dashboard'
+      : '/client/dashboard'
+
+  const buildFormsListUrl = (sectionKey, preserveSearch = false) => {
+    const params = preserveSearch ? new URLSearchParams(location.search) : new URLSearchParams()
+    params.set('tab', 'forms')
+    if (sectionKey) {
+      params.set('section', sectionKey)
+    } else {
+      params.delete('section')
+    }
+    return `${formsBasePath}?${params.toString()}`
+  }
+
+  const handleMobileEditNavigate = (section, options = {}) => {
+    const sectionKey = resolveFormsSectionKey(section || '')
+    if (!sectionKey) return
+    nav(buildFormsListUrl(sectionKey, true), { replace: true })
+    const editParams = new URLSearchParams()
+    if (sectionKey === 'household' && options.householdIndex !== undefined) {
+      editParams.set('household', String(options.householdIndex))
+    }
+    if (sectionKey === 'address' && options.addressIndex !== undefined) {
+      editParams.set('address', String(options.addressIndex))
+    }
+    if (sectionKey === 'additional' && typeof options.additionalFormIndex === 'number') {
+      editParams.set('additionalForm', String(options.additionalFormIndex))
+    }
+    const editSuffix = editParams.toString()
+    nav(`/passport/forms/edit/${sectionKey}${editSuffix ? `?${editSuffix}` : ''}`)
+  }
+
+  const handleEditBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      nav(-1)
+      return
+    }
+    nav(buildFormsListUrl(formsEditSection, false), { replace: true })
+  }
+
+  useEffect(() => {
+    if (!location.pathname.startsWith('/passport/forms/edit')) return
+    if (formsEditSection) return
+    nav(buildFormsListUrl('', false), { replace: true })
+  }, [location.pathname, formsEditSection])
+
   const openFormsFlow = () => {
     setFormsStartSection('household')
     setFormsStartKey((prev) => prev + 1)
@@ -1027,12 +1116,40 @@ export default function ClientDashboard() {
     nav('/agents')
   }
 
+  const sanitizeForJson = (value) => {
+    try {
+      return JSON.parse(JSON.stringify(value))
+    } catch (error) {
+      const seen = new WeakSet()
+      try {
+        return JSON.parse(
+          JSON.stringify(value, (key, val) => {
+            if (typeof val === 'function' || typeof val === 'symbol') return undefined
+            if (typeof val === 'object' && val !== null) {
+              if (seen.has(val)) return undefined
+              seen.add(val)
+            }
+            return val
+          })
+        )
+      } catch (err) {
+        console.warn('Failed to sanitize forms payload', err)
+        return null
+      }
+    }
+  }
+
   const handleSectionSave = async ({ section, nextSection, forms, profileStatus, logClick }) => {
     if (!user?.customerId) {
       toast.error('Customer profile not found')
       return { success: false }
     }
     try {
+      const sanitizedForms = forms ? sanitizeForJson(forms) : forms
+      if (forms && sanitizedForms === null) {
+        toast.error('Unable to save forms section')
+        return { success: false }
+      }
       const res = await api.post(`/customers/${user.customerId}/forms/section-save`, {
         section,
         nextSection,
@@ -1042,18 +1159,22 @@ export default function ClientDashboard() {
           profile_status: profileStatus || 'draft',
           current_section: nextSection,
           forms_started: true,
-          forms,
+          forms: sanitizedForms ?? forms,
         },
       })
       if (res.data?.profile) {
         setClient(res.data.profile)
       }
       if (forms) {
-        setFormsDraft(forms)
+        setFormsDraft(sanitizedForms ?? forms)
       }
       return { success: true }
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Unable to save forms section')
+      const errorData = err.response?.data
+      const errorText = errorData?.error || 'Unable to save forms section'
+      const detailText = errorData?.detail ? ` (${errorData.detail})` : ''
+      console.warn('Unable to save forms section', err, errorData)
+      toast.error(`${errorText}${detailText}`)
       return { success: false }
     }
   }
@@ -1098,6 +1219,27 @@ export default function ClientDashboard() {
     } finally {
       setRevokingShare('')
     }
+  }
+
+  if (isFormsEditRoute) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-3 py-4">
+        {loading ? (
+          <Skeleton className="h-24" />
+        ) : (
+          <CreateProfile
+            onShareSnapshotChange={setShareSnapshot}
+            onFormDataChange={setFormsDraft}
+            initialData={client?.profileData?.forms || null}
+            onSectionSave={handleSectionSave}
+            editSection={formsEditSection}
+            editContext={formsEditContext}
+            onEditBack={handleEditBack}
+            onMobileEditNavigate={handleMobileEditNavigate}
+          />
+        )}
+      </div>
+    )
   }
 
   const handlePasswordSubmit = async (e) => {
@@ -1832,6 +1974,7 @@ export default function ClientDashboard() {
                 startSection={formsStartSection}
                 startKey={formsStartKey}
                 onSectionSave={handleSectionSave}
+                onMobileEditNavigate={handleMobileEditNavigate}
               />
             </div>
           )}

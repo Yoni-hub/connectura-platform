@@ -157,6 +157,33 @@ const formatSiteContent = (entry) => ({
   updatedBy: entry.updatedBy,
 })
 
+const parseErrorMetadata = (value) => {
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch (err) {
+    return value
+  }
+}
+
+const formatErrorEvent = (event) => ({
+  id: event.id,
+  createdAt: event.createdAt,
+  level: event.level,
+  source: event.source,
+  message: event.message,
+  stack: event.stack,
+  url: event.url,
+  userAgent: event.userAgent,
+  componentStack: event.componentStack,
+  release: event.release,
+  sessionId: event.sessionId,
+  fingerprint: event.fingerprint,
+  metadata: parseErrorMetadata(event.metadata),
+  userId: event.userId,
+  userEmail: event.user?.email || null,
+})
+
 router.post('/login', async (req, res) => {
   const { email, password } = req.body
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
@@ -507,6 +534,74 @@ router.get('/audit', adminGuard, async (req, res) => {
   })
 })
 
+// Error events
+router.get('/errors', adminGuard, async (req, res) => {
+  const query = String(req.query?.query || '').trim()
+  const level = String(req.query?.level || '').trim().toLowerCase()
+  const source = String(req.query?.source || '').trim().toLowerCase()
+  const startRaw = String(req.query?.start || '').trim()
+  const endRaw = String(req.query?.end || '').trim()
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 25), 200)
+  const page = parsePositiveInt(req.query?.page, 1)
+  const offsetParam = Number.parseInt(String(req.query?.offset || ''), 10)
+  const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit
+  const effectivePage =
+    Number.isFinite(offsetParam) && offsetParam >= 0 ? Math.floor(offset / limit) + 1 : page
+  const startDate = parseAuditDate(startRaw)
+  const endDate = parseAuditDate(endRaw)
+  if ((startRaw && !startDate) || (endRaw && !endDate)) {
+    return res.status(400).json({ error: 'Invalid date range' })
+  }
+  if (startDate && endDate && endDate < startDate) {
+    return res.status(400).json({ error: 'End date must be after start date' })
+  }
+
+  const createdAt = {}
+  if (startDate) createdAt.gte = startDate
+  if (endDate) createdAt.lte = endDate
+  const baseWhere = Object.keys(createdAt).length ? { createdAt } : {}
+  const where = {
+    ...baseWhere,
+    ...(level ? { level } : {}),
+    ...(source ? { source } : {}),
+    ...(query
+      ? {
+          OR: [
+            { message: { contains: query, mode: 'insensitive' } },
+            { url: { contains: query, mode: 'insensitive' } },
+            { stack: { contains: query, mode: 'insensitive' } },
+            { userAgent: { contains: query, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  }
+
+  const [total, rows] = await Promise.all([
+    prisma.errorEvent.count({ where }),
+    prisma.errorEvent.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
+      include: { user: true },
+    }),
+  ])
+  const hasMore = rows.length > limit
+  const trimmed = rows.slice(0, limit)
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  res.json({
+    errors: trimmed.map(formatErrorEvent),
+    page: effectivePage,
+    limit,
+    offset,
+    total,
+    totalPages,
+    hasMore,
+    nextPage: hasMore ? effectivePage + 1 : null,
+    nextOffset: hasMore ? offset + limit : null,
+  })
+})
+
 // Site content management
 router.get('/site-content', adminGuard, async (req, res) => {
   await ensureSiteContentDefaults()
@@ -607,6 +702,106 @@ router.post('/products', adminGuard, async (req, res) => {
   res.status(201).json({ product })
 })
 
+const parseCustomerProfile = (profileData) => parseJson(profileData, {})
+
+const resolveFormProductId = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+const resolveFormName = (form, fallbackName) => {
+  const name = String(form?.name || form?.productName || fallbackName || '').trim()
+  return name
+}
+
+const migrateDeletedSystemQuestions = async (questions = []) => {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return { created: 0 }
+  }
+  const normalizedMap = new Map()
+  questions.forEach((question) => {
+    if (!question?.text) return
+    const normalized = question.normalized || normalizeQuestion(question.text)
+    if (!normalized || normalizedMap.has(normalized)) return
+    normalizedMap.set(normalized, {
+      id: question.id,
+      text: question.text,
+      normalized,
+      productId: question.productId ?? null,
+    })
+  })
+  if (!normalizedMap.size) return { created: 0 }
+
+  const productIds = Array.from(
+    new Set(
+      Array.from(normalizedMap.values())
+        .map((question) => question.productId)
+        .filter((id) => Boolean(id))
+    )
+  )
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, name: true },
+      })
+    : []
+  const productNameById = new Map(products.map((product) => [product.id, product.name]))
+
+  const customers = await prisma.customer.findMany({
+    select: { id: true, profileData: true },
+  })
+  const records = []
+  const recordKeys = new Set()
+
+  customers.forEach((customer) => {
+    const profile = parseCustomerProfile(customer.profileData)
+    const additionalForms = Array.isArray(profile?.additional?.additionalForms)
+      ? profile.additional.additionalForms
+      : Array.isArray(profile?.additionalForms)
+        ? profile.additionalForms
+        : []
+    if (!additionalForms.length) return
+
+    additionalForms.forEach((form) => {
+      const formQuestions = Array.isArray(form?.questions) ? form.questions : []
+      if (!formQuestions.length) return
+      const formProductId = resolveFormProductId(form?.productId)
+      formQuestions.forEach((question) => {
+        const text = typeof question === 'string' ? question : question?.question || question?.text || ''
+        if (!text) return
+        const normalized = normalizeQuestion(text)
+        if (!normalized || !normalizedMap.has(normalized)) return
+        const deleted = normalizedMap.get(normalized)
+        if (deleted?.productId && formProductId && deleted.productId !== formProductId) return
+        const resolvedProductId = deleted?.productId ?? formProductId ?? null
+        const fallbackName = deleted?.productId ? productNameById.get(deleted.productId) : ''
+        const formName = resolveFormName(form, fallbackName)
+        if (!formName) return
+        const key = `${customer.id}|${resolvedProductId || ''}|${formName}|${normalized}`
+        if (recordKeys.has(key)) return
+        recordKeys.add(key)
+        records.push({
+          text: deleted.text,
+          normalized,
+          productId: resolvedProductId,
+          customerId: customer.id,
+          formName,
+        })
+      })
+    })
+  })
+
+  if (!records.length) {
+    return { created: 0 }
+  }
+  const result = await prisma.customerQuestion.createMany({
+    data: records,
+    skipDuplicates: true,
+  })
+  return { created: result.count }
+}
+
 // Question bank management
 router.get('/questions', adminGuard, async (req, res) => {
   const productId = req.query.productId ? Number(req.query.productId) : null
@@ -704,6 +899,7 @@ router.post('/questions', adminGuard, async (req, res) => {
     const skippedTexts = []
 
     if (toDelete.length) {
+      await migrateDeletedSystemQuestions(toDelete)
       await prisma.questionBank.deleteMany({ where: { id: { in: toDelete.map((item) => item.id) } } })
       for (const item of toDelete) {
         await logAudit(req.admin.id, 'QuestionBank', item.id, 'delete', { productId })
@@ -829,6 +1025,9 @@ router.delete('/questions/:id', adminGuard, async (req, res) => {
       await prisma.customerQuestion.delete({ where: { id } })
       await logAudit(req.admin.id, 'CustomerQuestion', id, 'delete')
       return res.json({ ok: true })
+    }
+    if (existing) {
+      await migrateDeletedSystemQuestions([existing])
     }
     await prisma.questionBank.delete({ where: { id } })
     await logAudit(req.admin.id, 'QuestionBank', id, 'delete')

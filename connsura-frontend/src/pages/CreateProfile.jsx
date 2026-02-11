@@ -522,8 +522,7 @@ const hasNonEmptyValue = (value) => {
 }
 
 const normalizeQuestionText = (value = '') =>
-  value
-    .toString()
+  String(value ?? '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ')
@@ -554,6 +553,10 @@ export default function CreateProfile({
   startSection,
   startKey = 0,
   showProgress = false,
+  editSection,
+  editContext,
+  onMobileEditNavigate,
+  onEditBack,
 }) {
   const { user } = useAuth()
   const [formSchema, setFormSchema] = useState(() => buildDefaultSchema())
@@ -619,6 +622,11 @@ export default function CreateProfile({
     address: {},
     additional: {},
   })
+  const [isMobile, setIsMobile] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth < 640 : false)
+  )
+  const isEditScreen = Boolean(editSection)
+  const [slideIn, setSlideIn] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const prefillKeyRef = useRef('')
   const formsPayloadRef = useRef(null)
@@ -627,7 +635,6 @@ export default function CreateProfile({
   const [notification, setNotification] = useState(null)
   const baseAdditionalQuestionKeysRef = useRef([])
   const sectionProductIdsRef = useRef({ household: '', address: '' })
-  const suppressProductSyncRef = useRef(false)
   const suppressModeResetRef = useRef(false)
   const initialDataRef = useRef(false)
   const hasHouseholdData =
@@ -640,8 +647,30 @@ export default function CreateProfile({
   })
   const hasAdditionalData = additionalForms.length > 0
   const driverQuestionKey = driverQuestionLabel.toLowerCase()
-  const normalizeQuestionLabel = (value = '') => value.toString().trim().toLowerCase()
+  const normalizeQuestionLabel = (value = '') => String(value ?? '').trim().toLowerCase()
   const isDriverQuestion = (value = '') => normalizeQuestionLabel(value) === driverQuestionKey
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const handleResize = () => setIsMobile(window.innerWidth < 640)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    if (!isEditScreen || !isMobile) {
+      setSlideIn(false)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => setSlideIn(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [isEditScreen, isMobile])
+
+  const additionalFormProducts = useMemo(
+    () => products.filter((product) => !sectionQuestionProductSlugSet.has(product.slug)),
+    [products]
+  )
+
   const resolveAdditionalProductName = (value) => {
     if (!value) return ''
     const match = additionalFormProducts.find((product) => String(product.id) === String(value))
@@ -649,11 +678,6 @@ export default function CreateProfile({
     if (additionalFormProductOptions.includes(value)) return value
     return ''
   }
-
-  const additionalFormProducts = useMemo(
-    () => products.filter((product) => !sectionQuestionProductSlugSet.has(product.slug)),
-    [products]
-  )
 
   const resolveSectionProductId = (sectionKey) => {
     const slug = sectionQuestionProductSlugs[sectionKey]
@@ -761,7 +785,7 @@ export default function CreateProfile({
       const existingIndex = prev.findIndex((question) => isDriverQuestion(question?.question))
       const existing = existingIndex >= 0 ? prev[existingIndex] : null
       const normalizedInput = Array.isArray(existing?.input) ? existing.input : []
-      const nextBase = { question: driverQuestionLabel, input: normalizedInput }
+      const nextBase = { question: driverQuestionLabel, input: normalizedInput, source: 'SYSTEM' }
       if (existingIndex === 0 && prev[0]?.question === driverQuestionLabel) {
         return prev
       }
@@ -895,7 +919,7 @@ export default function CreateProfile({
     ? schema.sections.address.addressTypes
     : baseAddressTypeOptions
   const addressTypeOptions = rawAddressTypeOptions
-    .map((option) => option?.toString().trim())
+    .map((option) => String(option ?? '').trim())
     .filter(Boolean)
   const householdSectionLabel = schema.sections?.household?.label || 'Household Information'
   const addressSectionLabel = schema.sections?.address?.label || 'Address Information'
@@ -903,6 +927,23 @@ export default function CreateProfile({
   const householdSectionName = 'Household Information'
   const addressSectionName = 'Address Information'
   const additionalSectionName = 'Additional Information'
+  const navigateBack = useCallback(() => {
+    if (typeof onEditBack === 'function') {
+      onEditBack()
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.history.back()
+    }
+  }, [onEditBack])
+  const editSectionLabel = useMemo(() => {
+    if (!editSection) return ''
+    if (editSection === 'household') return householdSectionLabel
+    if (editSection === 'address') return addressSectionLabel
+    if (editSection === 'additional') return additionalSectionLabel
+    if (editSection === 'summary') return 'Summary'
+    return ''
+  }, [editSection, householdSectionLabel, addressSectionLabel, additionalSectionLabel])
 
   const validateHousehold = () => {
     return {}
@@ -916,7 +957,7 @@ export default function CreateProfile({
     return {}
   }
 
-  const handleHouseholdSaveContinue = async () => {
+  const handleHouseholdSaveContinue = async (formsOverride, options = {}) => {
     if (householdSaving) return
     setHouseholdSaving(true)
     const wasComplete = householdComplete
@@ -924,12 +965,12 @@ export default function CreateProfile({
     setHouseholdErrors(errors)
     if (Object.keys(errors).length > 0) {
       setHouseholdSaving(false)
-      return
+      return false
     }
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
         saveResult = await onSectionSave({
           section: householdSectionName,
           nextSection: addressSectionName,
@@ -941,33 +982,42 @@ export default function CreateProfile({
     }
     if (!saveResult?.success) {
       setHouseholdSaving(false)
-      return
+      return false
     }
-    if (formsPayloadRef.current) {
-      notifySaveIfChanged(formsPayloadRef.current)
+    const payloadForNotification = formsOverride || formsPayloadRef.current
+    if (payloadForNotification) {
+      notifySaveIfChanged(payloadForNotification)
     }
     setHouseholdComplete(true)
+    if (isEditScreen) {
+      setHouseholdSaving(false)
+      if (!options.skipNavigate) {
+        navigateBack()
+      }
+      return true
+    }
     setHouseholdEditing(false)
     if (!wasComplete) {
       openSection('address')
       setAddressEditing(true)
     }
     setHouseholdSaving(false)
+    return true
   }
 
-  const handleAddressSaveContinue = async () => {
+  const handleAddressSaveContinue = async (formsOverride, options = {}) => {
     if (addressSaving) return
     setAddressSaving(true)
     const errors = validateAddress()
     setAddressErrors(errors)
     if (Object.keys(errors).length > 0) {
       setAddressSaving(false)
-      return
+      return false
     }
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
         saveResult = await onSectionSave({
           section: addressSectionName,
           nextSection: additionalSectionName,
@@ -979,14 +1029,23 @@ export default function CreateProfile({
     }
     if (!saveResult?.success) {
       setAddressSaving(false)
-      return
+      return false
     }
-    if (formsPayloadRef.current) {
-      notifySaveIfChanged(formsPayloadRef.current)
+    const payloadForNotification = formsOverride || formsPayloadRef.current
+    if (payloadForNotification) {
+      notifySaveIfChanged(payloadForNotification)
     }
     setAddressComplete(true)
+    if (isEditScreen) {
+      setAddressSaving(false)
+      if (!options.skipNavigate) {
+        navigateBack()
+      }
+      return true
+    }
     setAddressEditing(false)
     setAddressSaving(false)
+    return true
   }
 
   const handleAdditionalSaveContinue = async (formsOverride, options = {}) => {
@@ -998,7 +1057,7 @@ export default function CreateProfile({
     setAdditionalErrors(errors)
     if (Object.keys(errors).length > 0) {
       setAdditionalSaving(false)
-      return
+      return false
     }
     let saveResult = { success: true }
     try {
@@ -1015,15 +1074,23 @@ export default function CreateProfile({
     }
     if (!saveResult?.success) {
       setAdditionalSaving(false)
-      return
+      return false
     }
     const payloadForNotification = formsOverride || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
     setAdditionalComplete(true)
+    if (isEditScreen) {
+      setAdditionalSaving(false)
+      if (!options.skipNavigate) {
+        navigateBack()
+      }
+      return true
+    }
     setAdditionalEditing(false)
     setAdditionalSaving(false)
+    return true
   }
 
   const handleAdditionalSummaryContinue = async () => {
@@ -1076,12 +1143,19 @@ export default function CreateProfile({
       onChange: (event) => setCustomFieldValue(sectionKey, field.id, event.target.value),
     }))
 
-  const buildQuestionBankRows = (sectionKey, idPrefix, questions = [], excludeKeys = new Set()) =>
+  const buildQuestionBankRows = (
+    sectionKey,
+    idPrefix,
+    questions = [],
+    excludeKeys = new Set(),
+    valueKeyPrefix = ''
+  ) =>
     questions
       .map((question, index) => {
         const text = question?.text || ''
         const normalized = normalizeQuestionText(text)
-        const key = `qb-${normalized}`
+        const keySuffix = valueKeyPrefix ? `${valueKeyPrefix}-${normalized}` : normalized
+        const key = `qb-${keySuffix}`
         if (!text || key === 'qb-' || excludeKeys.has(normalized)) return null
         return {
           id: `${idPrefix}-${index}`,
@@ -1223,32 +1297,33 @@ export default function CreateProfile({
     }
   }
 
-  const editAdditionalForm = (index) => {
-    const form = additionalForms[index] ?? { name: '', questions: [], productId: null }
-    const fallbackProduct =
-      additionalFormProducts.find(
-        (product) => product.name === form.productName || product.name === form.name
-      ) || null
-    const resolvedProductId = form.productId || fallbackProduct?.id || ''
-    setActiveAdditionalFormIndex(index)
-    if (resolvedProductId) {
-      suppressModeResetRef.current = true
-      suppressProductSyncRef.current = true
-      setAdditionalFormMode('existing')
-      setAdditionalFormProductId(String(resolvedProductId))
-      setAdditionalFormName('')
-    } else {
-      suppressModeResetRef.current = true
-      suppressProductSyncRef.current = true
-      setAdditionalFormMode('custom')
-      setAdditionalFormProductId('')
-      setAdditionalFormName(form.name ?? '')
-    }
-    setAdditionalQuestions(form.questions ?? [])
-    setBaseAdditionalQuestionKeys([])
-    setAdditionalFormError('')
-    setAdditionalEditing(true)
-  }
+  const editAdditionalForm = useCallback(
+    (index) => {
+      const form = additionalForms[index] ?? { name: '', questions: [], productId: null }
+      const fallbackProduct =
+        additionalFormProducts.find(
+          (product) => product.name === form.productName || product.name === form.name
+        ) || null
+      const resolvedProductId = form.productId || fallbackProduct?.id || ''
+      setActiveAdditionalFormIndex(index)
+      if (resolvedProductId) {
+        suppressModeResetRef.current = true
+        setAdditionalFormMode('existing')
+        setAdditionalFormProductId(String(resolvedProductId))
+        setAdditionalFormName('')
+      } else {
+        suppressModeResetRef.current = true
+        setAdditionalFormMode('custom')
+        setAdditionalFormProductId('')
+        setAdditionalFormName(form.name ?? '')
+      }
+      setAdditionalQuestions(form.questions ?? [])
+      setBaseAdditionalQuestionKeys([])
+      setAdditionalFormError('')
+      setAdditionalEditing(true)
+    },
+    [additionalForms, additionalFormProducts]
+  )
 
   const startNewAdditionalForm = () => {
     setActiveAdditionalFormIndex(null)
@@ -1259,6 +1334,69 @@ export default function CreateProfile({
     setBaseAdditionalQuestionKeys([])
     setAdditionalFormError('')
     setAdditionalEditing(true)
+  }
+
+  const handleAdditionalFormSave = async (options = {}) => {
+    if (additionalSaving) return false
+    setAdditionalSaving(true)
+    try {
+      const productId = additionalFormProductId ? Number(additionalFormProductId) : null
+      const selectedProduct = products.find((product) => product.id === productId) || null
+      const resolvedName =
+        additionalFormMode === 'existing'
+          ? selectedProduct?.name || ''
+          : additionalFormName.trim()
+      if (!additionalFormMode) {
+        setAdditionalFormError('Please choose existing or custom first.')
+        setAdditionalSaving(false)
+        return false
+      }
+      if (additionalFormMode === 'existing' && !productId) {
+        setAdditionalFormError('Please select a product.')
+        setAdditionalSaving(false)
+        return false
+      }
+      if (additionalFormMode === 'custom' && !resolvedName) {
+        setAdditionalFormError('Please enter a custom form name.')
+        setAdditionalSaving(false)
+        return false
+      }
+      const baseKeys = new Set(baseAdditionalQuestionKeysRef.current || [])
+      const questionsToSave =
+        additionalFormMode === 'existing'
+          ? additionalQuestions
+              .map((question) => (question?.question || '').toString().trim())
+              .filter((text) => text && !baseKeys.has(normalizeQuestionText(text)))
+          : additionalQuestions.map((question) => question.question)
+      await saveCustomerQuestions(questionsToSave, productId || null, resolvedName)
+      const nextForm = {
+        name: resolvedName,
+        questions: additionalQuestions,
+        productId: productId || null,
+        productName: selectedProduct?.name || '',
+      }
+      const buildNextForms = (prev) => {
+        if (typeof activeAdditionalFormIndex === 'number') {
+          const next = [...prev]
+          next[activeAdditionalFormIndex] = nextForm
+          return next
+        }
+        return [...prev, nextForm]
+      }
+      const nextAdditionalForms = buildNextForms(additionalForms)
+      setAdditionalForms((prev) => buildNextForms(prev))
+      setActiveAdditionalFormIndex(null)
+      const nextFormsPayload = buildFormsPayload({ additionalForms: nextAdditionalForms })
+      await handleAdditionalSaveContinue(nextFormsPayload, {
+        skipSaving: true,
+        skipNavigate: options.skipNavigate,
+      })
+      return true
+    } catch (error) {
+      console.warn('Failed to save additional form', error)
+      setAdditionalSaving(false)
+      return false
+    }
   }
 
   const isSectionAllowed = useCallback((section) => {
@@ -1300,14 +1438,60 @@ export default function CreateProfile({
       if (!res.ok) return
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
-      const baseList = bankQuestions
+      const systemQuestions = bankQuestions.filter(
+        (question) => question?.source === 'SYSTEM' || !question?.source
+      )
+      const customerQuestions = bankQuestions.filter((question) => question?.source === 'CUSTOMER')
+      const systemList = systemQuestions
         .map((question) => ({
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
         }))
         .filter((entry) => entry.key)
-      setAdditionalQuestions(baseList.map((entry) => ({ question: entry.text, input: '' })))
-      setBaseAdditionalQuestionKeys(baseList.map((entry) => entry.key))
+      const customerList = customerQuestions
+        .map((question) => ({
+          text: question?.text || '',
+          key: normalizeQuestionText(question?.text || ''),
+        }))
+        .filter((entry) => entry.key && !systemList.some((entryItem) => entryItem.key === entry.key))
+      const systemKeys = systemList.map((entry) => entry.key)
+      const customerKeys = customerList.map((entry) => entry.key)
+      const existingMap = new Map(
+        additionalQuestions
+          .map((question) => ({
+            key: normalizeQuestionText(question?.question || ''),
+            input: question?.input ?? '',
+            source: question?.source,
+          }))
+          .filter((entry) => entry.key)
+          .map((entry) => [entry.key, entry])
+      )
+      const baseEntries = systemList.map((entry) => ({
+        question: entry.text,
+        input: existingMap.has(entry.key) ? existingMap.get(entry.key)?.input ?? '' : '',
+        source: 'SYSTEM',
+      }))
+      const customerEntries = customerList.map((entry) => ({
+        question: entry.text,
+        input: existingMap.has(entry.key) ? existingMap.get(entry.key)?.input ?? '' : '',
+        source: 'CUSTOMER',
+      }))
+      const extraEntries = additionalQuestions
+        .map((question) => ({
+          question: question?.question || '',
+          input: question?.input ?? '',
+          source: 'CUSTOMER',
+          key: normalizeQuestionText(question?.question || ''),
+        }))
+        .filter(
+          (entry) =>
+            entry.key &&
+            !systemKeys.includes(entry.key) &&
+            !customerKeys.includes(entry.key)
+        )
+        .map(({ key, ...entry }) => entry)
+      setAdditionalQuestions([...baseEntries, ...customerEntries, ...extraEntries])
+      setBaseAdditionalQuestionKeys(systemKeys)
     } catch (error) {
       console.warn('Failed to load product questions', error)
     }
@@ -1341,14 +1525,214 @@ export default function CreateProfile({
     [hasHouseholdData, hasAddressData, hasAdditionalData, isSectionAllowed, pushSectionHistory]
   )
 
+  const handleEditSection = useCallback(
+    (section, options = {}) => {
+      if (!section) return
+      if (onMobileEditNavigate && isMobile && !isEditScreen) {
+        onMobileEditNavigate(section, options)
+        return
+      }
+      if (section === 'household') {
+        openSection('household')
+        setActiveHouseholdIndex(options.householdIndex ?? 'primary')
+        setHouseholdEditing(true)
+        return
+      }
+      if (section === 'address') {
+        openSection('address')
+        setActiveAddressIndex(options.addressIndex ?? 'primary')
+        setAddressEditing(true)
+        return
+      }
+      if (section === 'additional') {
+        openSection('additional')
+        if (typeof options.additionalFormIndex === 'number') {
+          editAdditionalForm(options.additionalFormIndex)
+        } else {
+          setAdditionalEditing(true)
+        }
+        return
+      }
+      openSection(section)
+    },
+    [
+      onMobileEditNavigate,
+      isMobile,
+      isEditScreen,
+      openSection,
+      editAdditionalForm,
+    ]
+  )
+
+  const handleSummaryEdit = useCallback(
+    (section) => {
+      if (!section) return
+      if (onMobileEditNavigate && isMobile && !isEditScreen) {
+        onMobileEditNavigate(section)
+        return
+      }
+      openSection(section)
+    },
+    [onMobileEditNavigate, isMobile, isEditScreen, openSection]
+  )
+
+  const handleAddHousehold = useCallback(() => {
+    if (onMobileEditNavigate && isMobile && !isEditScreen) {
+      onMobileEditNavigate('household', { householdIndex: 'new' })
+      return
+    }
+    setNewHousehold(createHouseholdMember())
+    setShowAddHouseholdModal(true)
+  }, [onMobileEditNavigate, isMobile, isEditScreen])
+
+  const handleAddAddress = useCallback(() => {
+    if (onMobileEditNavigate && isMobile && !isEditScreen) {
+      onMobileEditNavigate('address', { addressIndex: 'new' })
+      return
+    }
+    setNewAddress(createAddressEntry())
+    setShowAddAddressModal(true)
+  }, [onMobileEditNavigate, isMobile, isEditScreen])
+
+  const handleAddAdditionalForm = useCallback(() => {
+    if (onMobileEditNavigate && isMobile && !isEditScreen) {
+      onMobileEditNavigate('additional')
+      return
+    }
+    startNewAdditionalForm()
+  }, [onMobileEditNavigate, isMobile, isEditScreen])
+
+  const handleEditBack = async (options = {}) => {
+    if (!isEditScreen || options.skipAutoSave) {
+      navigateBack()
+      return
+    }
+    const choice = getSaveChoice()
+    if (choice === 'discard' || choice === 'none') {
+      navigateBack()
+      return
+    }
+    if (editSection === 'household') {
+      if (showAddHouseholdModal) {
+        if (!hasNonEmptyValue(newHousehold)) {
+          navigateBack()
+          return
+        }
+        const nextAdditionalHouseholds = [...additionalHouseholds, newHousehold]
+        const formsPayload = buildFormsPayload({ additionalHouseholds: nextAdditionalHouseholds })
+        const saveSuccess = await saveSectionWithNotification('household', formsPayload)
+        if (!saveSuccess) return
+        setAdditionalHouseholds(nextAdditionalHouseholds)
+        setShowAddHouseholdModal(false)
+        setNewHousehold(createHouseholdMember())
+        setHouseholdComplete(true)
+        navigateBack()
+        return
+      }
+      const activeAdditionalIndex = typeof activeHouseholdIndex === 'number' ? activeHouseholdIndex : null
+      const activePerson =
+        activeAdditionalIndex === null ? namedInsured : additionalHouseholds[activeAdditionalIndex] || {}
+      const hasPersonData =
+        activeAdditionalIndex === null ? hasNamedInsuredData(namedInsured) : hasNonEmptyValue(activePerson)
+      if (!hasPersonData) {
+        navigateBack()
+        return
+      }
+      const saveSuccess = await handleHouseholdSaveContinue(undefined, { skipNavigate: true })
+      if (!saveSuccess) return
+      navigateBack()
+      return
+    }
+    if (editSection === 'address') {
+      if (showAddAddressModal) {
+        if (!hasNonEmptyValue(newAddress)) {
+          navigateBack()
+          return
+        }
+        const nextAdditionalAddresses = [...additionalAddresses, newAddress]
+        const formsPayload = buildFormsPayload({ additionalAddresses: nextAdditionalAddresses })
+        const saveSuccess = await saveSectionWithNotification('address', formsPayload)
+        if (!saveSuccess) return
+        setAdditionalAddresses(nextAdditionalAddresses)
+        setShowAddAddressModal(false)
+        setNewAddress(createAddressEntry())
+        setAddressComplete(true)
+        navigateBack()
+        return
+      }
+      const activeAdditionalAddressIndex = typeof activeAddressIndex === 'number' ? activeAddressIndex : null
+      const activeEntry =
+        activeAdditionalAddressIndex === null
+          ? { contacts, residential, mailing }
+          : additionalAddresses[activeAdditionalAddressIndex] || {}
+      if (!hasNonEmptyValue(activeEntry)) {
+        navigateBack()
+        return
+      }
+      const saveSuccess = await handleAddressSaveContinue(undefined, { skipNavigate: true })
+      if (!saveSuccess) return
+      navigateBack()
+      return
+    }
+    if (editSection === 'additional') {
+      const hasAdditionalInput =
+        Boolean(additionalFormMode) ||
+        Boolean(additionalFormName.trim()) ||
+        Boolean(additionalFormProductId) ||
+        additionalQuestions.some((question) => hasNonEmptyValue(question))
+      if (!hasAdditionalInput) {
+        navigateBack()
+        return
+      }
+      const saveSuccess = await handleAdditionalFormSave({ skipNavigate: true })
+      if (!saveSuccess) return
+      navigateBack()
+      return
+    }
+    navigateBack()
+  }
+
   const startKeyRef = useRef(null)
 
   useEffect(() => {
+    if (isEditScreen) return
     if (!startSection) return
     if (startKeyRef.current === startKey) return
     startKeyRef.current = startKey
     openSection(startSection)
-  }, [startSection, startKey, openSection])
+  }, [startSection, startKey, openSection, isEditScreen])
+
+  useEffect(() => {
+    if (!editSection) return
+    openSection(editSection, { pushHistory: false })
+    if (editSection === 'household') {
+      const index = editContext?.householdIndex ?? 'primary'
+      if (index === 'new') {
+        setNewHousehold(createHouseholdMember())
+        setShowAddHouseholdModal(true)
+      } else {
+        setActiveHouseholdIndex(index)
+        setHouseholdEditing(true)
+      }
+    }
+    if (editSection === 'address') {
+      const index = editContext?.addressIndex ?? 'primary'
+      if (index === 'new') {
+        setNewAddress(createAddressEntry())
+        setShowAddAddressModal(true)
+      } else {
+        setActiveAddressIndex(index)
+        setAddressEditing(true)
+      }
+    }
+    if (editSection === 'additional') {
+      if (typeof editContext?.additionalFormIndex === 'number') {
+        editAdditionalForm(editContext.additionalFormIndex)
+      } else {
+        setAdditionalEditing(true)
+      }
+    }
+  }, [editSection, editContext, openSection, editAdditionalForm])
 
   useEffect(() => {
     const handlePopState = (event) => {
@@ -1362,10 +1746,6 @@ export default function CreateProfile({
 
   useEffect(() => {
     if (!additionalEditing) return
-    if (suppressProductSyncRef.current) {
-      suppressProductSyncRef.current = false
-      return
-    }
     syncProductQuestions(additionalFormProductId)
   }, [additionalEditing, additionalFormProductId])
 
@@ -1451,15 +1831,15 @@ export default function CreateProfile({
     })
     return keys
   })()
-  const householdBankFields =
-    activeHouseholdIndex === 'primary'
-      ? buildQuestionBankRows(
-          'household',
-          `${activeHousehold.idPrefix}-bank`,
-          sectionBankQuestions.household,
-          householdLabelExclusions
-        )
-      : []
+  const householdQuestionKeyPrefix =
+    activeHouseholdIndex === 'primary' ? '' : `additional-${activeAdditionalIndex ?? activeHouseholdIndex}`
+  const householdBankFields = buildQuestionBankRows(
+    'household',
+    `${activeHousehold.idPrefix}-bank`,
+    sectionBankQuestions.household,
+    householdLabelExclusions,
+    householdQuestionKeyPrefix
+  )
   const activeHouseholdFieldRows = [...activeHouseholdFields, ...householdCustomFields, ...householdBankFields]
   const primaryContact = contacts[0] || createContact()
   const primaryAddressLabel = 'Primary Address'
@@ -1572,15 +1952,20 @@ export default function CreateProfile({
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
   const showHouseholdForm =
-    showHouseholdSection && (!hasHouseholdData || householdEditing) && !showAddHouseholdModal
+    showHouseholdSection &&
+    (!hasHouseholdData || householdEditing || isEditScreen) &&
+    !showAddHouseholdModal
   const showHouseholdSummary =
-    showHouseholdSection && hasHouseholdData && !householdEditing && !showAddHouseholdModal
-  const showAddressForm = showAddressSection && (!hasAddressData || addressEditing) && !showAddAddressModal
-  const showAddressSummary = showAddressSection && hasAddressData && !addressEditing && !showAddAddressModal
+    showHouseholdSection && hasHouseholdData && !householdEditing && !showAddHouseholdModal && !isEditScreen
+  const showAddressForm =
+    showAddressSection && (!hasAddressData || addressEditing || isEditScreen) && !showAddAddressModal
+  const showAddressSummary =
+    showAddressSection && hasAddressData && !addressEditing && !showAddAddressModal && !isEditScreen
   const showAdditionalSection = activeSection === 'additional' && isSectionAllowed('additional')
   const showSummarySection = activeSection === 'summary' && isSectionAllowed('summary')
-  const showAdditionalForm = showAdditionalSection && (!hasAdditionalData || additionalEditing)
-  const showAdditionalSummary = showAdditionalSection && hasAdditionalData && !additionalEditing
+  const showAdditionalForm =
+    showAdditionalSection && (!hasAdditionalData || additionalEditing || isEditScreen)
+  const showAdditionalSummary = showAdditionalSection && hasAdditionalData && !additionalEditing && !isEditScreen
   const progressSteps = [
     { id: 'household', label: householdSectionLabel, complete: householdComplete, allowed: isSectionAllowed('household') },
     { id: 'address', label: addressSectionLabel, complete: addressComplete, allowed: isSectionAllowed('address') },
@@ -1590,6 +1975,14 @@ export default function CreateProfile({
   const progressTotal = progressSteps.length
   const progressPercent = progressTotal ? Math.round((progressCompletedCount / progressTotal) * 100) : 0
   const progressSummary = progressTotal ? `${progressCompletedCount} of ${progressTotal} sections` : 'No sections available'
+  const showProgressBar = showProgress && !isEditScreen
+  const editSlideClass =
+    isEditScreen && isMobile
+      ? `transform transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+          slideIn ? 'translate-x-0' : 'translate-x-full'
+        }`
+      : ''
+  const containerPadding = isEditScreen ? 'p-4 sm:p-6' : 'p-6'
   const setActiveAddressType = (value) => {
     if (activeAddressIndex === 'primary') {
       setResidential((prev) => ({ ...prev, addressType: value }))
@@ -1736,7 +2129,14 @@ export default function CreateProfile({
   }
 
   const buildFormsPayload = useCallback((overrides = {}) => {
+    const nextNamedInsured = overrides.namedInsured ?? namedInsured
+    const nextAdditionalHouseholds = overrides.additionalHouseholds ?? additionalHouseholds
+    const nextContacts = overrides.contacts ?? contacts
+    const nextResidential = overrides.residential ?? residential
+    const nextMailing = overrides.mailing ?? mailing
+    const nextAdditionalAddresses = overrides.additionalAddresses ?? additionalAddresses
     const nextAdditionalForms = overrides.additionalForms ?? additionalForms
+    const nextCustomFields = overrides.customFields ?? customFieldValues
     const availableProducts = additionalFormProducts.length
       ? additionalFormProducts
       : additionalFormProductOptions.map((name) => ({ id: name, name }))
@@ -1747,14 +2147,14 @@ export default function CreateProfile({
     }
     return {
       household: {
-        namedInsured,
-        additionalHouseholds,
+        namedInsured: nextNamedInsured,
+        additionalHouseholds: nextAdditionalHouseholds,
       },
       address: {
-        contacts,
-        residential,
-        mailing,
-        additionalAddresses,
+        contacts: nextContacts,
+        residential: nextResidential,
+        mailing: nextMailing,
+        additionalAddresses: nextAdditionalAddresses,
       },
       additional: {
         additionalForms: nextAdditionalForms.map((form) => {
@@ -1767,7 +2167,7 @@ export default function CreateProfile({
           }
         }),
       },
-      customFields: customFieldValues,
+      customFields: nextCustomFields,
     }
   }, [
     additionalAddresses,
@@ -1782,6 +2182,53 @@ export default function CreateProfile({
   ])
 
   const serializeForms = useCallback((payload) => JSON.stringify(payload ?? {}), [])
+  const resolveSectionName = useCallback(
+    (sectionKey) => {
+      if (!sectionKey) return ''
+      if (sectionKey === 'household') return householdSectionName
+      if (sectionKey === 'address') return addressSectionName
+      if (sectionKey === 'additional') return additionalSectionName
+      if (sectionKey === 'summary') return 'Summary'
+      return sectionKey
+    },
+    [householdSectionName, addressSectionName, additionalSectionName]
+  )
+
+  const hasUnsavedChanges = useCallback(() => {
+    if (showAddHouseholdModal && hasNonEmptyValue(newHousehold)) return true
+    if (showAddAddressModal && hasNonEmptyValue(newAddress)) return true
+    if (additionalEditing) {
+      const hasAdditionalInput =
+        Boolean(additionalFormMode) ||
+        Boolean(additionalFormName.trim()) ||
+        Boolean(additionalFormProductId) ||
+        additionalQuestions.some((question) => hasNonEmptyValue(question))
+      if (hasAdditionalInput) return true
+    }
+    const payload = formsPayloadRef.current || buildFormsPayload()
+    const serialized = serializeForms(payload)
+    const lastSaved = lastSavedSerializedRef.current
+    return lastSaved !== null && serialized !== lastSaved
+  }, [
+    showAddHouseholdModal,
+    newHousehold,
+    showAddAddressModal,
+    newAddress,
+    additionalEditing,
+    additionalFormMode,
+    additionalFormName,
+    additionalFormProductId,
+    additionalQuestions,
+    buildFormsPayload,
+    serializeForms,
+  ])
+
+  const getSaveChoice = useCallback(() => {
+    if (typeof window === 'undefined') return 'discard'
+    if (!hasUnsavedChanges()) return 'none'
+    const wantsSave = window.confirm('do you want to save changes?')
+    return wantsSave ? 'save' : 'discard'
+  }, [hasUnsavedChanges])
 
   const showNotification = useCallback((message) => {
     setNotification({ message })
@@ -1804,6 +2251,40 @@ export default function CreateProfile({
       return serialized
     },
     [serializeForms, showNotification]
+  )
+
+  const saveSectionWithNotification = useCallback(
+    async (sectionKey, formsOverride) => {
+      if (typeof onSectionSave !== 'function') return true
+      const resolvedSection = resolveSectionName(sectionKey)
+      if (!resolvedSection) return true
+      const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+      const saveResult = await onSectionSave({
+        section: resolvedSection,
+        nextSection: resolvedSection,
+        forms: formsPayload,
+        logClick: false,
+      })
+      if (!saveResult?.success) return false
+      notifySaveIfChanged(formsPayload)
+      showNotification('Changes saved.')
+      return true
+    },
+    [onSectionSave, resolveSectionName, buildFormsPayload, notifySaveIfChanged, showNotification]
+  )
+
+  const handleCancelWithPrompt = useCallback(
+    async ({ onSave, onDiscard }) => {
+      const choice = getSaveChoice()
+      if (choice === 'none' || choice === 'discard') {
+        if (typeof onDiscard === 'function') onDiscard()
+        return
+      }
+      const saveResult = typeof onSave === 'function' ? await onSave() : true
+      if (saveResult === false) return
+      if (typeof onDiscard === 'function') onDiscard()
+    },
+    [getSaveChoice]
   )
 
   useEffect(() => {
@@ -1894,17 +2375,31 @@ export default function CreateProfile({
   }, [])
 
   return (
-    <main className="min-h-full">
-      <div className="min-h-full w-full border border-slate-300 bg-white p-6">
-        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-800">
-          Create your insurance passport
-        </div>
+    <main className={`min-h-full ${isEditScreen && isMobile ? 'overflow-hidden' : ''}`}>
+      <div className={`min-h-full w-full border border-slate-300 bg-white ${containerPadding} ${editSlideClass}`}>
         {notification && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="sticky top-0 z-20 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             <div className="font-semibold">{notification.message}</div>
           </div>
         )}
-        {showProgress && (
+        {isEditScreen ? (
+          <div className="mb-4 flex items-center gap-3 border-b border-slate-200 pb-3">
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-semibold text-slate-700 shadow-sm"
+              onClick={handleEditBack}
+              aria-label="Go back"
+            >
+              &lt;
+            </button>
+            <div className="text-sm font-semibold text-slate-900">{editSectionLabel}</div>
+          </div>
+        ) : (
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-800">
+            Create your insurance passport
+          </div>
+        )}
+        {showProgressBar && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <span>Progress</span>
@@ -1935,36 +2430,38 @@ export default function CreateProfile({
             </div>
           </div>
         )}
-        <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {isSectionAllowed('household') && (
-            <button
-              type="button"
-              className={`${tabButton} w-full`}
-              onClick={() => openSection('household')}
-            >
-              {householdSectionLabel}
-            </button>
-          )}
-          {isSectionAllowed('address') && (
-            <button
-              type="button"
-              className={`${tabButton} w-full`}
-              onClick={() => openSection('address')}
-            >
-              {addressSectionLabel}
-            </button>
-          )}
-          {isSectionAllowed('additional') && (
-            <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
-              {additionalSectionLabel}
-            </button>
-          )}
-          {isSectionAllowed('summary') && (
-            <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('summary')}>
-              Summary
-            </button>
-          )}
-        </nav>
+        {!isEditScreen && (
+          <nav className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {isSectionAllowed('household') && (
+              <button
+                type="button"
+                className={`${tabButton} w-full`}
+                onClick={() => openSection('household')}
+              >
+                {householdSectionLabel}
+              </button>
+            )}
+            {isSectionAllowed('address') && (
+              <button
+                type="button"
+                className={`${tabButton} w-full`}
+                onClick={() => openSection('address')}
+              >
+                {addressSectionLabel}
+              </button>
+            )}
+            {isSectionAllowed('additional') && (
+              <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('additional')}>
+                {additionalSectionLabel}
+              </button>
+            )}
+            {isSectionAllowed('summary') && (
+              <button type="button" className={`${tabButton} w-full`} onClick={() => openSection('summary')}>
+                Summary
+              </button>
+            )}
+          </nav>
+        )}
 
         {showHouseholdSection && (
           <>
@@ -1990,8 +2487,31 @@ export default function CreateProfile({
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          setShowAddHouseholdModal(false)
-                          setNewHousehold(createHouseholdMember())
+                          if (isEditScreen) {
+                            handleEditBack()
+                            return
+                          }
+                          handleCancelWithPrompt({
+                            onSave: async () => {
+                              const nextAdditionalHouseholds = [...additionalHouseholds, newHousehold]
+                              const formsPayload = buildFormsPayload({
+                                additionalHouseholds: nextAdditionalHouseholds,
+                              })
+                              const saveSuccess = await saveSectionWithNotification('household', formsPayload)
+                              if (!saveSuccess) return false
+                              setAdditionalHouseholds(nextAdditionalHouseholds)
+                              setShowAddHouseholdModal(false)
+                              setNewHousehold(createHouseholdMember())
+                              setHouseholdComplete(true)
+                              setActiveHouseholdIndex('primary')
+                              setHouseholdEditing(false)
+                              return true
+                            },
+                            onDiscard: () => {
+                              setShowAddHouseholdModal(false)
+                              setNewHousehold(createHouseholdMember())
+                            },
+                          })
                         }}
                       >
                         Cancel
@@ -1999,11 +2519,17 @@ export default function CreateProfile({
                       <button
                         type="button"
                         className={nextButton}
-                        onClick={() => {
-                          setAdditionalHouseholds((prev) => [...prev, newHousehold])
+                        onClick={async () => {
+                          const nextAdditionalHouseholds = [...additionalHouseholds, newHousehold]
+                          setAdditionalHouseholds(nextAdditionalHouseholds)
                           setShowAddHouseholdModal(false)
                           setNewHousehold(createHouseholdMember())
                           setHouseholdComplete(true)
+                          if (isEditScreen) {
+                            const formsPayload = buildFormsPayload({ additionalHouseholds: nextAdditionalHouseholds })
+                            await handleHouseholdSaveContinue(formsPayload)
+                            return
+                          }
                           setActiveHouseholdIndex('primary')
                           setHouseholdEditing(false)
                         }}
@@ -2039,10 +2565,11 @@ export default function CreateProfile({
                           )}
                         </div>
                         {activeHouseholdFieldRows.map((field) => {
-                          const errorKey = field.key || field.id
+                          const { key: fieldKey, ...fieldProps } = field
+                          const errorKey = fieldKey || field.id
                           return (
                             <div key={field.id} className="contents">
-                              <FieldRow {...field} />
+                              <FieldRow {...fieldProps} />
                               {householdErrors[errorKey] && (
                                 <div className="col-span-2 text-xs text-rose-600">
                                   {householdErrors[errorKey]}
@@ -2058,11 +2585,20 @@ export default function CreateProfile({
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          if (householdComplete) {
-                            setHouseholdEditing(false)
-                          } else {
-                            setActiveSection(null)
+                          if (isEditScreen) {
+                            handleEditBack()
+                            return
                           }
+                          handleCancelWithPrompt({
+                            onSave: async () => saveSectionWithNotification('household'),
+                            onDiscard: () => {
+                              if (householdComplete) {
+                                setHouseholdEditing(false)
+                              } else {
+                                setActiveSection(null)
+                              }
+                            },
+                          })
                         }}
                       >
                         Cancel
@@ -2090,10 +2626,7 @@ export default function CreateProfile({
                       <button
                         type="button"
                         className={miniButton}
-                        onClick={() => {
-                          setActiveHouseholdIndex('primary')
-                          setHouseholdEditing(true)
-                        }}
+                        onClick={() => handleEditSection('household', { householdIndex: 'primary' })}
                       >
                         Edit
                       </button>
@@ -2129,10 +2662,7 @@ export default function CreateProfile({
                             <button
                               type="button"
                               className={miniButton}
-                              onClick={() => {
-                                setActiveHouseholdIndex(index)
-                                setHouseholdEditing(true)
-                              }}
+                              onClick={() => handleEditSection('household', { householdIndex: index })}
                             >
                               Edit
                             </button>
@@ -2165,10 +2695,7 @@ export default function CreateProfile({
                     <button
                       type="button"
                       className={miniButton}
-                      onClick={() => {
-                        setNewHousehold(createHouseholdMember())
-                        setShowAddHouseholdModal(true)
-                      }}
+                      onClick={handleAddHousehold}
                     >
                       Add more people
                     </button>
@@ -2256,8 +2783,31 @@ export default function CreateProfile({
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          setShowAddAddressModal(false)
-                          setNewAddress(createAddressEntry())
+                          if (isEditScreen) {
+                            handleEditBack()
+                            return
+                          }
+                          handleCancelWithPrompt({
+                            onSave: async () => {
+                              const nextAdditionalAddresses = [...additionalAddresses, newAddress]
+                              const formsPayload = buildFormsPayload({
+                                additionalAddresses: nextAdditionalAddresses,
+                              })
+                              const saveSuccess = await saveSectionWithNotification('address', formsPayload)
+                              if (!saveSuccess) return false
+                              setAdditionalAddresses(nextAdditionalAddresses)
+                              setShowAddAddressModal(false)
+                              setNewAddress(createAddressEntry())
+                              setAddressComplete(true)
+                              setActiveAddressIndex('primary')
+                              setAddressEditing(false)
+                              return true
+                            },
+                            onDiscard: () => {
+                              setShowAddAddressModal(false)
+                              setNewAddress(createAddressEntry())
+                            },
+                          })
                         }}
                       >
                         Cancel
@@ -2265,11 +2815,17 @@ export default function CreateProfile({
                       <button
                         type="button"
                         className={nextButton}
-                        onClick={() => {
-                          setAdditionalAddresses((prev) => [...prev, newAddress])
+                        onClick={async () => {
+                          const nextAdditionalAddresses = [...additionalAddresses, newAddress]
+                          setAdditionalAddresses(nextAdditionalAddresses)
                           setShowAddAddressModal(false)
                           setNewAddress(createAddressEntry())
                           setAddressComplete(true)
+                          if (isEditScreen) {
+                            const formsPayload = buildFormsPayload({ additionalAddresses: nextAdditionalAddresses })
+                            await handleAddressSaveContinue(formsPayload)
+                            return
+                          }
                           setActiveAddressIndex('primary')
                           setAddressEditing(false)
                         }}
@@ -2320,12 +2876,13 @@ export default function CreateProfile({
 
                           if (row.type === 'customField') {
                             const field = row.customField
+                            const { key: _fieldKey, ...fieldProps } = field || {}
                             return (
                               <div key={row.id} className="contents">
-                                <FieldRow {...field} />
-                                {addressErrors[field.id] && (
+                                <FieldRow {...fieldProps} />
+                                {fieldProps?.id && addressErrors[fieldProps.id] && (
                                   <div className="col-span-2 text-xs text-rose-600">
-                                    {addressErrors[field.id]}
+                                    {addressErrors[fieldProps.id]}
                                   </div>
                                 )}
                               </div>
@@ -2386,11 +2943,20 @@ export default function CreateProfile({
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          if (addressComplete) {
-                            setAddressEditing(false)
-                          } else {
-                            setActiveSection(null)
+                          if (isEditScreen) {
+                            handleEditBack()
+                            return
                           }
+                          handleCancelWithPrompt({
+                            onSave: async () => saveSectionWithNotification('address'),
+                            onDiscard: () => {
+                              if (addressComplete) {
+                                setAddressEditing(false)
+                              } else {
+                                setActiveSection(null)
+                              }
+                            },
+                          })
                         }}
                       >
                         Cancel
@@ -2418,10 +2984,7 @@ export default function CreateProfile({
                       <button
                         type="button"
                         className={miniButton}
-                        onClick={() => {
-                          setActiveAddressIndex('primary')
-                          setAddressEditing(true)
-                        }}
+                        onClick={() => handleEditSection('address', { addressIndex: 'primary' })}
                       >
                         Edit
                       </button>
@@ -2460,10 +3023,7 @@ export default function CreateProfile({
                           <button
                             type="button"
                             className={miniButton}
-                            onClick={() => {
-                              setActiveAddressIndex(index)
-                              setAddressEditing(true)
-                            }}
+                            onClick={() => handleEditSection('address', { addressIndex: index })}
                           >
                             Edit
                           </button>
@@ -2505,10 +3065,7 @@ export default function CreateProfile({
                     <button
                       type="button"
                       className={miniButton}
-                      onClick={() => {
-                        setNewAddress(createAddressEntry())
-                        setShowAddAddressModal(true)
-                      }}
+                      onClick={handleAddAddress}
                     >
                       Add more address
                     </button>
@@ -2678,11 +3235,20 @@ export default function CreateProfile({
                         type="button"
                         className={miniButton}
                         onClick={() => {
-                          if (additionalComplete) {
-                            setAdditionalEditing(false)
-                          } else {
-                            setActiveSection(null)
+                          if (isEditScreen) {
+                            handleEditBack()
+                            return
                           }
+                          handleCancelWithPrompt({
+                            onSave: async () => handleAdditionalFormSave({ skipNavigate: true }),
+                            onDiscard: () => {
+                              if (additionalComplete) {
+                                setAdditionalEditing(false)
+                              } else {
+                                setActiveSection(null)
+                              }
+                            },
+                          })
                         }}
                       >
                         Cancel
@@ -2690,67 +3256,7 @@ export default function CreateProfile({
                       <button
                         type="button"
                         className={nextButton}
-                        onClick={async () => {
-                          if (additionalSaving) return
-                          setAdditionalSaving(true)
-                          try {
-                            const productId = additionalFormProductId ? Number(additionalFormProductId) : null
-                            const selectedProduct = products.find((product) => product.id === productId) || null
-                            const resolvedName =
-                              additionalFormMode === 'existing'
-                                ? selectedProduct?.name || ''
-                                : additionalFormName.trim()
-                            if (!additionalFormMode) {
-                              setAdditionalFormError('Please choose existing or custom first.')
-                              setAdditionalSaving(false)
-                              return
-                            }
-                            if (additionalFormMode === 'existing' && !productId) {
-                              setAdditionalFormError('Please select a product.')
-                              setAdditionalSaving(false)
-                              return
-                            }
-                            if (additionalFormMode === 'custom' && !resolvedName) {
-                              setAdditionalFormError('Please enter a custom form name.')
-                              setAdditionalSaving(false)
-                              return
-                            }
-                            const baseKeys = new Set(baseAdditionalQuestionKeysRef.current || [])
-                            const questionsToSave =
-                              additionalFormMode === 'existing'
-                                ? additionalQuestions
-                                    .map((question) => (question?.question || '').toString().trim())
-                                    .filter((text) => text && !baseKeys.has(normalizeQuestionText(text)))
-                                : additionalQuestions.map((question) => question.question)
-                            await saveCustomerQuestions(questionsToSave, productId || null, resolvedName)
-                            const nextForm = {
-                              name: resolvedName,
-                              questions: additionalQuestions,
-                              productId: productId || null,
-                              productName: selectedProduct?.name || '',
-                            }
-                            const buildNextForms = (prev) => {
-                              if (typeof activeAdditionalFormIndex === 'number') {
-                                const next = [...prev]
-                                next[activeAdditionalFormIndex] = nextForm
-                                return next
-                              }
-                              return [...prev, nextForm]
-                            }
-                            const nextAdditionalForms = buildNextForms(additionalForms)
-                            if (typeof activeAdditionalFormIndex === 'number') {
-                              setAdditionalForms((prev) => buildNextForms(prev))
-                            } else {
-                              setAdditionalForms((prev) => buildNextForms(prev))
-                            }
-                            setActiveAdditionalFormIndex(null)
-                            const nextFormsPayload = buildFormsPayload({ additionalForms: nextAdditionalForms })
-                            await handleAdditionalSaveContinue(nextFormsPayload, { skipSaving: true })
-                          } catch (error) {
-                            console.warn('Failed to save additional form', error)
-                            setAdditionalSaving(false)
-                          }
-                        }}
+                        onClick={handleAdditionalFormSave}
                         disabled={additionalSaving}
                       >
                         {additionalSaving ? 'Saving...' : 'Save & Continue'}
@@ -2780,7 +3286,11 @@ export default function CreateProfile({
                             {form.name || `Additional Form ${index + 1}`}
                           </div>
                           <div className="flex gap-2">
-                            <button type="button" className={miniButton} onClick={() => editAdditionalForm(index)}>
+                            <button
+                              type="button"
+                              className={miniButton}
+                              onClick={() => handleEditSection('additional', { additionalFormIndex: index })}
+                            >
                               Edit
                             </button>
                             <button type="button" className={miniButton} onClick={() => removeAdditionalForm(index)}>
@@ -2813,7 +3323,7 @@ export default function CreateProfile({
                     <div className="text-slate-500">No additional forms added.</div>
                   )}
                   <div className="flex flex-wrap justify-end gap-3">
-                    <button type="button" className={miniButton} onClick={startNewAdditionalForm}>
+                    <button type="button" className={miniButton} onClick={handleAddAdditionalForm}>
                       Add more forms
                     </button>
                     <button
@@ -2839,7 +3349,7 @@ export default function CreateProfile({
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-900">{householdSectionLabel}</div>
-                  <button type="button" className={miniButton} onClick={() => openSection('household')}>
+                  <button type="button" className={miniButton} onClick={() => handleSummaryEdit('household')}>
                     Edit
                   </button>
                 </div>
@@ -2871,7 +3381,7 @@ export default function CreateProfile({
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-900">{addressSectionLabel}</div>
-                  <button type="button" className={miniButton} onClick={() => openSection('address')}>
+                  <button type="button" className={miniButton} onClick={() => handleSummaryEdit('address')}>
                     Edit
                   </button>
                 </div>
@@ -2907,7 +3417,7 @@ export default function CreateProfile({
               <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-900">{additionalSectionLabel}</div>
-                  <button type="button" className={miniButton} onClick={() => openSection('additional')}>
+                  <button type="button" className={miniButton} onClick={() => handleSummaryEdit('additional')}>
                     Edit
                   </button>
                 </div>

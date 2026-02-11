@@ -71,6 +71,7 @@ Messaging is allowed only when a ProfileShare exists with:
 - Auto-scroll only when user is near bottom; otherwise "Jump to latest" appears.
 - Enter sends message; Shift+Enter inserts newline.
 - Relationship gating enforced (no conversation unless share exists).
+- Mobile overflow regression: at 375px wide, send a long URL with no spaces, a 200+ character unbroken string, and a multiline message; verify no horizontal scroll and bubbles still align left/right.
 
 ## Tests
 Backend tests use Node's built-in test runner.
