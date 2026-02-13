@@ -33,17 +33,6 @@ export function AuthProvider({ children }) {
         if (!active) return
         setUser(res.data.user)
         setConsentStatus(res.data.consent || null)
-        if (res.data.user?.role === 'AGENT') {
-          const pending = res.data.user.agentStatus && res.data.user.agentStatus !== 'approved'
-          const suspended = res.data.user.agentSuspended
-          if (pending || suspended) {
-            localStorage.setItem('connsura_agent_onboarding_pending', 'true')
-            localStorage.setItem('connsura_agent_onboarding_submitted', 'true')
-          } else {
-            localStorage.removeItem('connsura_agent_onboarding_pending')
-            localStorage.removeItem('connsura_agent_onboarding_submitted')
-          }
-        }
       })
       .catch(() => {
         if (!active) return
@@ -73,17 +62,6 @@ export function AuthProvider({ children }) {
     if (password) {
       setLastPassword(password)
     }
-    if (nextUser?.role === 'AGENT') {
-      const pending = nextUser.agentStatus && nextUser.agentStatus !== 'approved'
-      const suspended = nextUser.agentSuspended
-      if (pending || suspended) {
-        localStorage.setItem('connsura_agent_onboarding_pending', 'true')
-        localStorage.setItem('connsura_agent_onboarding_submitted', 'true')
-      } else {
-        localStorage.removeItem('connsura_agent_onboarding_pending')
-        localStorage.removeItem('connsura_agent_onboarding_submitted')
-      }
-    }
   }
 
   const login = async (email, password, options = {}) => {
@@ -107,10 +85,6 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.post('/auth/register', payload)
       applyAuth(res.data.token, res.data.user, payload.password, { persist: true, consent: res.data.consent || null })
-      if (res.data.user.role === 'AGENT') {
-        localStorage.setItem('connsura_agent_onboarding_pending', 'true')
-        localStorage.removeItem('connsura_agent_onboarding_submitted')
-      }
       if (res.data.user.role === 'CUSTOMER') {
         sessionStorage.setItem('connsura_force_dashboard', 'true')
       }
@@ -135,8 +109,6 @@ export function AuthProvider({ children }) {
     setLastPassword('')
     setConsentStatus(null)
     clearStoredToken()
-    localStorage.removeItem('connsura_agent_onboarding_pending')
-    localStorage.removeItem('connsura_agent_onboarding_submitted')
     sessionStorage.removeItem('connsura_force_dashboard')
   }
 

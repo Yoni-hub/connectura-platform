@@ -1,10 +1,9 @@
 const express = require('express')
 const crypto = require('crypto')
 const prisma = require('../prisma')
-const { authGuard, getAuthToken } = require('../middleware/auth')
+const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { sendEmail } = require('../utils/emailClient')
-const { verifyToken } = require('../utils/token')
 const { LEGAL_DOC_TYPES, getLatestDocuments } = require('../utils/legalDocuments')
 
 const router = express.Router()
@@ -34,7 +33,6 @@ const formatShare = (share) => ({
   sections: parseJson(share.sections, {}),
   snapshot: parseJson(share.snapshot, {}),
   customerId: share.customerId,
-  agentId: share.agentId,
   editable: share.editable,
   status: share.status,
   pendingStatus: share.pendingStatus,
@@ -53,18 +51,6 @@ const buildShareUrl = (token) => {
   return `${base}/share/${token}`
 }
 
-const getOptionalUser = async (req) => {
-  const token = getAuthToken(req)
-  if (!token) return null
-  try {
-    const decoded = verifyToken(token)
-    if (!decoded?.id) return null
-    return await prisma.user.findUnique({ where: { id: decoded.id } })
-  } catch {
-    return null
-  }
-}
-
 const requireLatestConsent = async (userId, documentType) => {
   const latestDocs = await getLatestDocuments(prisma, [documentType])
   const latest = latestDocs[documentType]
@@ -76,16 +62,12 @@ const requireLatestConsent = async (userId, documentType) => {
   return { ok: Boolean(consent), latest }
 }
 
-const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code, editable, agentName }) => {
+const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code, editable }) => {
   const recipientLabel = recipientName ? ` for ${recipientName}` : ''
   const customerLabel = customerName ? ` from ${customerName}` : ''
   const accessMode = editable ? 'Editable' : 'Read-only'
-  const subject = agentName
-    ? `Connsura profile shared with you${customerLabel}`
-    : `Your Connsura share link${recipientLabel}`
-  const intro = agentName
-    ? `A customer${customerLabel} shared their Connsura profile with you.`
-    : `Here is your Connsura share link${recipientLabel}.`
+  const subject = `Your Connsura share link${recipientLabel}`
+  const intro = `Here is your Connsura share link${recipientLabel}${customerLabel}.`
   const text = [
     intro,
     '',
@@ -182,23 +164,12 @@ router.post('/', authGuard, async (req, res) => {
   }
   const sections = req.body?.sections || {}
   const snapshot = req.body?.snapshot || {}
-  const agentId = req.body?.agentId ? Number(req.body.agentId) : null
   const editable = Boolean(req.body?.editable)
   const rawRecipientName = typeof req.body?.recipientName === 'string' ? req.body.recipientName : ''
   const recipientName = collapseSpaces(rawRecipientName)
   const recipientNameNormalized = normalizeRecipientName(rawRecipientName)
-  if (agentId && Number.isNaN(agentId)) {
-    return res.status(400).json({ error: 'Invalid agent id' })
-  }
-  if (!agentId && !recipientNameNormalized) {
+  if (!recipientNameNormalized) {
     return res.status(400).json({ error: 'Recipient name is required' })
-  }
-  let agent = null
-  if (agentId) {
-    agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { user: true } })
-    if (!agent) {
-      return res.status(404).json({ error: 'Agent not found' })
-    }
   }
 
   const token = generateToken()
@@ -211,16 +182,15 @@ router.post('/', authGuard, async (req, res) => {
       sections: JSON.stringify(sections || {}),
       snapshot: JSON.stringify(snapshot || {}),
       customerId: customer.id,
-      agentId: agentId || null,
       editable,
-      recipientName: agentId ? null : recipientName,
-      recipientNameNormalized: agentId ? null : recipientNameNormalized,
+      recipientName,
+      recipientNameNormalized,
       lastAccessedAt: new Date(),
     },
   })
 
   const shareUrl = buildShareUrl(token)
-  const emailTarget = agent?.user?.email || customer.user?.email
+  const emailTarget = customer.user?.email
   if (emailTarget) {
     try {
       await sendShareEmail({
@@ -230,7 +200,6 @@ router.post('/', authGuard, async (req, res) => {
         shareUrl,
         code,
         editable,
-        agentName: agent?.name,
       })
     } catch (err) {
       console.error('share email send error', { error: err.message })
@@ -248,18 +217,6 @@ router.post('/:token/verify', async (req, res) => {
   const shouldTouch = req.body?.touch !== false
   if (!token) return res.status(400).json({ error: 'Share token is required' })
   if (!code) return res.status(400).json({ error: 'Verification code is required' })
-  const optionalUser = await getOptionalUser(req)
-  if (optionalUser?.role === 'AGENT') {
-    const consentCheck = await requireLatestConsent(optionalUser.id, LEGAL_DOC_TYPES.DATA_SHARING)
-    if (!consentCheck.ok) {
-      return res.status(403).json({
-        error: 'Consent required',
-        code: 'CONSENT_REQUIRED',
-        documentType: LEGAL_DOC_TYPES.DATA_SHARING,
-        version: consentCheck.latest?.version || null,
-      })
-    }
-  }
   let share = await prisma.profileShare.findUnique({
     where: { token },
     include: { customer: true },
@@ -359,14 +316,12 @@ router.get('/pending', authGuard, async (req, res) => {
   }
   const shares = await prisma.profileShare.findMany({
     where: { customerId: customer.id, pendingStatus: 'pending' },
-    include: { agent: true },
     orderBy: { pendingAt: 'desc' },
   })
   res.json({
     shares: shares.map((share) => ({
       ...formatShare(share),
       pendingEdits: parseJson(share.pendingEdits, {}),
-      agent: share.agent ? { id: share.agent.id, name: share.agent.name } : null,
       customer: { name: customer.name },
     })),
   })
@@ -382,35 +337,13 @@ router.get('/active', authGuard, async (req, res) => {
   }
   const shares = await prisma.profileShare.findMany({
     where: { customerId: customer.id, status: 'active' },
-    include: { agent: true },
     orderBy: { createdAt: 'desc' },
   })
   res.json({
     shares: shares.map((share) => ({
       ...formatShare(share),
-      agent: share.agent ? { id: share.agent.id, name: share.agent.name } : null,
     })),
   })
-})
-
-router.post('/status', authGuard, async (req, res) => {
-  if (req.user.role !== 'AGENT') {
-    return res.status(403).json({ error: 'Only agents can view share status' })
-  }
-  const agent = await prisma.agent.findUnique({ where: { userId: req.user.id } })
-  if (!agent) {
-    return res.status(404).json({ error: 'Agent not found' })
-  }
-  const tokens = Array.isArray(req.body?.tokens) ? req.body.tokens : []
-  const cleanTokens = tokens.map((token) => String(token || '').trim()).filter(Boolean)
-  if (!cleanTokens.length) {
-    return res.json({ statuses: [] })
-  }
-  const shares = await prisma.profileShare.findMany({
-    where: { token: { in: cleanTokens }, agentId: agent.id },
-    select: { token: true, status: true },
-  })
-  res.json({ statuses: shares })
 })
 
 router.post('/:token/approve', authGuard, async (req, res) => {

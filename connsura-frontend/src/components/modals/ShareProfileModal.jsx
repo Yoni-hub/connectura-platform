@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
-import { useAgents } from '../../context/AgentContext'
 import { api } from '../../services/api'
 import Modal from '../ui/Modal'
 import ShareSummary from '../share/ShareSummary'
@@ -69,9 +68,8 @@ const copyText = async (value, label) => {
   }
 }
 
-export default function ShareProfileModal({ open, onClose, snapshot, defaultAgentId }) {
+export default function ShareProfileModal({ open, onClose, snapshot }) {
   const { user } = useAuth()
-  const { agents, loading } = useAgents()
   const [step, setStep] = useState('sections')
   const [activeMethod, setActiveMethod] = useState(null)
   const [accessMode, setAccessMode] = useState('read')
@@ -91,9 +89,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
   })
   const [shareLoading, setShareLoading] = useState(false)
   const [linkShare, setLinkShare] = useState(null)
-  const [agentShare, setAgentShare] = useState(null)
-  const [selectedAgentId, setSelectedAgentId] = useState('')
-  const [sendingAgent, setSendingAgent] = useState(false)
   const [recipientName, setRecipientName] = useState('')
   const additionalForms = Array.isArray(snapshot?.additionalForms) ? snapshot.additionalForms : []
   const householdAvailable = useMemo(() => getHouseholdHasData(snapshot?.household), [snapshot])
@@ -113,21 +108,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     }),
     [sections]
   )
-
-  const selectedSectionLabels = useMemo(() => {
-    const labels = []
-    if (sections.household) labels.push('Household')
-    if (sections.address) labels.push('Address')
-    if (sections.additional) {
-      labels.push('Additional information')
-    } else {
-      sections.additionalIndexes.forEach((index) => {
-        const form = additionalForms[index]
-        labels.push(form?.name || `Additional Form ${index + 1}`)
-      })
-    }
-    return labels
-  }, [sections, additionalForms])
 
   const allSelected = useMemo(() => {
     const additionalSelected =
@@ -183,8 +163,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     setActiveMethod(null)
     setShareLoading(false)
     setLinkShare(null)
-    setAgentShare(null)
-    setSelectedAgentId(defaultAgentId ? String(defaultAgentId) : '')
     setRecipientName('')
   }, [
     open,
@@ -193,7 +171,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     addressAvailable,
     additionalAvailable,
     availableAdditionalIndexes,
-    defaultAgentId,
   ])
 
   const startShareAction = (action) => {
@@ -242,7 +219,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     })
   }
 
-  const createShare = async (agentId) => {
+  const createShare = async () => {
     if (!snapshot) {
       toast.error('Profile snapshot not ready')
       return null
@@ -255,8 +232,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     try {
       const payload = { sections: sectionsPayload, snapshot, editable: accessMode === 'edit' }
       const trimmedRecipientName = recipientName.replace(/\s+/g, ' ').trim()
-      if (agentId) payload.agentId = agentId
-      if (!agentId && trimmedRecipientName) payload.recipientName = trimmedRecipientName
+      if (trimmedRecipientName) payload.recipientName = trimmedRecipientName
       const res = await api.post('/shares', payload)
       return res.data
     } catch (err) {
@@ -330,46 +306,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
     })
   }
 
-  const handleSendToAgent = async () => {
-    const agentId = Number(selectedAgentId)
-    if (!agentId) {
-      toast.error('Select an agent first')
-      return
-    }
-    startShareAction(async () => {
-      setSendingAgent(true)
-      const share = await createShare(agentId)
-      if (!share) {
-        setSendingAgent(false)
-        return
-      }
-      setAgentShare(share)
-      const shareUrl = buildShareUrl(share.share.token)
-      const messageLines = [
-        `Shared profile sections: ${selectedSectionLabels.join(', ') || 'None'}.`,
-        accessMode === 'edit' ? 'Editing is enabled for this share.' : null,
-        `Link: ${shareUrl}`,
-        `Access code: ${share.code}`,
-        'The link requires the 4-digit code from the customer.',
-      ].filter(Boolean)
-      try {
-        const convoRes = await api.post('/api/messages/conversations', { agentId })
-        const conversationId = convoRes.data?.conversationId
-        if (!conversationId) {
-          throw new Error('No conversation id')
-        }
-        await api.post(`/api/messages/conversations/${conversationId}/messages`, {
-          body: messageLines.join('\n'),
-        })
-        toast.success('Share sent to agent')
-      } catch (err) {
-        toast.error(err.response?.data?.error || 'Unable to send to agent')
-      } finally {
-        setSendingAgent(false)
-      }
-    })
-  }
-
   const renderShareDetails = (share) => {
     if (!share?.share?.token) return null
     const shareUrl = buildShareUrl(share.share.token)
@@ -415,7 +351,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
         title="Share your profile"
         open={open}
         onClose={() => {
-          if (!shareLoading && !sendingAgent) onClose?.()
+          if (!shareLoading) onClose?.()
         }}
         panelClassName="max-w-4xl"
       >
@@ -555,7 +491,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
             </div>
 
             <div
-              className={`print-hidden grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
+              className={`print-hidden grid gap-3 ${accessMode === 'edit' ? 'sm:grid-cols-1' : 'sm:grid-cols-2'}`}
             >
               <button
                 type="button"
@@ -581,17 +517,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
                   Share as PDF
                 </button>
               )}
-              <button
-                type="button"
-                className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                  activeMethod === 'agent'
-                    ? 'border-[#0b3b8c] bg-[#e8f0ff]'
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-                onClick={() => handleMethodChange('agent')}
-              >
-                Share with agent
-              </button>
             </div>
 
             {activeMethod === 'link' && (
@@ -625,41 +550,6 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
               </div>
             )}
 
-            {activeMethod === 'agent' && (
-              <div className="print-hidden space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm text-slate-600">
-                  Send a secure link and code to an agent. They will only see the sections you selected.
-                </div>
-                <label className="block text-sm">
-                  Agent
-                  <select
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                    value={selectedAgentId}
-                    onChange={(event) => setSelectedAgentId(event.target.value)}
-                    disabled={loading}
-                  >
-                    <option value="">Select an agent</option>
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name || agent.email}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="pill-btn-primary px-5"
-                    onClick={handleSendToAgent}
-                    disabled={sendingAgent || shareLoading}
-                  >
-                    {sendingAgent ? 'Sending...' : 'Send to agent'}
-                  </button>
-                </div>
-                {agentShare && renderShareDetails(agentShare)}
-              </div>
-            )}
-
             {activeMethod === 'pdf' && accessMode !== 'edit' && (
               <div className="print-share-shell space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="print-hidden text-sm text-slate-600">Preview your PDF before printing.</div>
@@ -690,7 +580,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
                 checked={shareConsentChecks.shareProfile}
                 onChange={(e) => setShareConsentChecks((prev) => ({ ...prev, shareProfile: e.target.checked }))}
               />
-              I consent to sharing my insurance profile with this agent
+              I consent to sharing my insurance profile with this recipient
             </label>
             <label className="flex items-start gap-2">
               <input
@@ -699,7 +589,7 @@ export default function ShareProfileModal({ open, onClose, snapshot, defaultAgen
                 checked={shareConsentChecks.exportData}
                 onChange={(e) => setShareConsentChecks((prev) => ({ ...prev, exportData: e.target.checked }))}
               />
-              I understand the agent may export and store my data
+              I understand the recipient may export and store my data
             </label>
             <label className="flex items-start gap-2">
               <input

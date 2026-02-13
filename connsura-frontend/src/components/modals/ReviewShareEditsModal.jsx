@@ -224,7 +224,7 @@ export default function ReviewShareEditsModal({ open, onClose, share, currentFor
     <Modal title="Review profile edits" open={open} onClose={onClose} panelClassName="max-w-3xl">
       <div className="space-y-4">
         <div className="text-sm text-slate-600">
-          {share?.agent?.name ? `Edits submitted by ${share.agent.name}.` : 'Edits submitted from a shared link.'}
+          {`Edits submitted by ${share?.recipientName || 'a shared link'}.`}
         </div>
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
           {changes.length ? (

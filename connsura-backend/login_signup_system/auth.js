@@ -84,14 +84,10 @@ const sanitizeUser = (user) => ({
   id: user.id,
   email: user.email,
   emailPending: user.emailPending || null,
-  name: user.customer?.name || user.agent?.name || '',
+  name: user.customer?.name || user.email || '',
   role: user.role,
   emailVerified: Boolean(user.emailVerified),
-  agentId: user.agent?.id,
   customerId: user.customer?.id,
-  agentStatus: user.agent?.status,
-  agentSuspended: user.agent?.isSuspended,
-  agentUnderReview: user.agent?.underReview,
   totpEnabled: Boolean(user.totpEnabled),
   recoveryId: user.totpRecoveryId || null,
 })
@@ -334,18 +330,16 @@ router.post('/register', async (req, res) => {
     const {
       email,
       password,
-      role = 'CUSTOMER',
       name,
       languages = [],
-      states = [],
-      specialty = 'Auto',
-      producerNumber = '',
-      address = '',
-      zip = '',
-      products = [],
       consents = {},
     } = req.body
-    const isCustomer = role === 'CUSTOMER'
+    const requestedRole = String(req.body?.role || 'CUSTOMER').toUpperCase()
+    if (requestedRole !== 'CUSTOMER') {
+      return res.status(403).json({ error: 'Agent accounts are disabled' })
+    }
+    const role = 'CUSTOMER'
+    const isCustomer = true
     const auditTarget = normalizeEmail(email) || 'unknown'
     if (isCustomer) {
       await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_SUBMITTED')
@@ -356,17 +350,7 @@ router.post('/register', async (req, res) => {
       }
       return res.status(400).json({ error: 'Email, password, and name are required' })
     }
-    const requiredConsentKeys = isCustomer
-      ? ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
-      : [
-          'terms',
-          'privacy',
-          'independentAgent',
-          'lawCompliance',
-          'noEndorsement',
-          'restrictedDataExport',
-          'indemnify',
-        ]
+    const requiredConsentKeys = ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
     const missingConsents = requiredConsentKeys.filter((key) => !consents?.[key])
     if (missingConsents.length) {
       if (isCustomer) {
@@ -387,42 +371,16 @@ router.post('/register', async (req, res) => {
         email,
         password: hashed,
         role,
-        agent:
-          role === 'AGENT'
-            ? {
-                create: {
-                  name,
-                  bio: 'New agent on Connsura.',
-                  languages: JSON.stringify(languages),
-                  states: JSON.stringify(states),
-                  specialty: specialty || (products[0] || 'Auto'),
-                  producerNumber,
-                  address,
-                  zip,
-                  products: JSON.stringify(products),
-                  availability: 'online',
-                  rating: 4.5,
-                  reviews: JSON.stringify([]),
-                  photo: '/uploads/agents/agent1.svg',
-                  status: 'pending',
-                  underReview: true,
-                  isSuspended: false,
-                },
-              }
-            : undefined,
-        customer:
-          role === 'CUSTOMER'
-            ? {
-                create: {
-                  name,
-                  preferredLangs: JSON.stringify(languages),
-                  priorInsurance: JSON.stringify([]),
-                  coverages: JSON.stringify([]),
-                },
-              }
-            : undefined,
+        customer: {
+          create: {
+            name,
+            preferredLangs: JSON.stringify(languages),
+            priorInsurance: JSON.stringify([]),
+            coverages: JSON.stringify([]),
+          },
+        },
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     const requiredDocTypes = getRequiredDocTypes(role)
     if (requiredDocTypes.length) {
@@ -453,23 +411,6 @@ router.post('/register', async (req, res) => {
           userAgent,
           consentItems: buildConsentItems({
             emailCommunications: Boolean(consents?.emailCommunications),
-          }),
-        })
-      }
-      if (user.role === 'AGENT' && latestDocs[LEGAL_DOC_TYPES.AGENT_TERMS]) {
-        consentRecords.push({
-          userId: user.id,
-          role: user.role,
-          documentType: LEGAL_DOC_TYPES.AGENT_TERMS,
-          version: latestDocs[LEGAL_DOC_TYPES.AGENT_TERMS].version,
-          ipAddress: ip,
-          userAgent,
-          consentItems: buildConsentItems({
-            independentAgent: Boolean(consents?.independentAgent),
-            lawCompliance: Boolean(consents?.lawCompliance),
-            noEndorsement: Boolean(consents?.noEndorsement),
-            restrictedDataExport: Boolean(consents?.restrictedDataExport),
-            indemnify: Boolean(consents?.indemnify),
           }),
         })
       }
@@ -1433,6 +1374,9 @@ router.post('/login', async (req, res) => {
       include: { agent: true, customer: true },
     })
     if (!user) return res.status(400).json({ error: 'Invalid credentials' })
+    if (user.role === 'AGENT') {
+      return res.status(403).json({ error: 'Agent access is disabled' })
+    }
     if (user.customer?.isDisabled) {
       return res.status(403).json({ error: 'Account is deactivated' })
     }

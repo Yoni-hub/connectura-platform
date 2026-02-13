@@ -5,7 +5,6 @@ const links = [
   { label: 'Terms & conditions', to: '/terms' },
   { label: 'Privacy policy', to: '/privacy' },
   { label: 'Data sharing', to: '/data-sharing' },
-  { label: 'Agent responsibilities', to: '/agent-responsibilities' },
 ]
 
 export default function Footer() {

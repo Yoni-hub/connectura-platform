@@ -51,18 +51,7 @@ export default function AccountRecovery() {
       })
       completeAuth(res.data.token, res.data.user, form.password)
       toast.success('Account recovered')
-      const user = res.data.user
-      if (user?.role === 'AGENT') {
-        const pending = user.agentStatus && user.agentStatus !== 'approved'
-        const suspended = user.agentSuspended
-        if (pending || suspended) {
-          nav('/agent/onboarding', { replace: true })
-        } else {
-          nav('/agent/dashboard', { replace: true })
-        }
-      } else {
-        nav('/client/dashboard', { replace: true })
-      }
+      nav('/client/dashboard', { replace: true })
     } catch (err) {
       toast.error(err.response?.data?.error || 'Account recovery failed')
     } finally {

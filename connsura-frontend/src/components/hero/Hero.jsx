@@ -11,8 +11,8 @@ export default function Hero({ onCreateProfile }) {
               Create Your Insurance Profile - Once
             </h1>
             <p className="text-sm text-white/90">
-              Build a reusable insurance profile you control. Fill it out yourself, or invite an agent to help complete
-              and update it for you&mdash;securely, with permission.
+              Build a reusable insurance profile you control. Share it securely with a link or PDF whenever you need
+              coverage.
             </p>
 
             <div className="flex flex-wrap justify-center gap-3 pt-1">
@@ -22,15 +22,6 @@ export default function Hero({ onCreateProfile }) {
                 onClick={onCreateProfile}
               >
                 Create Your Insurance Profile
-              </button>
-              <button
-                type="button"
-                className="pill-btn-ghost px-6 py-3 text-sm sm:text-base"
-                onClick={() => {
-                  window.location.href = '/agents'
-                }}
-              >
-                Talk to an Agent
               </button>
             </div>
 

@@ -5,17 +5,14 @@ import { useAuth } from '../context/AuthContext'
 import { API_URL, api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
-import AgentCard from '../components/agents/AgentCard'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
-import RateAgentModal from '../components/modals/RateAgentModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import ShareSummary from '../components/share/ShareSummary'
 import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
-import Messages from './Messages'
 
-const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Agents', 'Messages', 'Settings']
+const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -37,7 +34,7 @@ const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '
 const reminderLinkClass =
   'inline-flex text-sm font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:hover:no-underline'
 
-const getInitials = (name = '', fallback = 'AG') => {
+const getInitials = (name = '', fallback = 'CL') => {
   const parts = name.trim().split(' ').filter(Boolean)
   if (!parts.length) return fallback
   return parts
@@ -154,7 +151,6 @@ const DEFAULT_NOTIFICATION_PREFS = {
   inapp: true,
   loginAlerts: true,
   groups: {
-    messages: true,
     passport: true,
     system: true,
   },
@@ -169,7 +165,6 @@ const normalizeNotificationPrefs = (value = {}) => {
     inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
     loginAlerts: true,
     groups: {
-      messages: typeof groups.messages === 'boolean' ? groups.messages : true,
       passport: typeof groups.passport === 'boolean' ? groups.passport : true,
       system: typeof groups.system === 'boolean' ? groups.system : true,
     },
@@ -212,11 +207,6 @@ export default function ClientDashboard() {
   const formsSaveRef = useRef(null)
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
-  const [savedAgents, setSavedAgents] = useState([])
-  const [savedAgentsLoading, setSavedAgentsLoading] = useState(false)
-  const [savedAgentIdOverrides, setSavedAgentIdOverrides] = useState([])
-  const [rateOpen, setRateOpen] = useState(false)
-  const [rateAgent, setRateAgent] = useState(null)
   const [settingsModal, setSettingsModal] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
@@ -362,12 +352,6 @@ export default function ClientDashboard() {
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
-    if (nextTab !== 'Messages') {
-      params.delete('conversationId')
-      params.delete('agent')
-      params.delete('client')
-      params.delete('customer')
-    }
     nav(`/client/dashboard?${params.toString()}`, { replace: true })
   }
 
@@ -405,20 +389,6 @@ export default function ClientDashboard() {
     fetchProfile()
   }, [user?.customerId, user?.email])
 
-  const loadSavedAgents = async () => {
-    if (!user?.customerId) return
-    setSavedAgentsLoading(true)
-    try {
-      const res = await api.get(`/customers/${user.customerId}/saved-agents`)
-      setSavedAgents(res.data.agents || [])
-      setSavedAgentIdOverrides([])
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Could not load saved agents')
-    } finally {
-      setSavedAgentsLoading(false)
-    }
-  }
-
   const loadPendingShares = async () => {
     if (!user?.customerId) return
     try {
@@ -441,80 +411,6 @@ export default function ClientDashboard() {
         console.warn('Failed to load active shares', err)
       }
     }
-  }
-
-  const handleRemoveAgent = async (agentId) => {
-    if (!user?.customerId) {
-      toast.error('Customer profile not found')
-      return
-    }
-    const confirmed = window.confirm('Remove this agent from your list?')
-    if (!confirmed) return
-    try {
-      await api.delete(`/customers/${user.customerId}/saved-agents/${agentId}`)
-      toast.success('Agent removed')
-      await loadSavedAgents()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to remove agent')
-    }
-  }
-
-  const handleSaveAgent = async (agent) => {
-    if (!user?.customerId) {
-      toast.error('Customer profile not found')
-      return
-    }
-    const agentId = agent?.id
-    if (!agentId) {
-      toast.error('Agent not found')
-      return
-    }
-    if (savedAgentIds.has(agentId)) {
-      return
-    }
-    setSavedAgentIdOverrides((prev) => (prev.includes(agentId) ? prev : [...prev, agentId]))
-    try {
-      await api.post(`/customers/${user.customerId}/saved-agents`, { agentId })
-      toast.success('Agent saved')
-      await loadSavedAgents()
-    } catch (err) {
-      setSavedAgentIdOverrides((prev) => prev.filter((id) => id !== agentId))
-      toast.error(err.response?.data?.error || 'Failed to save agent')
-    }
-  }
-
-  const handleMessageAgent = (agent) => {
-    if (!user) {
-      toast.error('Login to send a message')
-      return
-    }
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can message agents')
-      return
-    }
-    nav(`/messages?agent=${agent.id}`)
-  }
-
-  const handleRateAgent = (agent) => {
-    if (!user) {
-      toast.error('Login to rate an agent')
-      return
-    }
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can rate agents')
-      return
-    }
-    setRateAgent(agent)
-    setRateOpen(true)
-  }
-
-  const handleRemoveAgentCard = (agent) => {
-    handleRemoveAgent(agent.id)
-  }
-
-  const handleViewProfile = (agent) => {
-    if (!agent?.id) return
-    nav(`/agents/${agent.id}`)
   }
 
   const handlePhotoChange = (event) => {
@@ -603,11 +499,6 @@ export default function ClientDashboard() {
       setPhotoUploading(false)
     }
   }
-
-  useEffect(() => {
-    if (!user?.customerId) return
-    loadSavedAgents()
-  }, [user?.customerId])
 
   useEffect(() => {
     loadPendingShares()
@@ -722,7 +613,6 @@ export default function ClientDashboard() {
   )
   useEffect(() => {
     if (!user?.customerId || !activeTab) return
-    if (activeTab === 'Agents' && savedAgentsLoading) return
     if (tabLogRef.current === activeTab) return
     tabLogRef.current = activeTab
     const profileStatus = formsCompleted ? 'completed' : formsStarted ? 'draft' : 'none'
@@ -731,7 +621,6 @@ export default function ClientDashboard() {
       sessionId,
       profileStatus,
       currentSection: activeTab === 'Forms' ? formsCurrentSection || null : null,
-      savedAgentsCount: activeTab === 'Agents' ? savedAgents.length : null,
     }).catch(() => {})
   }, [
     activeTab,
@@ -740,15 +629,8 @@ export default function ClientDashboard() {
     formsStarted,
     sessionId,
     formsCurrentSection,
-    savedAgents.length,
-    savedAgentsLoading,
   ])
   const displayName = client?.name || user?.name || user?.email || 'client'
-  const savedAgentIds = useMemo(() => {
-    const ids = new Set(savedAgents.map((agent) => agent.id))
-    savedAgentIdOverrides.forEach((id) => ids.add(id))
-    return ids
-  }, [savedAgents, savedAgentIdOverrides])
   const passportForms = formsDraft || client?.profileData?.forms || {}
   const householdForms = passportForms.household || {}
   const namedInsured = householdForms.namedInsured || {}
@@ -1103,17 +985,6 @@ export default function ClientDashboard() {
     const confirmed = window.confirm('Return to Overview? Your progress is saved.')
     if (!confirmed) return
     updateTab('Overview')
-  }
-
-  const handleTalkToAgent = async () => {
-    if (user?.customerId) {
-      try {
-        await api.post(`/customers/${user.customerId}/agent-search/click`)
-      } catch (err) {
-        console.warn('Unable to log agent search click', err)
-      }
-    }
-    nav('/agents')
   }
 
   const sanitizeForJson = (value) => {
@@ -1653,7 +1524,7 @@ export default function ClientDashboard() {
   }
 
   const passwordDisplay = showPassword ? lastPassword || 'Not captured this session' : '********'
-  const resolveShareRecipient = (share) => share?.agent?.name || share?.recipientName || 'Shared link'
+  const resolveShareRecipient = (share) => share?.recipientName || 'Shared link'
   const accountName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
   const emailValue = form.email || user?.email || ''
   const fallbackLanguage =
@@ -1789,9 +1660,6 @@ export default function ClientDashboard() {
               {activeTab === 'Forms' && (
                 <p className="text-slate-600">Complete your insurance profile.</p>
               )}
-              {activeTab === 'Agents' && (
-                <p className="text-slate-600">Manage the agents you have saved for quick access.</p>
-              )}
               {activeShares.length > 0 && (
                 <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                   <div className="font-semibold">Sharing in progress</div>
@@ -1843,21 +1711,6 @@ export default function ClientDashboard() {
           {!loading && activeTab === 'Overview' && (
             <div className="surface p-5">
               <p className="text-slate-600">Stay on top of your insurance profile and forms.</p>
-              {savedAgentIds.size > 0 && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-900">You have a saved agent</div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    View your saved agents to keep the relationship active.{' '}
-                    <button
-                      type="button"
-                      className={reminderLinkClass}
-                      onClick={() => updateTab('Agents')}
-                    >
-                      View saved agents
-                    </button>
-                  </p>
-                </div>
-              )}
               {needsEmailVerification && (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-sm font-semibold text-amber-900">Verify your email</div>
@@ -1891,23 +1744,8 @@ export default function ClientDashboard() {
                   </p>
                 </div>
               )}
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                <div className="text-sm font-semibold text-slate-900">Need help finishing your profile?</div>
-                <p className="mt-1 text-sm text-slate-600">
-                  Talk to an agent for guidance and next steps.{' '}
-                  <button
-                    type="button"
-                    className={reminderLinkClass}
-                    onClick={handleTalkToAgent}
-                  >
-                    Talk to an Agent
-                  </button>
-                </p>
-              </div>
             </div>
           )}
-
-          {!loading && activeTab === 'Messages' && <Messages embedded />}
 
           {!loading && activeTab === 'My Insurance Passport' && (
             <div className="space-y-4">
@@ -1979,52 +1817,6 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {!loading && activeTab === 'Agents' && (
-            <div className="space-y-4">
-              <div className="surface p-5">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    className="pill-btn-ghost px-4"
-                    onClick={loadSavedAgents}
-                    disabled={savedAgentsLoading}
-                  >
-                    {savedAgentsLoading ? 'Loading...' : 'Refresh'}
-                  </button>
-                </div>
-              </div>
-              {savedAgentsLoading && (
-                <div className="space-y-3">
-                  <Skeleton className="h-24" />
-                  <Skeleton className="h-24" />
-                </div>
-              )}
-              {!savedAgentsLoading && savedAgents.length === 0 && (
-                <div className="surface p-5 text-sm text-slate-500">
-                  <div>No saved agents yet.</div>
-                  <button
-                    type="button"
-                    className="pill-btn-primary mt-3 px-4"
-                    onClick={handleTalkToAgent}
-                  >
-                    Talk to an Agent
-                  </button>
-                </div>
-              )}
-              {!savedAgentsLoading && savedAgents.length > 0 && (
-                <div className="space-y-3">
-                  {savedAgents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      onMessage={handleMessageAgent}
-                      onRemove={handleRemoveAgentCard}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {!loading && activeTab === 'Settings' && (
             <div className="space-y-6">
@@ -2662,7 +2454,7 @@ export default function ClientDashboard() {
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
                   <div className="text-sm font-semibold text-rose-700">Delete account</div>
                   <p className="text-xs text-rose-700">
-                    This permanently deletes your account, profile, and messages. This cannot be undone.
+                    This permanently deletes your account and profile. This cannot be undone.
                   </p>
                   {!deleteOpen ? (
                     <button
@@ -2868,7 +2660,7 @@ export default function ClientDashboard() {
                   <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                     <div>
                       <div className="text-sm font-semibold text-slate-900">Email notifications</div>
-                      <div className="text-xs text-slate-500">Updates about messages and forms.</div>
+                      <div className="text-xs text-slate-500">Updates about your profile and forms.</div>
                     </div>
                     <select
                       className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -2933,27 +2725,7 @@ export default function ClientDashboard() {
 
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                     <div className="text-sm font-semibold text-slate-900">Notification groups</div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                        Messages
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={currentNotificationPrefs.groups.messages}
-                          onChange={(event) => {
-                            const next = normalizeNotificationPrefs({
-                              ...currentNotificationPrefs,
-                              groups: {
-                                ...currentNotificationPrefs.groups,
-                                messages: event.target.checked,
-                              },
-                            })
-                            setNotificationPrefs(next)
-                            saveNotificationPreferences(next)
-                          }}
-                          disabled={notificationLoading}
-                        />
-                      </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                         Passport activity
                         <input
@@ -3032,12 +2804,6 @@ export default function ClientDashboard() {
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         snapshot={resolvedShareSnapshot}
-      />
-      <RateAgentModal
-        open={rateOpen}
-        agent={rateAgent}
-        onClose={() => setRateOpen(false)}
-        onSubmitted={() => loadSavedAgents()}
       />
       <ReviewShareEditsModal
         open={Boolean(reviewShare)}

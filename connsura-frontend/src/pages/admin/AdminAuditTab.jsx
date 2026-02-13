@@ -178,10 +178,9 @@ export default function AdminAuditTab({ onSessionExpired }) {
 
   const modes = [
     { key: 'client', label: 'Client logs', viewAllLabel: 'View all clients' },
-    { key: 'agent', label: 'Agent logs', viewAllLabel: 'View all agents' },
     { key: 'admin', label: 'Admin logs', viewAllLabel: 'View all admin logs' },
   ]
-  const modeLabel = auditMode === 'agent' ? 'agent' : 'client'
+  const modeLabel = auditMode === 'admin' ? 'admin' : 'client'
   const searchLabel = `Search ${modeLabel} logs`
   const searchPlaceholder = 'Name, email, or ID'
 

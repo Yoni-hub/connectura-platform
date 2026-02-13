@@ -64,19 +64,6 @@ export default function AgentProfile() {
     }).catch(() => {})
   }, [user?.customerId, agent?.id])
 
-
-  const handleMessageOpen = () => {
-    if (!user) {
-      toast.error('Login to send a message')
-      return
-    }
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can message agents')
-      return
-    }
-    nav(`/messages?agent=${agent.id}`)
-  }
-
   const handleSaveAgent = async () => {
     if (!user) {
       toast.error('Login to save an agent')
@@ -177,9 +164,6 @@ export default function AgentProfile() {
             <div className="text-sm text-slate-500">Phone: {agent.phone || '—'}</div>
             <div className="text-sm text-slate-500">Address: {agent.address || '—'} {agent.zip || ''}</div>
             <div className="flex gap-2 flex-wrap pt-2">
-              <button onClick={handleMessageOpen} className="pill-btn-ghost">
-                Message
-              </button>
               <button onClick={handleRateOpen} className="pill-btn-ghost">
                 Rate Agent
               </button>

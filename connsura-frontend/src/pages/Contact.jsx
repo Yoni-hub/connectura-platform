@@ -51,7 +51,6 @@ export default function Contact() {
               onChange={(e) => setForm({ ...form, topic: e.target.value })}
             >
               <option value="support">Support</option>
-              <option value="agents">Agents</option>
               <option value="billing">Billing</option>
               <option value="legal">Legal</option>
               <option value="privacy">Privacy</option>

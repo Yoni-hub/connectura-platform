@@ -6,13 +6,9 @@ const bcrypt = require('bcrypt')
 const http = require('http')
 
 const authRoutes = require('../login_signup_system/auth')
-const agentRoutes = require('./routes/agents')
 const customerRoutes = require('./routes/customers')
-const searchRoutes = require('./routes/search')
-const quoteRoutes = require('./routes/quotes')
 const contactRoutes = require('./routes/contact')
 const adminRoutes = require('./routes/admin')
-const messageRoutes = require('./routes/messages')
 const questionRoutes = require('./routes/questions')
 const shareRoutes = require('./routes/shares')
 const siteContentRoutes = require('./routes/siteContent')
@@ -21,13 +17,11 @@ const productRoutes = require('./routes/products')
 const legalRoutes = require('./routes/legal')
 const errorRoutes = require('./routes/errors')
 const prisma = require('./prisma')
-const { initSocket } = require('./socket')
 const { questionBank, buildQuestionRecords } = require('./utils/questionBank')
 const { ensureLegalDocuments } = require('./utils/legalDocuments')
 
 const PORT = process.env.PORT || 8000
 const HOST = process.env.HOST || '127.0.0.1'
-
 const createApp = () => {
   const app = express()
   app.use(
@@ -44,13 +38,9 @@ const createApp = () => {
   })
 
   app.use('/auth', authRoutes)
-  app.use('/agents', agentRoutes)
   app.use('/customers', customerRoutes)
-  app.use('/search', searchRoutes)
-  app.use('/', quoteRoutes)
   app.use('/contact', contactRoutes)
   app.use('/admin', adminRoutes)
-  app.use('/api/messages', messageRoutes)
   app.use('/questions', questionRoutes)
   app.use('/shares', shareRoutes)
   app.use('/legal', legalRoutes)
@@ -106,9 +96,7 @@ async function ensureQuestionBank() {
 const createServer = () => {
   const app = createApp()
   const server = http.createServer(app)
-  const io = initSocket(server)
-  app.set('io', io)
-  return { app, server, io }
+  return { app, server }
 }
 
 if (require.main === module) {

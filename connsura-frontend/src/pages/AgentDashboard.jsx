@@ -7,9 +7,7 @@ import Badge from '../components/ui/Badge'
 import Skeleton from '../components/ui/Skeleton'
 import AgentCard from '../components/agents/AgentCard'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
-import Messages from './Messages'
-
-const navItems = ['Overview', 'Onboarding', 'Clients', 'Messages', 'Settings']
+const navItems = ['Overview', 'Onboarding', 'Clients', 'Settings']
 
 const DEFAULT_AGENT_NOTIFICATION_PREFS = {
   email: 'all',
@@ -17,7 +15,6 @@ const DEFAULT_AGENT_NOTIFICATION_PREFS = {
   loginAlerts: true,
   groups: {
     leads: true,
-    messages: true,
     system: true,
   },
 }
@@ -32,7 +29,6 @@ const normalizeAgentNotificationPrefs = (value = {}) => {
     loginAlerts: true,
     groups: {
       leads: typeof groups.leads === 'boolean' ? groups.leads : true,
-      messages: typeof groups.messages === 'boolean' ? groups.messages : true,
       system: typeof groups.system === 'boolean' ? groups.system : true,
     },
   }
@@ -161,12 +157,9 @@ export default function AgentDashboard() {
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
-    if (nextTab !== 'Messages') {
-      params.delete('conversationId')
-      params.delete('agent')
-      params.delete('client')
-      params.delete('customer')
-    }
+    params.delete('agent')
+    params.delete('client')
+    params.delete('customer')
     nav(`/agent/dashboard?${params.toString()}`, { replace: true })
   }
 
@@ -573,7 +566,7 @@ export default function AgentDashboard() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-slate-500">
-                  Welcome back{agent?.name ? `, ${agent.name.split(' ')[0]}` : ''}. Track your clients and messages.
+                  Welcome back{agent?.name ? `, ${agent.name.split(' ')[0]}` : ''}. Track your clients.
                 </p>
               </div>
             </div>
@@ -608,8 +601,6 @@ export default function AgentDashboard() {
                   </div>
                 )}
               </div>
-              ) : activeTab === 'Messages' ? (
-              <Messages embedded />
               ) : activeTab === 'Settings' ? (
               <div className="space-y-6">
                 {!settingsView && (
@@ -962,7 +953,7 @@ export default function AgentDashboard() {
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
                       <div className="text-sm font-semibold text-rose-700">Delete account</div>
                       <p className="text-xs text-rose-700">
-                        This permanently deletes your account, profile, and messages. This cannot be undone.
+                        This permanently deletes your account and profile data. This cannot be undone.
                       </p>
                       {!deleteOpen ? (
                         <button
@@ -1075,7 +1066,7 @@ export default function AgentDashboard() {
                       <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                         <div>
                           <div className="text-sm font-semibold text-slate-900">Email notifications</div>
-                          <div className="text-xs text-slate-500">Updates about messages and new leads.</div>
+                          <div className="text-xs text-slate-500">Updates about new leads and system changes.</div>
                         </div>
                         <select
                           className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -1144,26 +1135,6 @@ export default function AgentDashboard() {
                                   groups: {
                                     ...currentNotificationPrefs.groups,
                                     leads: event.target.checked,
-                                  },
-                                })
-                                setNotificationPrefs(next)
-                                saveAgentNotificationPreferences(next)
-                              }}
-                              disabled={notificationLoading}
-                            />
-                          </label>
-                          <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                            Messages
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={currentNotificationPrefs.groups.messages}
-                              onChange={(event) => {
-                                const next = normalizeAgentNotificationPrefs({
-                                  ...currentNotificationPrefs,
-                                  groups: {
-                                    ...currentNotificationPrefs.groups,
-                                    messages: event.target.checked,
                                   },
                                 })
                                 setNotificationPrefs(next)

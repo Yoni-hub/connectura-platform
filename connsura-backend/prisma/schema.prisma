@@ -32,7 +32,6 @@ model User {
   agent     Agent?
   customer  Customer?
   consents  UserConsent[]
-  readStates ReadState[]
   errorEvents ErrorEvent[]
 }
 
@@ -59,7 +58,6 @@ model Agent {
   reviews      String
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  conversations Conversation[] @relation("AgentConversations")
   shares       ProfileShare[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -78,7 +76,6 @@ model Customer {
   drivers          Driver[]
   vehicles         Vehicle[]
   profileData      String    @default("{}")
-  conversations    Conversation[] @relation("ClientConversations")
   shares           ProfileShare[]
   questions        QuestionBank[]
   customerQuestions CustomerQuestion[]
@@ -107,47 +104,6 @@ model ProfileShare {
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   agent    Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
-}
-
-model Conversation {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clientId  Int
-  agentId   Int
-
-  client     Customer   @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
-  agent      Agent      @relation("AgentConversations", fields: [agentId], references: [id], onDelete: Cascade)
-  messages   Message[]
-  readStates ReadState[]
-
-  @@unique([clientId, agentId])
-  @@index([agentId])
-  @@index([clientId])
-}
-
-model Message {
-  id             Int      @id @default(autoincrement())
-  conversationId Int
-  senderId       Int
-  body           String
-  createdAt      DateTime @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@index([conversationId, createdAt])
-}
-
-model ReadState {
-  conversationId Int
-  userId         Int
-  lastReadAt     DateTime?
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([conversationId, userId])
-  @@index([userId])
 }
 
 model Driver {

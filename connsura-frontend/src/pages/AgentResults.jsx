@@ -63,18 +63,6 @@ export default function AgentResults() {
 
   const savedAgentIdSet = useMemo(() => new Set(savedAgentIds), [savedAgentIds])
 
-  const handleMessage = (agent) => {
-    if (!user) {
-      toast.error('Login to send a message')
-      return
-    }
-    if (user.role !== 'CUSTOMER') {
-      toast.error('Only customers can message agents')
-      return
-    }
-    nav(`/messages?agent=${agent.id}`)
-  }
-
   const handleViewProfile = (agent) => {
     nav(`/agents/${agent.id}`)
   }
@@ -146,7 +134,6 @@ export default function AgentResults() {
               key={agent.id}
               agent={agent}
               onViewProfile={handleViewProfile}
-              onMessage={handleMessage}
               onRate={handleRate}
               onSave={handleSave}
               saved={savedAgentIdSet.has(agent.id)}

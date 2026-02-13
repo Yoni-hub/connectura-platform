@@ -7,7 +7,6 @@ import Modal from '../ui/Modal'
 const docMeta = {
   terms: { label: 'Terms & Conditions', link: '/terms' },
   privacy: { label: 'Privacy Policy', link: '/privacy' },
-  'agent-terms': { label: 'Agent Responsibilities', link: '/agent-responsibilities' },
   'data-sharing': { label: 'Data Sharing', link: '/data-sharing' },
 }
 

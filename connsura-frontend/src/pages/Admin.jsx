@@ -4,7 +4,6 @@ import { API_URL } from '../services/api'
 import { adminApi, clearAdminToken, setAdminToken } from '../services/adminApi'
 import AdminDetailPanel from './admin/AdminDetailPanel'
 
-const AdminAgentsTab = lazy(() => import('./admin/AdminAgentsTab'))
 const AdminClientsTab = lazy(() => import('./admin/AdminClientsTab'))
 const AdminAuditTab = lazy(() => import('./admin/AdminAuditTab'))
 const AdminErrorsTab = lazy(() => import('./admin/AdminErrorsTab'))
@@ -20,18 +19,13 @@ const splitList = (value = '') =>
 
 const joinList = (value = []) => (Array.isArray(value) ? value.filter(Boolean).join(', ') : '')
 
-export default function Admin({ initialView = 'agents' }) {
+export default function Admin({ initialView = 'clients' }) {
   const [admin, setAdmin] = useState(null)
   const [authChecking, setAuthChecking] = useState(true)
   const [view, setView] = useState(initialView)
   const [form, setForm] = useState({ email: '', password: '' })
   const [detailTabs, setDetailTabs] = useState([])
   const [activeDetailKey, setActiveDetailKey] = useState(null)
-  const [otpEmail, setOtpEmail] = useState('')
-  const [otpResult, setOtpResult] = useState(null)
-  const [otpLoading, setOtpLoading] = useState(false)
-  const [otpError, setOtpError] = useState('')
-  const [agentsRefreshKey, setAgentsRefreshKey] = useState(0)
   const [clientsRefreshKey, setClientsRefreshKey] = useState(0)
 
   const isAuthed = Boolean(admin)
@@ -99,11 +93,6 @@ export default function Admin({ initialView = 'agents' }) {
     setAdmin(null)
     setDetailTabs([])
     setActiveDetailKey(null)
-    setOtpEmail('')
-    setOtpResult(null)
-    setOtpError('')
-    setOtpLoading(false)
-    setAgentsRefreshKey(0)
     setClientsRefreshKey(0)
   }
 
@@ -125,52 +114,6 @@ export default function Admin({ initialView = 'agents' }) {
     setDetailTabs((prev) =>
       prev.map((t) => (t.key === key ? { ...t, form: { ...(t.form || {}), ...patch } } : t))
     )
-
-  const openAgentTab = async (agent) => {
-    const key = `agent-${agent.id}`
-    upsertTab({
-      key,
-      type: 'agent',
-      id: agent.id,
-      label: agent.name || `Agent #${agent.id}`,
-      loading: true,
-      saving: false,
-      form: null,
-      data: null,
-    })
-    try {
-      const res = await adminApi.get(`/admin/agents/${agent.id}`)
-      const detail = res.data.agent
-      patchTab(key, {
-        loading: false,
-        data: detail,
-        label: detail.name || `Agent #${agent.id}`,
-        form: {
-          name: detail.name || '',
-          email: detail.email || '',
-          password: detail.userPassword || '',
-          bio: detail.bio || '',
-          phone: detail.phone || '',
-          address: detail.address || '',
-          zip: detail.zip || '',
-          availability: detail.availability || 'online',
-          languages: joinList(detail.languages),
-          states: joinList(detail.states),
-          products: joinList(detail.products),
-          appointedCarriers: joinList(detail.appointedCarriers),
-          specialty: detail.specialty || '',
-          producerNumber: detail.producerNumber || '',
-          status: detail.status || 'pending',
-          underReview: Boolean(detail.underReview),
-          isSuspended: Boolean(detail.isSuspended),
-          rating: detail.rating ?? '',
-        },
-      })
-    } catch (err) {
-      handleSessionError(err, 'Failed to load agent details')
-      patchTab(key, { loading: false })
-    }
-  }
 
   const openClientTab = async (client) => {
     const key = `client-${client.id}`
@@ -205,68 +148,6 @@ export default function Admin({ initialView = 'agents' }) {
     } catch (err) {
       handleSessionError(err, 'Failed to load client details')
       patchTab(key, { loading: false })
-    }
-  }
-
-  const saveAgentTab = async (tab) => {
-    const payload = {
-      name: tab.form.name,
-      email: tab.form.email,
-      password: tab.form.password,
-      bio: tab.form.bio,
-      phone: tab.form.phone,
-      address: tab.form.address,
-      zip: tab.form.zip,
-      availability: tab.form.availability,
-      specialty: tab.form.specialty,
-      producerNumber: tab.form.producerNumber,
-      languages: splitList(tab.form.languages),
-      states: splitList(tab.form.states),
-      products: splitList(tab.form.products),
-      appointedCarriers: splitList(tab.form.appointedCarriers),
-      status: tab.form.status,
-      underReview: Boolean(tab.form.underReview),
-      isSuspended: Boolean(tab.form.isSuspended),
-    }
-    if (tab.form.rating !== '' && tab.form.rating !== null && tab.form.rating !== undefined) {
-      const ratingNumber = Number(tab.form.rating)
-      if (!Number.isNaN(ratingNumber)) payload.rating = ratingNumber
-    }
-    patchTab(tab.key, { saving: true })
-    try {
-      const res = await adminApi.put(`/admin/agents/${tab.id}`, payload)
-      const updated = res.data.agent
-      patchTab(tab.key, {
-        saving: false,
-        data: updated,
-        label: updated.name || tab.label,
-        form: {
-          ...tab.form,
-          name: updated.name || '',
-          email: updated.email || '',
-          password: updated.userPassword || tab.form.password,
-          bio: updated.bio || '',
-          phone: updated.phone || '',
-          address: updated.address || '',
-          zip: updated.zip || '',
-          availability: updated.availability || 'online',
-          languages: joinList(updated.languages),
-          states: joinList(updated.states),
-          products: joinList(updated.products),
-          appointedCarriers: joinList(updated.appointedCarriers),
-          specialty: updated.specialty || '',
-          producerNumber: updated.producerNumber || '',
-          status: updated.status || 'pending',
-          underReview: Boolean(updated.underReview),
-          isSuspended: Boolean(updated.isSuspended),
-          rating: updated.rating ?? '',
-        },
-      })
-      setAgentsRefreshKey((prev) => prev + 1)
-      toast.success('Agent saved')
-    } catch (err) {
-      patchTab(tab.key, { saving: false })
-      handleSessionError(err, 'Save failed')
     }
   }
 
@@ -313,29 +194,6 @@ export default function Admin({ initialView = 'agents' }) {
     } catch (err) {
       patchTab(tab.key, { saving: false })
       handleSessionError(err, 'Save failed')
-    }
-  }
-
-  const handleOtpLookup = async () => {
-    const email = otpEmail.trim().toLowerCase()
-    if (!email) {
-      toast.error('Enter an agent email to lookup the OTP.')
-      return
-    }
-    setOtpLoading(true)
-    setOtpError('')
-    setOtpResult(null)
-    try {
-      const res = await adminApi.get('/admin/email-otp', { params: { email } })
-      setOtpResult({ ...res.data, email })
-      toast.success('OTP loaded')
-    } catch (err) {
-      if (handleSessionError(err, 'OTP lookup failed')) return
-      const message = err.response?.data?.error || 'OTP lookup failed'
-      setOtpError(message)
-      toast.error(message)
-    } finally {
-      setOtpLoading(false)
     }
   }
 
@@ -391,7 +249,7 @@ export default function Admin({ initialView = 'agents' }) {
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Admin</div>
             <h1 className="text-2xl font-semibold">Connsura Admin Console</h1>
-            <p className="text-sm text-slate-600">Manage agents, clients, and audit logs.</p>
+            <p className="text-sm text-slate-600">Manage clients, content, and audit logs.</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-slate-600">{admin?.email || 'Admin'}</span>
@@ -402,7 +260,6 @@ export default function Admin({ initialView = 'agents' }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: 'agents', label: 'Agents' },
             { id: 'clients', label: 'Clients' },
             { id: 'audit', label: 'Audit logs' },
             { id: 'errors', label: 'Errors' },
@@ -447,52 +304,11 @@ export default function Admin({ initialView = 'agents' }) {
             </button>
           ))}
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Email OTP lookup</h2>
-              <p className="text-xs text-slate-500">Fetch the latest verification code for an agent.</p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="block text-sm">
-              Agent email
-              <input
-                className="mt-1 w-64 rounded-lg border border-slate-200 px-3 py-2"
-                value={otpEmail}
-                onChange={(e) => setOtpEmail(e.target.value)}
-                placeholder="agent@email.com"
-                type="email"
-              />
-            </label>
-            <button
-              type="button"
-              className="pill-btn-primary px-5"
-              onClick={handleOtpLookup}
-              disabled={otpLoading}
-            >
-              {otpLoading ? 'Looking...' : 'Get OTP'}
-            </button>
-            {otpResult && (
-              <div className="text-sm text-slate-700">
-                <span className="font-semibold text-slate-900">Code:</span> {otpResult.code}
-              </div>
-            )}
-          </div>
-          {otpResult && (
-            <div className="mt-2 text-xs text-slate-500">
-              Created: {new Date(otpResult.createdAt).toLocaleString()} | Expires:{' '}
-              {new Date(otpResult.expiresAt).toLocaleString()} | Attempts: {otpResult.attempts}
-            </div>
-          )}
-          {otpError && <div className="mt-2 text-xs text-red-600">{otpError}</div>}
-        </div>
         {activeDetailTab && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm max-w-xl md:max-w-3xl">
             <AdminDetailPanel
               tab={activeDetailTab}
               closeTab={closeTab}
-              saveAgentTab={saveAgentTab}
               saveClientTab={saveClientTab}
               patchTabForm={patchTabForm}
             />
@@ -500,13 +316,6 @@ export default function Admin({ initialView = 'agents' }) {
         )}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm min-h-[300px]">
           <Suspense fallback={<div className="text-sm text-slate-500">Loading tab...</div>}>
-            {view === 'agents' && (
-              <AdminAgentsTab
-                onOpenAgent={openAgentTab}
-                onSessionExpired={handleLogout}
-                refreshKey={agentsRefreshKey}
-              />
-            )}
             {view === 'clients' && (
               <AdminClientsTab
                 onOpenClient={openClientTab}

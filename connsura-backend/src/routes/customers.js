@@ -11,6 +11,7 @@ const { parseJson } = require('../utils/transform')
 const { logClientAudit } = require('../utils/auditLog')
 
 const router = express.Router()
+const enableAgentFeatures = false
 
 const getRequestIp = (req) => {
   const forwarded = req.headers['x-forwarded-for']
@@ -24,7 +25,6 @@ const DEFAULT_NOTIFICATION_PREFS = {
   inapp: true,
   loginAlerts: true,
   groups: {
-    messages: true,
     passport: true,
     system: true,
   },
@@ -39,7 +39,6 @@ const normalizeNotificationPrefs = (value = {}) => {
     inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
     loginAlerts: true,
     groups: {
-      messages: typeof groups.messages === 'boolean' ? groups.messages : true,
       passport: typeof groups.passport === 'boolean' ? groups.passport : true,
       system: typeof groups.system === 'boolean' ? groups.system : true,
     },
@@ -191,25 +190,6 @@ const formatCustomerProfile = (customer) => ({
   profileData: parseJson(customer.profileData, {}),
   isDisabled: customer.isDisabled,
 })
-
-const formatSavedAgent = (agent) => ({
-  id: agent.id,
-  name: agent.name,
-  photo: agent.photo,
-  email: agent.user?.email,
-  languages: parseJson(agent.languages, []),
-  states: parseJson(agent.states, []),
-  products: parseJson(agent.products, []),
-  specialty: agent.specialty,
-  availability: agent.availability,
-  rating: agent.rating,
-})
-
-const getSavedAgentIds = (customer) => {
-  const profileData = parseJson(customer.profileData, {})
-  const savedAgents = Array.isArray(profileData.savedAgents) ? profileData.savedAgents : []
-  return savedAgents.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
-}
 
 router.get('/:id/profile', authGuard, async (req, res) => {
   const customerId = Number(req.params.id)
@@ -641,63 +621,11 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
   }
 })
 
-router.post('/:id/agent-search/click', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot access this customer' })
-  }
-  await logClientAudit(customerId, 'CLIENT_TALK_TO_AGENT_CLICKED')
-  res.json({ ok: true })
-})
-
-router.post('/:id/agent-search/view', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-    include: { drivers: true, vehicles: true },
-  })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot access this customer' })
-  }
-  const currentProfileData = parseJson(customer.profileData, {})
-  const updatedProfileData = {
-    ...currentProfileData,
-    agent_search_viewed: true,
-  }
-  const updated = await prisma.customer.update({
-    where: { id: customerId },
-    data: { profileData: JSON.stringify(updatedProfileData) },
-    include: { drivers: true, vehicles: true },
-  })
-  await logClientAudit(customerId, 'CLIENT_AGENT_SEARCH_PAGE_VIEWED')
-  res.json({ profile: formatCustomerProfile(updated) })
-})
-
-router.post('/:id/agent-profile/view', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  const agentId = Number(req.body?.agentId)
-  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer id and agent id are required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot access this customer' })
-  }
-  const agent = await prisma.agent.findUnique({ where: { id: agentId } })
-  if (!agent) return res.status(404).json({ error: 'Agent not found' })
-  await logClientAudit(customerId, 'CLIENT_AGENT_PROFILE_VIEWED', {
-    agentId,
-    source: req.body?.source || null,
-  })
-  res.json({ ok: true })
-})
+if (!enableAgentFeatures) {
+  router.post('/:id/agent-search/click', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+  router.post('/:id/agent-search/view', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+  router.post('/:id/agent-profile/view', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+}
 
 router.post('/:id/tab-view', authGuard, async (req, res) => {
   const customerId = Number(req.params.id)
@@ -712,16 +640,12 @@ router.post('/:id/tab-view', authGuard, async (req, res) => {
   const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
   const profileStatus = req.body?.profileStatus ? String(req.body.profileStatus) : null
   const currentSection = req.body?.currentSection ? String(req.body.currentSection) : null
-  const savedAgentsCount = Number.isFinite(Number(req.body?.savedAgentsCount))
-    ? Number(req.body.savedAgentsCount)
-    : null
 
   await logClientAudit(customerId, 'CLIENT_TAB_VIEWED', {
     tab_name: tabName,
     session_id: sessionId,
     profile_status: profileStatus,
     current_section: currentSection,
-    saved_agents_count: savedAgentsCount,
   })
   if (tabName.toLowerCase() === 'my insurance passport') {
     await logClientAudit(customerId, 'CLIENT_INSURANCE_PASSPORT_VIEWED', {
@@ -739,23 +663,10 @@ router.post('/:id/tab-view', authGuard, async (req, res) => {
       current_section: currentSection,
     })
   }
-  if (tabName.toLowerCase() === 'messages') {
-    await logClientAudit(customerId, 'CLIENT_MESSAGES_TAB_VIEWED', {
-      tab_name: tabName,
-      session_id: sessionId,
-    })
-  }
   if (tabName.toLowerCase() === 'settings') {
     await logClientAudit(customerId, 'CLIENT_SETTINGS_VIEWED', {
       tab_name: tabName,
       session_id: sessionId,
-    })
-  }
-  if (tabName.toLowerCase() === 'agents') {
-    await logClientAudit(customerId, 'CLIENT_AGENTS_TAB_VIEWED', {
-      tab_name: tabName,
-      session_id: sessionId,
-      saved_agents_count: savedAgentsCount,
     })
   }
   res.json({ ok: true })
@@ -804,7 +715,6 @@ router.put('/:id/notification-preferences', authGuard, async (req, res) => {
   if (previousPrefs.inapp !== nextPrefs.inapp) channelChanged.push('inapp')
   if (previousPrefs.loginAlerts !== nextPrefs.loginAlerts) channelChanged.push('login_alerts')
   const groupsChanged =
-    previousPrefs.groups.messages !== nextPrefs.groups.messages ||
     previousPrefs.groups.passport !== nextPrefs.groups.passport ||
     previousPrefs.groups.system !== nextPrefs.groups.system
   if (groupsChanged && !channelChanged.includes('inapp')) {
@@ -1018,7 +928,6 @@ router.get('/:id/shared-profile-activity', authGuard, async (req, res) => {
   }
   const shares = await prisma.profileShare.findMany({
     where: { customerId },
-    include: { agent: true },
     orderBy: { updatedAt: 'desc' },
   })
   await logClientAudit(customerId, 'CLIENT_SHARED_PROFILE_ACTIVITY_VIEWED', {
@@ -1028,7 +937,7 @@ router.get('/:id/shared-profile-activity', authGuard, async (req, res) => {
   })
   const activity = shares.map((share) => ({
     id: share.id,
-    recipient: share.agent?.name || share.recipientName || 'Shared link',
+    recipient: share.recipientName || 'Shared link',
     status: share.status,
     lastAccessedAt: share.lastAccessedAt,
   }))
@@ -1124,92 +1033,10 @@ router.post('/:id/forms/additional/remove', authGuard, async (req, res) => {
   res.json({ ok: true })
 })
 
-router.get('/:id/saved-agents', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot access this customer' })
-  }
-
-  const savedIds = getSavedAgentIds(customer)
-  if (!savedIds.length) return res.json({ agents: [] })
-
-  const agents = await prisma.agent.findMany({
-    where: { id: { in: savedIds } },
-    include: { user: true },
-  })
-  const agentMap = new Map(agents.map((agent) => [agent.id, agent]))
-  const ordered = savedIds.map((id) => agentMap.get(id)).filter(Boolean)
-  res.json({ agents: ordered.map(formatSavedAgent) })
-})
-
-router.post('/:id/saved-agents', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  const agentId = Number(req.body?.agentId)
-  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer id and agent id are required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot edit this customer' })
-  }
-
-  const agent = await prisma.agent.findUnique({ where: { id: agentId } })
-  if (!agent) {
-    await logClientAudit(customerId, 'CLIENT_AGENT_SAVED_FAILED', { agentId, reason: 'agent_not_found' })
-    return res.status(404).json({ error: 'Agent not found' })
-  }
-
-  await logClientAudit(customerId, 'CLIENT_AGENT_SAVED', { agentId })
-
-  const savedIds = getSavedAgentIds(customer)
-  const alreadySaved = savedIds.includes(agentId)
-  const nextSaved = alreadySaved ? savedIds : [...savedIds, agentId]
-  const profileData = parseJson(customer.profileData, {})
-  const updatedProfileData = { ...profileData, savedAgents: nextSaved }
-
-  try {
-    await prisma.customer.update({
-      where: { id: customerId },
-      data: { profileData: JSON.stringify(updatedProfileData) },
-    })
-    await logClientAudit(customerId, 'CLIENT_AGENT_SAVED_SUCCESS', { agentId, alreadySaved })
-    res.status(201).json({ savedAgents: nextSaved })
-  } catch (error) {
-    await logClientAudit(customerId, 'CLIENT_AGENT_SAVED_FAILED', {
-      agentId,
-      reason: 'update_failed',
-      message: error?.message,
-    })
-    res.status(500).json({ error: 'Failed to save agent' })
-  }
-})
-
-router.delete('/:id/saved-agents/:agentId', authGuard, async (req, res) => {
-  const customerId = Number(req.params.id)
-  const agentId = Number(req.params.agentId)
-  if (!customerId || !agentId) return res.status(400).json({ error: 'Customer id and agent id are required' })
-  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
-  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-  if (!customer) return res.status(404).json({ error: 'Customer not found' })
-  if (customer.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Cannot edit this customer' })
-  }
-
-  const savedIds = getSavedAgentIds(customer)
-  const nextSaved = savedIds.filter((id) => id !== agentId)
-  const profileData = parseJson(customer.profileData, {})
-  const updatedProfileData = { ...profileData, savedAgents: nextSaved }
-
-  await prisma.customer.update({
-    where: { id: customerId },
-    data: { profileData: JSON.stringify(updatedProfileData) },
-  })
-
-  res.json({ savedAgents: nextSaved })
-})
+if (!enableAgentFeatures) {
+  router.get('/:id/saved-agents', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+  router.post('/:id/saved-agents', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+  router.delete('/:id/saved-agents/:agentId', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
+}
 
 module.exports = router

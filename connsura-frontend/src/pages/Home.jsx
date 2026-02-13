@@ -1,18 +1,11 @@
 import Hero from '../components/hero/Hero'
-import SearchBar from '../components/search/SearchBar'
-import Badge from '../components/ui/Badge'
-import { useAgents } from '../context/AgentContext'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import AgentCard from '../components/agents/AgentCard'
-import Skeleton from '../components/ui/Skeleton'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 export default function Home() {
-  const { agents, loading, fetchAgents } = useAgents()
   const { user } = useAuth()
   const nav = useNavigate()
-  const [hasFilters, setHasFilters] = useState(false)
 
   useEffect(() => {
     if (user?.role !== 'CUSTOMER') return
@@ -25,10 +18,6 @@ export default function Home() {
   const handleCreateProfile = () => {
     if (user?.role === 'CUSTOMER') {
       nav('/client/dashboard?tab=forms')
-      return
-    }
-    if (user?.role === 'AGENT') {
-      nav('/agent/dashboard')
       return
     }
     sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
@@ -57,22 +46,22 @@ export default function Home() {
                 alt: 'Profile setup illustration',
               },
               {
-                title: 'Get Help',
-                body: 'Connect with agents who speak your language.',
+                title: 'Stay Organized',
+                body: 'Keep your details ready for any insurer or quote.',
                 image: '/how-2.png',
-                alt: 'Agent support illustration',
+                alt: 'Organized profile illustration',
               },
               {
                 title: 'Share Instantly',
-                body: 'Send your saved profile to any agent.',
+                body: 'Send a secure link or PDF in seconds.',
                 image: '/how-3.png',
                 alt: 'Secure sharing illustration',
               },
               {
-                title: 'Shop Faster',
-                body: 'Agents use your profile to quote you on their own systems.',
+                title: 'Move Faster',
+                body: 'Reuse your profile wherever you need coverage.',
                 image: '/how-4.png',
-                alt: 'Quoting faster illustration',
+                alt: 'Faster coverage illustration',
               },
             ].map((step, index) => (
               <div
@@ -110,7 +99,7 @@ export default function Home() {
               {[
                 'Same questions again and again.',
                 'Confusing insurance language.',
-                'Every agent needs the same info.',
+                'Every form asks the same info.',
                 'One change means starting over.',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
@@ -134,7 +123,7 @@ export default function Home() {
               {[
                 'Build once, reuse anytime.',
                 'Update as life changes.',
-                'Share instantly with agents.',
+                'Share instantly when requested.',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <span className="mt-0.5 text-white">
@@ -153,46 +142,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="space-y-4 px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="search-agents">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div id="search-agents">
-            <h2 className="text-2xl font-semibold">Search agents</h2>
-            <p className="text-sm text-slate-600">Filter by state, language, or name to start a conversation.</p>
-          </div>
-          <Badge label="Live filters" tone="blue" />
-        </div>
-        <SearchBar
-          busy={loading}
-          onSearch={fetchAgents}
-          onFilterChange={(filters) => {
-            const nextHasFilters = Object.values(filters).some((entry) => String(entry || '').trim())
-            setHasFilters(nextHasFilters)
-          }}
-          requireFilters
-          variant="minimal"
-        />
-        {!hasFilters ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-            Choose a filter to see matching agents.
-          </div>
-        ) : loading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-          </div>
-        ) : agents.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-            No agents match these filters.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
-            ))}
-          </div>
-        )}
-      </section>
-
       <section className="relative overflow-hidden bg-[#0b3b8c] px-4 py-10 sm:px-8 lg:px-16" aria-labelledby="home-trust">
         <div className="relative z-10 flex justify-center">
           <div className="max-w-2xl space-y-4 text-center text-white">
@@ -201,7 +150,7 @@ export default function Home() {
                 We don't sell insurance.
               </h2>
               <p className="text-sm text-white/90">We help you create and share your insurance profile.</p>
-              <p className="text-sm text-white/90">Quotes and policies are handled by independent agents.</p>
+              <p className="text-sm text-white/90">Use your profile anywhere you need coverage.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <button type="button" className="pill-btn-primary px-6 py-3" onClick={handleCreateProfile}>

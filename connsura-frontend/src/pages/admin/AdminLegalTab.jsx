@@ -148,7 +148,7 @@ export default function AdminLegalTab({ onSessionExpired }) {
     }
   }
 
-  const docTypes = ['terms', 'privacy', 'data-sharing', 'agent-terms']
+  const docTypes = ['terms', 'privacy', 'data-sharing']
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -283,7 +283,6 @@ export default function AdminLegalTab({ onSessionExpired }) {
             >
               <option value="">All</option>
               <option value="CUSTOMER">Customer</option>
-              <option value="AGENT">Agent</option>
             </select>
           </label>
           <button type="button" className="pill-btn-primary px-4" onClick={loadLegalConsents} disabled={legalConsentLoading}>

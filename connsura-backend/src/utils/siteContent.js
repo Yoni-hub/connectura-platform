@@ -3,15 +3,14 @@ const normalizeWhitespace = (value = '') => value.replace(/\s+/g, ' ').trim()
 const ABOUT_PUBLIC_CONTENT = `
 <h2>Introduction</h2>
 <p>Connsura is a technology platform designed to simplify how people organize, manage, and share their insurance information.</p>
-<p>Buying or reviewing insurance often means filling out the same forms repeatedly, navigating unfamiliar terminology, and struggling to communicate clearly with licensed professionals. Connsura was built to solve that problem without replacing or interfering with the insurance process itself.</p>
+<p>Buying or reviewing insurance often means filling out the same forms repeatedly and navigating unfamiliar terminology. Connsura was built to solve that problem without replacing or interfering with the insurance process itself.</p>
 <h2>What We Do</h2>
 <p>Connsura provides a secure digital Insurance Passport that allows individuals and families to:</p>
 <ul>
   <li>Create and manage their insurance-related information in one place</li>
   <li>Update details once instead of re-entering them repeatedly</li>
-  <li>Share their information securely with licensed insurance agents when they choose</li>
-  <li>Find independent agents based on language, location, or name</li>
-  <li>Communicate directly with agents using built-in messaging tools</li>
+  <li>Share their information securely when needed via link or PDF</li>
+  <li>Keep control of what is shared and for how long</li>
 </ul>
 <p>All information shared through Connsura remains under the user's control.</p>
 <h2>What We Do Not Do</h2>
@@ -23,15 +22,10 @@ const ABOUT_PUBLIC_CONTENT = `
   <li>We do not bind insurance or collect payments</li>
   <li>We do not act on behalf of any insurance company</li>
 </ul>
-<p>All insurance transactions occur directly between consumers and independently licensed insurance agents.</p>
+<p>All insurance transactions occur outside the Connsura platform.</p>
 <h2>Our Role in the Insurance Ecosystem</h2>
-<p>Connsura serves as neutral infrastructure - a secure bridge between consumers and licensed professionals.</p>
-<p>We support:</p>
-<ul>
-  <li>Consumers by reducing friction and improving clarity</li>
-  <li>Licensed agents by providing better-organized, client-approved information</li>
-</ul>
-<p>We do not replace agents, carriers, or regulators.</p>
+<p>Connsura serves as neutral infrastructure that helps consumers stay organized and share their information efficiently.</p>
+<p>We do not replace carriers or regulators.</p>
 <h2>Trust, Privacy &amp; Control</h2>
 <ul>
   <li>Users own their data</li>
@@ -41,22 +35,20 @@ const ABOUT_PUBLIC_CONTENT = `
 </ul>
 <p>Trust is not a feature - it is the core of our platform.</p>
 <h2>Our Vision</h2>
-<p>We believe insurance should be easier to manage, easier to understand, and easier to communicate - without compromising regulation, professionalism, or consumer protection.</p>
+<p>We believe insurance should be easier to manage, easier to understand, and easier to communicate - without compromising regulation or consumer protection.</p>
 <p>Connsura exists to modernize access, not bypass safeguards.</p>
 `
 
 const LEGAL_NOTICE_CONTENT = `
 <h2>Connsura: Platform Overview &amp; Regulatory Position</h2>
 <h3>Company Overview</h3>
-<p>Connsura is an insurance technology (InsurTech) platform that enables consumers to digitally store, manage, and selectively share insurance-related information with independently licensed insurance producers.</p>
+<p>Connsura is an insurance technology (InsurTech) platform that enables consumers to digitally store, manage, and selectively share insurance-related information with parties they choose.</p>
 <p>Connsura operates exclusively as a technology and data-management platform and does not participate in insurance solicitation, negotiation, quoting, binding, or premium collection.</p>
 <h3>Platform Functionality</h3>
 <p>Connsura provides:</p>
 <ul>
   <li>A secure consumer-managed insurance profile ("Insurance Passport")</li>
-  <li>Consent-based data sharing with licensed agents</li>
-  <li>Agent discovery tools (language, geography, name)</li>
-  <li>Communication features supporting client-agent interaction</li>
+  <li>Consent-based data sharing with selected recipients</li>
   <li>Auditability and access controls for shared information</li>
 </ul>
 <p>All insurance-related decisions and transactions occur outside the Connsura platform.</p>
@@ -70,14 +62,6 @@ const LEGAL_NOTICE_CONTENT = `
   <li>Collect or transmit insurance premiums</li>
 </ul>
 <p>The platform is intentionally structured to avoid activities requiring insurance producer licensure.</p>
-<h3>Agent Relationship Model</h3>
-<p>All agents using Connsura are:</p>
-<ul>
-  <li>Independently licensed insurance producers</li>
-  <li>Responsible for their own regulatory compliance</li>
-  <li>Not employees, contractors, or representatives of Connsura</li>
-</ul>
-<p>License verification may be performed for platform integrity, but Connsura does not sponsor, supervise, or control agent conduct.</p>
 <h3>Data Governance &amp; Consumer Protection</h3>
 <ul>
   <li>Data ownership remains with the consumer</li>
@@ -87,10 +71,10 @@ const LEGAL_NOTICE_CONTENT = `
 </ul>
 <p>Connsura's compliance focus is centered on data protection, transparency, and consumer consent.</p>
 <h3>Regulatory Position Statement</h3>
-<p>Connsura should be classified as a non-regulated insurance technology service provider, similar to CRM platforms, data-management tools, and agent directories.</p>
+<p>Connsura should be classified as a non-regulated insurance technology service provider, similar to CRM platforms and data-management tools.</p>
 <p>The platform does not engage in activities that constitute insurance solicitation or transaction under applicable state insurance laws.</p>
 <h3>Long-Term Vision</h3>
-<p>Connsura aims to become trusted infrastructure that supports licensed professionals while empowering consumers - without disrupting established regulatory frameworks.</p>
+<p>Connsura aims to become trusted infrastructure that empowers consumers without disrupting established regulatory frameworks.</p>
 `
 
 const PRIVACY_POLICY_CONTENT = `

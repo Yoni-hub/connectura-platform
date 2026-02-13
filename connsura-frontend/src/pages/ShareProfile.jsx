@@ -2,16 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
-import { useAuth } from '../context/AuthContext'
 import ShareSummary from '../components/share/ShareSummary'
 import ShareEditsStatusModal from '../components/modals/ShareEditsStatusModal'
-import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
 export default function ShareProfile() {
   const { token } = useParams()
   const nav = useNavigate()
-  const { user } = useAuth()
   const [code, setCode] = useState('')
   const [share, setShare] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -23,15 +20,7 @@ export default function ShareProfile() {
   const [endingSession, setEndingSession] = useState(false)
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
   const [approvalStatus, setApprovalStatus] = useState('')
-  const [showAgentConsent, setShowAgentConsent] = useState(false)
-  const [agentAccessConsented, setAgentAccessConsented] = useState(false)
-  const [agentConsentChecks, setAgentConsentChecks] = useState({
-    legitimateUse: false,
-    noResell: false,
-    protectData: false,
-  })
   const pendingStatusRef = useRef('')
-  const pendingVerifyRef = useRef(false)
   const lastActivityRef = useRef(Date.now())
   const isAwaitingApproval = approvalModalOpen && approvalStatus === 'pending'
 
@@ -68,7 +57,6 @@ export default function ShareProfile() {
   }, [])
 
   const handleVerify = async () => {
-    pendingVerifyRef.current = false
     if (!accessCode) {
       toast.error('Enter the 4-digit code')
       return
@@ -89,20 +77,11 @@ export default function ShareProfile() {
       const nextShare = res.data?.share || null
       setShare(nextShare)
       markActivity()
-      if (user?.role === 'AGENT') {
-        setAgentAccessConsented(true)
-      }
       setSessionExpired(false)
       if (nextShare?.status === 'revoked' || nextShare?.status === 'expired') {
         setSessionExpired(true)
       }
     } catch (err) {
-      if (err.response?.data?.code === 'CONSENT_REQUIRED') {
-        setAgentAccessConsented(false)
-        pendingVerifyRef.current = true
-        setShowAgentConsent(true)
-        return
-      }
       if (err.response?.status === 410) {
         setSessionExpired(true)
         setError('Your session has expired.')
@@ -116,34 +95,6 @@ export default function ShareProfile() {
       setShare(null)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const allAgentConsentsChecked =
-    agentConsentChecks.legitimateUse && agentConsentChecks.noResell && agentConsentChecks.protectData
-
-  const handleAgentConsentConfirm = async () => {
-    if (!allAgentConsentsChecked) {
-      toast.error('Please accept all required consents.')
-      return
-    }
-    try {
-      await api.post('/legal/consent', {
-        documentType: 'data-sharing',
-        consentItems: {
-          legitimateUse: true,
-          noResell: true,
-          protectData: true,
-        },
-      })
-      setAgentAccessConsented(true)
-      setShowAgentConsent(false)
-      if (pendingVerifyRef.current) {
-        pendingVerifyRef.current = false
-        void handleVerify()
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Unable to save consent')
     }
   }
 
@@ -182,11 +133,6 @@ export default function ShareProfile() {
       setSavingEdits(false)
     }
   }
-
-  useEffect(() => {
-    if (!showAgentConsent) return
-    setAgentConsentChecks({ legitimateUse: false, noResell: false, protectData: false })
-  }, [showAgentConsent])
 
   useEffect(() => {
     if (!token || !accessCode || !share || sessionExpired) return
@@ -395,57 +341,6 @@ export default function ShareProfile() {
         status={approvalStatus}
         onClose={() => setApprovalModalOpen(false)}
       />
-      {showAgentConsent && (
-        <Modal title="Data access consent" open={showAgentConsent} showClose={false} panelClassName="max-w-lg">
-          <div className="space-y-4 text-sm text-slate-700">
-            <p>Before viewing this shared profile, please confirm the following:</p>
-            <label className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-                checked={agentConsentChecks.legitimateUse}
-                onChange={(e) => setAgentConsentChecks((prev) => ({ ...prev, legitimateUse: e.target.checked }))}
-              />
-              I will use this data only for legitimate insurance purposes
-            </label>
-            <label className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-                checked={agentConsentChecks.noResell}
-                onChange={(e) => setAgentConsentChecks((prev) => ({ ...prev, noResell: e.target.checked }))}
-              />
-              I will not resell or misuse this data
-            </label>
-            <label className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-                checked={agentConsentChecks.protectData}
-                onChange={(e) => setAgentConsentChecks((prev) => ({ ...prev, protectData: e.target.checked }))}
-              />
-              I will protect this data under applicable law
-            </label>
-            <div className="text-xs text-slate-500">
-              Review the full{' '}
-              <a className="underline" href="/data-sharing" target="_blank" rel="noreferrer">
-                Data Sharing policy
-              </a>
-              .
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className="pill-btn-primary px-5"
-                onClick={handleAgentConsentConfirm}
-                disabled={!allAgentConsentsChecked}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </main>
   )
 }

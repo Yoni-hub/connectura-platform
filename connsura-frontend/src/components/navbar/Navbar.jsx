@@ -6,68 +6,38 @@ import { useAuth } from '../../context/AuthContext'
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
-  const [authIntent, setAuthIntent] = useState('agent')
   const [authStartMode, setAuthStartMode] = useState('login')
   const { user, logout } = useAuth()
   const nav = useNavigate()
   const isCustomer = user?.role === 'CUSTOMER'
-  const isAgent = user?.role === 'AGENT'
   const customerLabel = user?.name || user?.email || 'Client'
-  const agentLabel = user?.name || user?.email || 'Agent'
-  const agentHome =
-    (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended
-      ? '/agent/onboarding'
-      : '/agent/dashboard'
 
   const handleCreateProfileClick = () => {
     sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
-    setAuthIntent('customer')
     setAuthStartMode('create')
     setAuthOpen(true)
   }
 
   useEffect(() => {
     const openCustomer = () => {
-      setAuthIntent('customer')
       setAuthStartMode('login')
       setAuthOpen(true)
     }
     const openCustomerSignup = () => {
-      setAuthIntent('customer')
-      setAuthStartMode('create')
-      setAuthOpen(true)
-    }
-    const openAgent = () => {
-      setAuthIntent('agent')
-      setAuthStartMode('login')
-      setAuthOpen(true)
-    }
-    const openAgentSignup = () => {
-      setAuthIntent('agent')
       setAuthStartMode('create')
       setAuthOpen(true)
     }
     window.addEventListener('open-customer-auth', openCustomer)
     window.addEventListener('open-customer-auth-signup', openCustomerSignup)
-    window.addEventListener('open-agent-auth', openAgent)
-    window.addEventListener('open-agent-auth-signup', openAgentSignup)
     return () => {
       window.removeEventListener('open-customer-auth', openCustomer)
       window.removeEventListener('open-customer-auth-signup', openCustomerSignup)
-      window.removeEventListener('open-agent-auth', openAgent)
-      window.removeEventListener('open-agent-auth-signup', openAgentSignup)
     }
   }, [])
 
-  const triggerAuth = (intent) => {
-    setAuthIntent(intent)
+  const triggerAuth = () => {
     setAuthStartMode('login')
     setAuthOpen(true)
-  }
-
-  const handleForAgentsClick = () => {
-    setMenuOpen(false)
-    triggerAuth('agent')
   }
 
   const handleLogout = () => {
@@ -105,9 +75,6 @@ export default function Navbar() {
           <nav className="hidden items-center gap-5 text-sm md:flex">
             {isCustomer ? (
               <>
-                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
-                  Find agents
-                </Link>
                 <Link to="/client/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
                   {customerLabel}
                 </Link>
@@ -121,23 +88,8 @@ export default function Navbar() {
                   About us
                 </Link>
               </>
-            ) : isAgent ? (
-              <>
-                <Link to={agentHome} className="text-slate-700 hover:text-[#0b3b8c]">
-                  {agentLabel}
-                </Link>
-                <button type="button" onClick={handleLogout} className="text-slate-700 hover:text-[#0b3b8c]">
-                  Log out
-                </button>
-                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
-                  About us
-                </Link>
-              </>
             ) : (
               <>
-                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]">
-                  Find agents
-                </Link>
                 <button
                   type="button"
                   onClick={handleCreateProfileClick}
@@ -145,21 +97,13 @@ export default function Navbar() {
                 >
                   Create your insurance profile
                 </button>
-                {user?.role === 'AGENT' ? (
-                  (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
-                    <Link to="/agent/onboarding" className="text-slate-700 hover:text-[#0b3b8c]">
-                      Agent onboarding
-                    </Link>
-                  ) : (
-                    <Link to="/agent/dashboard" className="text-slate-700 hover:text-[#0b3b8c]">
-                      Agent dashboard
-                    </Link>
-                  )
-                ) : (
-                  <button type="button" onClick={handleForAgentsClick} className="text-slate-700 hover:text-[#0b3b8c]">
-                    For agents
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => triggerAuth()}
+                  className="text-slate-700 hover:text-[#0b3b8c]"
+                >
+                  Sign in
+                </button>
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
                   Contact us
                 </Link>
@@ -176,9 +120,6 @@ export default function Navbar() {
             <div className="page-shell flex flex-col gap-3 py-3 text-sm">
             {isCustomer ? (
               <>
-                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                  Find agents
-                </Link>
                 <Link
                   to="/client/dashboard"
                   className="text-slate-700 hover:text-[#0b3b8c]"
@@ -200,17 +141,27 @@ export default function Navbar() {
                   About us
                 </Link>
               </>
-            ) : isAgent ? (
+            ) : (
               <>
-                <Link to={agentHome} className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                  {agentLabel}
-                </Link>
                 <button
                   type="button"
                   className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                  onClick={handleLogout}
+                  onClick={() => {
+                    handleCreateProfileClick()
+                    setMenuOpen(false)
+                  }}
                 >
-                  Log out
+                  Create your insurance profile
+                </button>
+                <button
+                  type="button"
+                  className="text-left text-slate-700 hover:text-[#0b3b8c]"
+                  onClick={() => {
+                    triggerAuth()
+                    setMenuOpen(false)
+                  }}
+                >
+                  Sign in
                 </button>
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                   Contact us
@@ -219,63 +170,12 @@ export default function Navbar() {
                   About us
                 </Link>
               </>
-            ) : (
-              <>
-                <Link to="/agents" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                  Find agents
-                </Link>
-                  <button
-                    type="button"
-                    className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                    onClick={() => {
-                      handleCreateProfileClick()
-                      setMenuOpen(false)
-                    }}
-                  >
-                    Create your insurance profile
-                  </button>
-                  {user?.role === 'AGENT' ? (
-                    (user?.agentStatus && user.agentStatus !== 'approved') || user?.agentSuspended ? (
-                      <Link
-                        to="/agent/onboarding"
-                        className="text-slate-700 hover:text-[#0b3b8c]"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        Agent onboarding
-                      </Link>
-                    ) : (
-                      <Link
-                        to="/agent/dashboard"
-                        className="text-slate-700 hover:text-[#0b3b8c]"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        Agent dashboard
-                      </Link>
-                    )
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-left text-slate-700 hover:text-[#0b3b8c]"
-                      onClick={() => {
-                        handleForAgentsClick()
-                      }}
-                    >
-                      For agents
-                    </button>
-                  )}
-                  <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    Contact us
-                  </Link>
-                  <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                    About us
-                  </Link>
-                </>
-              )}
+            )}
             </div>
           </div>
         )}
       </header>
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} intent={authIntent} startMode={authStartMode} />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} startMode={authStartMode} />
     </>
   )
 }

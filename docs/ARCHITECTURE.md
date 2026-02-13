@@ -2,7 +2,7 @@
 
 ## Overview
 Connsura is a React frontend (Vite) paired with a Node/Express backend using Prisma.
-The frontend calls the backend API for auth, agents, customers, messages, and admin tasks.
+The frontend calls the backend API for auth, customers, shares, and admin tasks.
 
 ## Components
 - connsura-frontend: React + Vite UI, API base comes from VITE_API_URL.

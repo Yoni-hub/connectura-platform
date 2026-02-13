@@ -13,6 +13,14 @@ const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBa
 const router = express.Router()
 
 const ADMIN_JWT_EXPIRY = process.env.ADMIN_JWT_EXPIRY || '2h'
+const enableAgentFeatures = false
+
+const requireAgentFeatures = (req, res, next) => {
+  if (!enableAgentFeatures) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  return next()
+}
 
 const parseDurationMs = (value) => {
   const raw = String(value || '').trim()
@@ -217,7 +225,7 @@ router.get('/email-otp', adminGuard, async (req, res) => {
 })
 
 // Agents
-router.get('/agents', adminGuard, async (req, res) => {
+router.get('/agents', adminGuard, requireAgentFeatures, async (req, res) => {
   const query = String(req.query?.query || '').trim()
   const statusRaw = String(req.query?.status || '').trim().toLowerCase()
   const availabilityRaw = String(req.query?.availability || '').trim().toLowerCase()
@@ -275,13 +283,13 @@ router.get('/agents', adminGuard, async (req, res) => {
   })
 })
 
-router.get('/agents/:id', adminGuard, async (req, res) => {
+router.get('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
   const agent = await prisma.agent.findUnique({ where: { id: Number(req.params.id) }, include: { user: true } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
   res.json({ agent: formatAgent(agent) })
 })
 
-router.post('/agents/:id/approve', adminGuard, async (req, res) => {
+router.post('/agents/:id/approve', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.update({
     where: { id },
@@ -292,7 +300,7 @@ router.post('/agents/:id/approve', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.post('/agents/:id/reject', adminGuard, async (req, res) => {
+router.post('/agents/:id/reject', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.update({
     where: { id },
@@ -303,7 +311,7 @@ router.post('/agents/:id/reject', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.post('/agents/:id/suspend', adminGuard, async (req, res) => {
+router.post('/agents/:id/suspend', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.update({
     where: { id },
@@ -314,7 +322,7 @@ router.post('/agents/:id/suspend', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.post('/agents/:id/restore', adminGuard, async (req, res) => {
+router.post('/agents/:id/restore', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.update({
     where: { id },
@@ -325,7 +333,7 @@ router.post('/agents/:id/restore', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.post('/agents/:id/review', adminGuard, async (req, res) => {
+router.post('/agents/:id/review', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.update({
     where: { id },
@@ -336,7 +344,7 @@ router.post('/agents/:id/review', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.put('/agents/:id', adminGuard, async (req, res) => {
+router.put('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const payload = req.body || {}
   const data = {}
@@ -372,7 +380,7 @@ router.put('/agents/:id', adminGuard, async (req, res) => {
   res.json({ agent: formatAgent(agent) })
 })
 
-router.delete('/agents/:id', adminGuard, async (req, res) => {
+router.delete('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
   const id = Number(req.params.id)
   const agent = await prisma.agent.findUnique({ where: { id } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
@@ -532,7 +540,7 @@ router.get('/audit', adminGuard, async (req, res) => {
 
   let where = baseWhere
 
-  if (type === 'client' || type === 'agent') {
+  if (type === 'client' || (type === 'agent' && enableAgentFeatures)) {
     const targetType = type === 'client' ? 'Client' : 'Agent'
     if (!query) {
       where = {

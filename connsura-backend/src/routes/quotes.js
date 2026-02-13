@@ -3,8 +3,12 @@ const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 
 const router = express.Router()
+const enableAgentFeatures = false
 
 router.post('/agents/:id/quote', authGuard, async (req, res) => {
+  if (!enableAgentFeatures) {
+    return res.status(404).json({ error: 'Not found' })
+  }
   const agentId = Number(req.params.id)
   const agent = await prisma.agent.findUnique({ where: { id: agentId } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
@@ -17,6 +21,9 @@ router.post('/agents/:id/quote', authGuard, async (req, res) => {
 })
 
 router.get('/agents/:id/summary', async (req, res) => {
+  if (!enableAgentFeatures) {
+    return res.status(404).json({ error: 'Not found' })
+  }
   const agentId = Number(req.params.id)
   const agent = await prisma.agent.findUnique({ where: { id: agentId } })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })

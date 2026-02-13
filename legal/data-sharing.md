@@ -8,7 +8,7 @@
 
 ## 1. Purpose of This Policy
 
-This Data Sharing Policy explains **how, when, and with whom information is shared** on the Connsura platform. It is designed to provide transparency to Clients, Agents, regulators, and partners regarding Connsura’s data‑sharing practices.
+This Data Sharing Policy explains **how, when, and with whom information is shared** on the Connsura platform. It is designed to provide transparency to Clients, recipients, regulators, and partners regarding Connsura’s data‑sharing practices.
 
 Connsura is built on a **client‑controlled sharing model**: no insurance data is shared unless a Client explicitly authorizes it.
 
@@ -25,7 +25,7 @@ All sharing is:
 * **Revocable at any time**
 * **Logged for audit and compliance**
 
-Agents never receive access to data unless a Client grants permission through the platform.
+Recipients never receive access to data unless a Client grants permission through the platform.
 
 ---
 
@@ -36,7 +36,7 @@ Depending on what the Client chooses to share, data may include:
 * Contact information (name, email, phone)
 * Address and location details
 * Insurance profile information (auto, home, renters, commercial, etc.)
-* Notes and messages exchanged with an Agent
+* Notes included in the profile
 
 Clients can choose **which categories** of data to share and may update or revoke access at any time.
 
@@ -44,12 +44,11 @@ Clients can choose **which categories** of data to share and may update or revok
 
 ## 4. Who Data Is Shared With
 
-### 4.1 Licensed Insurance Agents
+### 4.1 Client‑Selected Recipients
 
-Data may be shared with Agents when:
+Data may be shared with recipients when:
 
-* The Agent is verified and licensed
-* The Client selects the Agent
+* The Client selects the recipient
 * The Client explicitly grants access
 
 Access is limited to the scope and duration defined by the Client.
@@ -84,15 +83,15 @@ Connsura does **not**:
 
 ## 6. Revoking Access
 
-Clients may revoke an Agent’s access at any time through the platform.
+Clients may revoke a recipient’s access at any time through the platform.
 
 When access is revoked:
 
-* The Agent immediately loses platform access to the data
+* The recipient immediately loses platform access to the data
 * Future updates are no longer visible
 * Access revocation is logged for audit purposes
 
-Agents are contractually required to delete or stop using Client data once access is revoked, except where retention is required by law.
+Recipients are expected to delete or stop using Client data once access is revoked, except where retention is required by law.
 
 ---
 
@@ -101,7 +100,7 @@ Agents are contractually required to delete or stop using Client data once acces
 Connsura maintains audit logs of:
 
 * When data is shared
-* Which Agent received access
+* Which recipient received access
 * What categories of data were shared
 * When access was revoked
 

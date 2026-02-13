@@ -11,7 +11,6 @@ router.post('/', (req, res) => {
   const topicKey = String(topic || 'support').toLowerCase()
   const inboxes = {
     support: process.env.EMAIL_SUPPORT_INBOX || process.env.SUPPORT_EMAIL || 'support@connsura.com',
-    agents: process.env.EMAIL_AGENTS_INBOX || 'agents@connsura.com',
     billing: process.env.EMAIL_BILLING_INBOX || 'billing@connsura.com',
     legal: process.env.EMAIL_LEGAL_INBOX || 'legal@connsura.com',
     privacy: process.env.EMAIL_PRIVACY_INBOX || 'privacy@connsura.com',
@@ -20,7 +19,6 @@ router.post('/', (req, res) => {
   }
   const labels = {
     support: 'Support',
-    agents: 'Agents',
     billing: 'Billing',
     legal: 'Legal',
     privacy: 'Privacy',
