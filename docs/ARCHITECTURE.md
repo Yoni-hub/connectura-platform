@@ -11,6 +11,7 @@ The frontend calls the backend API for auth, agents, customers, messages, and ad
 - Static assets: forms at /forms, uploads at /uploads.
 
 ## Runtime (staging)
+- AWS EC2 (Ubuntu 22.04.5 LTS, us-east-1) with Elastic IP hosts the staging stack.
 - Nginx reverse proxy routes:
   - https://staging.connsura.com -> frontend container (Vite preview on port 4173).
   - https://api.staging.connsura.com -> backend container (Express on port 8000).

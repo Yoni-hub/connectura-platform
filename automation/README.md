@@ -2,10 +2,17 @@
 
 This folder contains the automation scripts to deploy Connsura to an Ubuntu 22.04.5 LTS server via SSH and manage Squarespace DNS via Playwright.
 
+## Current staging (AWS)
+- Staging is hosted on AWS EC2 (us-east-1) with an Elastic IP.
+- `automation/.env` points to the AWS host for deploys.
+- Routine flow: test locally -> commit/push -> run:
+  - `.\automation\master.ps1 -SkipDns`
+- Use the full script (no `-SkipDns`) only when DNS changes are needed.
+
 ## Prereqs
 - Windows 11 with OpenSSH Client enabled.
 - Node.js installed locally (for Playwright).
-- Router port forwarding: 22, 80, 443 -> your server LAN IP.
+- Router port forwarding: 22, 80, 443 -> your server LAN IP (only needed for home server hosting).
 - Squarespace login for `connsura.com`.
 
 ## 1) Fill .env

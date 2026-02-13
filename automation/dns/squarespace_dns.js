@@ -236,11 +236,21 @@ async function run() {
   const page = await context.newPage();
 
   await page.goto("https://account.squarespace.com/", { waitUntil: "domcontentloaded" });
-  await fillFirst(page, ["input[type='email']", "input[name='email']"], email);
-  await fillFirst(page, ["input[type='password']", "input[name='password']"], password);
-  await clickFirst(page, ["button[type='submit']", "button:has-text('Log In')", "button:has-text('Sign In')"]);
+  let autoLogin = true;
+  try {
+    await fillFirst(page, ["input[type='email']", "input[name='email']"], email);
+    await fillFirst(page, ["input[type='password']", "input[name='password']"], password);
+    await clickFirst(page, ["button[type='submit']", "button:has-text('Log In')", "button:has-text('Sign In')"]);
+  } catch (err) {
+    autoLogin = false;
+    console.log("Auto-login failed to find expected inputs.");
+    console.log("Please log in manually in the browser window.");
+    await waitForEnter("Press Enter after you are logged in...");
+  }
 
-  await page.waitForTimeout(2000);
+  if (autoLogin) {
+    await page.waitForTimeout(2000);
+  }
   const otpInputs = page.locator("input[type='tel'], input[name*='otp'], input[autocomplete='one-time-code']");
   if ((await otpInputs.count()) > 0) {
     console.log("MFA/OTP detected. Complete it in the browser window.");
