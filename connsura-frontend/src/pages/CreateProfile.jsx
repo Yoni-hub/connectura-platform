@@ -563,6 +563,52 @@ const resolveQuestionInputConfig = (inputType, selectOptions) => {
   return { type: 'text', options: undefined }
 }
 
+const resolveQuestionConfigWithFallback = (question, fallback) => {
+  const normalized = String(question?.inputType || '').trim().toLowerCase()
+  if (!normalized || normalized === 'general') return fallback
+  const config = resolveQuestionInputConfig(normalized, question?.selectOptions)
+  if (config.type === 'select' && (!config.options || config.options.length === 0) && fallback?.options?.length) {
+    return { ...config, options: fallback.options }
+  }
+  return config
+}
+
+const buildQuestionCustomKey = (prefix, normalized) =>
+  prefix ? `qb-${prefix}-${normalized}` : `qb-${normalized}`
+
+const householdFieldByLabel = new Map(
+  baseHouseholdFields.map((field) => [normalizeQuestionText(field.label), field])
+)
+const householdLabelByKey = new Map(baseHouseholdFields.map((field) => [field.key, normalizeQuestionText(field.label)]))
+const householdRelationLabelSet = new Set([
+  normalizeQuestionText('Relation To Applicant'),
+  normalizeQuestionText('Relation to applicant'),
+  normalizeQuestionText('Relationship to applicant'),
+])
+
+const addressFieldMappings = [
+  { labels: ['Address Type'], target: 'residential', fieldId: 'addressType', defaultType: 'select' },
+  { labels: ['Street Address', 'Street Address 1'], target: 'residential', fieldId: 'address1' },
+  { labels: ['Street Address 2'], target: 'residential', fieldId: 'address2' },
+  { labels: ['City'], target: 'residential', fieldId: 'city' },
+  { labels: ['State'], target: 'residential', fieldId: 'state' },
+  { labels: ['Zip Code', 'Zip'], target: 'residential', fieldId: 'zip' },
+  {
+    labels: ['Mailing Street Address', 'Mailing Street Address 1', 'Mailing Address', 'Mailing Address 1'],
+    target: 'mailing',
+    fieldId: 'address1',
+  },
+  { labels: ['Mailing Street Address 2', 'Mailing Address 2'], target: 'mailing', fieldId: 'address2' },
+  { labels: ['Mailing City'], target: 'mailing', fieldId: 'city' },
+  { labels: ['Mailing State'], target: 'mailing', fieldId: 'state' },
+  { labels: ['Mailing Zip Code', 'Mailing Zip'], target: 'mailing', fieldId: 'zip' },
+]
+const addressFieldLabelMap = new Map()
+addressFieldMappings.forEach((entry) => {
+  entry.labels.forEach((label) => addressFieldLabelMap.set(normalizeQuestionText(label), entry))
+})
+const addressResidentLabelKey = normalizeQuestionText('Who lives in this address')
+
 const hasNamedInsuredData = (person) =>
   Object.entries(person || {}).some(([key, value]) => key !== 'relation' && hasNonEmptyValue(value))
 
@@ -1206,6 +1252,137 @@ export default function CreateProfile({
         }
       })
       .filter(Boolean)
+
+  const buildHouseholdFallbackRows = (person, setPerson, idPrefix) => [
+    {
+      id: `${idPrefix}-relation`,
+      label: 'Relation To Applicant',
+      type: 'select',
+      options: relationToApplicantOptions,
+      value: person.relation ?? '',
+      errorKey: 'relation',
+      onChange: (event) => setPerson((prev) => ({ ...prev, relation: event.target.value })),
+    },
+    ...buildHouseholdFields(person, setPerson, idPrefix).map((field) => ({
+      ...field,
+      errorKey: field.key || field.id,
+    })),
+  ]
+
+  const buildHouseholdQuestionRows = (person, setPerson, idPrefix, valueKeyPrefix = '') => {
+    const occupationOptionsForEmployment =
+      specialEmploymentOccupations[person.employment] ||
+      (occupationMap[person.employment]?.length ? occupationMap[person.employment] : allOccupations)
+    const isOccupationLocked = Boolean(specialEmploymentOccupations[person.employment])
+
+    const resolveMappedConfig = (field, question) => {
+      const fallback =
+        field?.options?.length
+          ? { type: 'select', options: field.options }
+          : { type: field?.type || 'text', options: undefined }
+      return resolveQuestionConfigWithFallback(question, fallback)
+    }
+
+    return sectionBankQuestions.household
+      .map((question, index) => {
+        const label = (question?.text || '').toString().trim()
+        const normalized = normalizeQuestionText(label)
+        if (!label || !normalized) return null
+
+        if (householdRelationLabelSet.has(normalized)) {
+          const config = resolveQuestionConfigWithFallback(question, {
+            type: 'select',
+            options: relationToApplicantOptions,
+          })
+          return {
+            id: `${idPrefix}-relation-${index}`,
+            label,
+            type: config.type,
+            options: config.options,
+            value: person.relation ?? '',
+            errorKey: 'relation',
+            fieldKey: 'relation',
+            onChange: (event) => setPerson((prev) => ({ ...prev, relation: event.target.value })),
+          }
+        }
+
+        const mappedField = householdFieldByLabel.get(normalized)
+        if (mappedField) {
+          const config = resolveMappedConfig(mappedField, question)
+          if (mappedField.key === 'employment') {
+            const handleEmploymentChange = (event) => {
+              const nextEmployment = event.target.value
+              if (config.type !== 'select') {
+                setPerson((prev) => ({ ...prev, employment: nextEmployment }))
+                return
+              }
+              const nextOptions =
+                specialEmploymentOccupations[nextEmployment] ||
+                (occupationMap[nextEmployment]?.length ? occupationMap[nextEmployment] : allOccupations)
+              const nextOccupation = Array.isArray(nextOptions) && nextOptions.length === 1 ? nextOptions[0] : ''
+              setPerson((prev) => ({
+                ...prev,
+                employment: nextEmployment,
+                occupation: nextOptions.includes(prev.occupation) ? prev.occupation : nextOccupation,
+              }))
+            }
+            return {
+              id: `${idPrefix}-${mappedField.key}-${index}`,
+              label,
+              type: config.type,
+              options: config.options,
+              value: person.employment ?? '',
+              errorKey: mappedField.key,
+              fieldKey: mappedField.key,
+              onChange: handleEmploymentChange,
+            }
+          }
+          if (mappedField.key === 'occupation') {
+            const optionOverride =
+              config.type === 'select'
+                ? config.options?.length
+                  ? config.options
+                  : occupationOptionsForEmployment
+                : config.options
+            return {
+              id: `${idPrefix}-${mappedField.key}-${index}`,
+              label,
+              type: config.type,
+              options: optionOverride,
+              disabled: config.type === 'select' && !config.options?.length ? isOccupationLocked : false,
+              value: person.occupation ?? '',
+              errorKey: mappedField.key,
+              fieldKey: mappedField.key,
+              onChange: (event) => setPerson((prev) => ({ ...prev, occupation: event.target.value })),
+            }
+          }
+          return {
+            id: `${idPrefix}-${mappedField.key}-${index}`,
+            label,
+            type: config.type,
+            options: config.options,
+            value: person[mappedField.key] ?? '',
+            errorKey: mappedField.key,
+            fieldKey: mappedField.key,
+            onChange: (event) => setPerson((prev) => ({ ...prev, [mappedField.key]: event.target.value })),
+          }
+        }
+
+        const customKey = buildQuestionCustomKey(valueKeyPrefix, normalized)
+        const config = resolveQuestionInputConfig(question?.inputType, question?.selectOptions)
+        return {
+          id: `${idPrefix}-custom-${index}`,
+          label,
+          type: config.type,
+          options: config.options,
+          value: customFieldValues?.household?.[customKey] ?? '',
+          errorKey: customKey,
+          customKey,
+          onChange: (event) => setCustomFieldValue('household', customKey, event.target.value),
+        }
+      })
+      .filter(Boolean)
+  }
   const buildHouseholdFields = (person, setPerson, idPrefix) => {
     const occupationOptionsForEmployment =
       specialEmploymentOccupations[person.employment] ||
@@ -1250,7 +1427,11 @@ export default function CreateProfile({
     })
   }
 
-  const newHouseholdFields = buildHouseholdFields(newHousehold, setNewHousehold, 'hh-new')
+  const householdQuestionsAvailable = sectionBankQuestions.household.length > 0
+  const addressQuestionsAvailable = sectionBankQuestions.address.length > 0
+  const newHouseholdFields = householdQuestionsAvailable
+    ? buildHouseholdQuestionRows(newHousehold, setNewHousehold, 'hh-new', 'new')
+    : buildHouseholdFallbackRows(newHousehold, setNewHousehold, 'hh-new')
   const updateAdditionalHousehold = (index, updater) => {
     setAdditionalHouseholds((prev) => {
       const next = [...prev]
@@ -1862,33 +2043,16 @@ export default function CreateProfile({
           label: getAdditionalHouseholdLabel(activeAdditionalPerson.relation),
           idPrefix: `hh2-${activeAdditionalIndex + 1}`,
         }
-  const activeHouseholdFields = buildHouseholdFields(
-    activeHousehold.person,
-    activeHousehold.setPerson,
-    activeHousehold.idPrefix
-  )
-  const householdCustomFields = buildCustomFieldRows('household', `${activeHousehold.idPrefix}-custom`)
-  const householdLabelExclusions = (() => {
-    const keys = new Set()
-    keys.add(normalizeQuestionText('Relation To Applicant'))
-    activeHouseholdFields.forEach((field) => {
-      if (field?.label) keys.add(normalizeQuestionText(field.label))
-    })
-    householdCustomFields.forEach((field) => {
-      if (field?.label) keys.add(normalizeQuestionText(field.label))
-    })
-    return keys
-  })()
   const householdQuestionKeyPrefix =
     activeHouseholdIndex === 'primary' ? '' : `additional-${activeAdditionalIndex ?? activeHouseholdIndex}`
-  const householdBankFields = buildQuestionBankRows(
-    'household',
-    `${activeHousehold.idPrefix}-bank`,
-    sectionBankQuestions.household,
-    householdLabelExclusions,
-    householdQuestionKeyPrefix
-  )
-  const activeHouseholdFieldRows = [...activeHouseholdFields, ...householdCustomFields, ...householdBankFields]
+  const activeHouseholdFieldRows = householdQuestionsAvailable
+    ? buildHouseholdQuestionRows(
+        activeHousehold.person,
+        activeHousehold.setPerson,
+        `${activeHousehold.idPrefix}-bank`,
+        householdQuestionKeyPrefix
+      )
+    : buildHouseholdFallbackRows(activeHousehold.person, activeHousehold.setPerson, activeHousehold.idPrefix)
   const primaryContact = contacts[0] || createContact()
   const primaryAddressLabel = 'Primary Address'
   const getAdditionalAddressLabel = (entry, index) => {
@@ -1914,91 +2078,91 @@ export default function CreateProfile({
     ? activeAddressResidential.residents
     : []
   const newAddressResidents = Array.isArray(newAddress.residential?.residents) ? newAddress.residential.residents : []
-  const addressCustomFields = buildCustomFieldRows(
-    'address',
-    `addr-${activeAdditionalAddressIndex === null ? 'primary' : activeAdditionalAddressIndex}-custom`
-  )
-  const addressQuestionRows = (() => {
-    if (activeAddressIndex !== 'primary') return []
+  const activeAddressMailing =
+    activeAdditionalAddressIndex === null ? mailing : activeAddressEntry.mailing
+  const activeAddressCustomKeyPrefix =
+    activeAdditionalAddressIndex === null ? '' : `additional-${activeAdditionalAddressIndex}`
+
+  const buildAddressQuestionRows = (questions, customKeyPrefix) => {
     const rows = []
     const seen = new Set()
-    const residentKey = normalizeQuestionText('Who lives in this address')
-    const fieldMap = new Map([
-      [normalizeQuestionText('Address Type'), { id: 'addressType', type: 'select' }],
-      [normalizeQuestionText('Street Address'), { id: 'address1', type: 'text' }],
-      [normalizeQuestionText('Street Address 1'), { id: 'address1', type: 'text' }],
-      [normalizeQuestionText('Street Address 2'), { id: 'address2', type: 'text' }],
-      [normalizeQuestionText('City'), { id: 'city', type: 'text' }],
-      [normalizeQuestionText('State'), { id: 'state', type: 'text' }],
-      [normalizeQuestionText('Zip Code'), { id: 'zip', type: 'text' }],
-      [normalizeQuestionText('Zip'), { id: 'zip', type: 'text' }],
-    ])
-
-    sectionBankQuestions.address.forEach((question, index) => {
+    questions.forEach((question, index) => {
       const label = (question?.text || '').toString().trim()
       const normalized = normalizeQuestionText(label)
-      if (!normalized || seen.has(normalized)) return
+      if (!label || !normalized || seen.has(normalized)) return
       seen.add(normalized)
 
-      if (normalized === residentKey) {
+      if (normalized === addressResidentLabelKey) {
         rows.push({
           type: 'residents',
           id: `addr-bank-residents-${index}`,
           label,
+          errorKey: 'residents',
         })
         return
       }
 
-      const mapped = fieldMap.get(normalized)
+      const mapped = addressFieldLabelMap.get(normalized)
       if (mapped) {
+        const fallback =
+          mapped.fieldId === 'addressType'
+            ? { type: 'select', options: addressTypeOptions }
+            : { type: mapped.defaultType || 'text', options: undefined }
+        const config = resolveQuestionConfigWithFallback(question, fallback)
         rows.push({
           type: 'field',
-          id: `addr-bank-${mapped.id}-${index}`,
+          id: `addr-bank-${mapped.fieldId}-${index}`,
           label,
-          fieldId: mapped.id,
-          fieldType: mapped.type,
+          fieldId: mapped.fieldId,
+          fieldTarget: mapped.target,
+          fieldType: config.type,
+          fieldOptions: config.options,
+          errorKey: mapped.fieldId,
         })
         return
       }
 
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const config = resolveQuestionInputConfig(question?.inputType, question?.selectOptions)
       rows.push({
         type: 'custom',
         id: `addr-bank-custom-${index}`,
         label,
-        customKey: `qb-${normalized}`,
-        inputType: question?.inputType || 'general',
-        selectOptions: normalizeSelectOptionsList(question?.selectOptions),
+        customKey,
+        fieldType: config.type,
+        fieldOptions: config.options,
+        errorKey: customKey,
       })
     })
-
-    if (!rows.length) {
-      orderedResidentialFields.forEach((field, index) => {
-        rows.push({
-          type: 'field',
-          id: `addr-fallback-${field.id}-${index}`,
-          label: field.label,
-          fieldId: field.id,
-          fieldType: field.type || 'text',
-        })
-      })
-      rows.push({
-        type: 'residents',
-        id: 'addr-fallback-residents',
-        label: 'Who lives in this address',
-      })
-    }
-
-    addressCustomFields.forEach((field) => {
-      rows.push({
-        type: 'customField',
-        id: field.id,
-        label: field.label,
-        customField: field,
-      })
-    })
-
     return rows
-  })()
+  }
+
+  const buildAddressFallbackRows = () => {
+    const rows = orderedResidentialFields.map((field, index) => ({
+      type: 'field',
+      id: `addr-fallback-${field.id}-${index}`,
+      label: field.label,
+      fieldId: field.id,
+      fieldTarget: 'residential',
+      fieldType: field.type || 'text',
+      fieldOptions: field.id === 'addressType' ? addressTypeOptions : undefined,
+      errorKey: field.id,
+    }))
+    rows.push({
+      type: 'residents',
+      id: 'addr-fallback-residents',
+      label: 'Who lives in this address',
+      errorKey: 'residents',
+    })
+    return rows
+  }
+
+  const addressQuestionRows = addressQuestionsAvailable
+    ? buildAddressQuestionRows(sectionBankQuestions.address, activeAddressCustomKeyPrefix)
+    : buildAddressFallbackRows()
+  const newAddressQuestionRows = addressQuestionsAvailable
+    ? buildAddressQuestionRows(sectionBankQuestions.address, 'new')
+    : buildAddressFallbackRows()
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
   const showHouseholdForm =
@@ -2105,9 +2269,96 @@ export default function CreateProfile({
       },
     }))
   }
+  const setActiveAddressField = (target, field, value) => {
+    if (target === 'mailing') {
+      if (activeAddressIndex === 'primary') {
+        setMailing((prev) => ({ ...prev, [field]: value }))
+        return
+      }
+      if (typeof activeAddressIndex !== 'number') return
+      updateAdditionalAddress(activeAddressIndex, (prev) => ({
+        ...prev,
+        mailing: { ...(prev.mailing ?? { address1: '', address2: '', city: '', state: '', zip: '' }), [field]: value },
+      }))
+      return
+    }
+    if (field === 'addressType') {
+      setActiveAddressType(value)
+      return
+    }
+    setActiveAddressResidentialField(field, value)
+  }
+  const setNewAddressField = (target, field, value) => {
+    if (target === 'mailing') {
+      setNewAddress((prev) => ({
+        ...prev,
+        mailing: { ...(prev.mailing ?? { address1: '', address2: '', city: '', state: '', zip: '' }), [field]: value },
+      }))
+      return
+    }
+    if (field === 'addressType') {
+      setNewAddress((prev) => ({
+        ...prev,
+        addressType: value,
+        residential: { ...(prev.residential ?? {}), addressType: value },
+      }))
+      return
+    }
+    setNewAddress((prev) => ({
+      ...prev,
+      residential: { ...(prev.residential ?? {}), [field]: value },
+    }))
+  }
   const nameFieldKeys = new Set(['first-name', 'middle-initial', 'last-name', 'suffix'])
-  const buildHouseholdDetails = (person) => {
+  const householdQuestionFieldKeySet = (() => {
+    const set = new Set()
+    if (!householdQuestionsAvailable) return set
+    sectionBankQuestions.household.forEach((question) => {
+      const normalized = normalizeQuestionText(question?.text || '')
+      if (!normalized) return
+      const mappedField = householdFieldByLabel.get(normalized)
+      if (mappedField?.key) {
+        set.add(mappedField.key)
+      }
+    })
+    return set
+  })()
+  const buildHouseholdDetails = (person, customKeyPrefix = '') => {
     const details = []
+    if (householdQuestionsAvailable) {
+      const seen = new Set()
+      sectionBankQuestions.household.forEach((question) => {
+        const label = (question?.text || '').toString().trim()
+        const normalized = normalizeQuestionText(label)
+        if (!label || !normalized || seen.has(normalized)) return
+        seen.add(normalized)
+
+        if (householdRelationLabelSet.has(normalized)) {
+          if (hasNonEmptyValue(person?.relation)) {
+            details.push({ label, value: person.relation })
+          }
+          return
+        }
+
+        const mappedField = householdFieldByLabel.get(normalized)
+        if (mappedField) {
+          if (nameFieldKeys.has(mappedField.key)) return
+          const value = person?.[mappedField.key]
+          if (hasNonEmptyValue(value)) {
+            details.push({ label, value })
+          }
+          return
+        }
+
+        const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+        const value = customFieldValues?.household?.[customKey]
+        if (hasNonEmptyValue(value)) {
+          details.push({ label, value })
+        }
+      })
+      return details
+    }
+
     if (hasNonEmptyValue(person?.relation)) {
       details.push({ label: 'Relation to Applicant', value: person.relation })
     }
@@ -2116,35 +2367,13 @@ export default function CreateProfile({
       if (nameFieldKeys.has(fieldKey)) return
       const value = person?.[fieldKey]
       if (hasNonEmptyValue(value)) {
-        const label =
-          field.id === 'address1' ? field.label.replace(/Street Address 1/i, 'Street Address') : field.label
-        details.push({ label, value })
+        details.push({ label: field.label, value })
       }
     })
     return details
   }
   const buildHouseholdSummaryRows = (fullName) =>
     fullName ? [{ label: 'Full Name', value: fullName }] : []
-  const buildAddressDetails = (residentialEntry) => {
-    const details = []
-    residentialFields.forEach((field) => {
-      if (field.id === 'addressType' || field.id === 'address2') return
-      const value = residentialEntry?.[field.id]
-      if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
-      }
-    })
-    return details
-  }
-  const primaryFullName = buildFullName(namedInsured)
-  const summaryValue = (value) => (value ? value : '-')
-  const householdFieldKeySet = new Set(householdFields.map((field) => field.key))
-  const hasNameFieldsInSchema = householdFields.some((field) => nameFieldKeys.has(field.key))
-  const primarySummaryRows = [
-    { label: 'Full Name', value: primaryFullName },
-    { label: 'Phone', value: primaryContact?.phone1 || '' },
-    { label: 'Email', value: primaryContact?.email1 || '' },
-  ]
   const getFirstName = (value) => {
     const trimmed = (value || '').toString().trim()
     if (!trimmed) return ''
@@ -2160,6 +2389,69 @@ export default function CreateProfile({
     if (!firstName) return '-'
     return residentIds.length > 1 ? `${firstName} ...` : firstName
   }
+  const buildAddressDetails = (residentialEntry, mailingEntry = {}, customKeyPrefix = '', fallbackAddressType = '') => {
+    const details = []
+    if (addressQuestionsAvailable) {
+      const seen = new Set()
+      sectionBankQuestions.address.forEach((question) => {
+        const label = (question?.text || '').toString().trim()
+        const normalized = normalizeQuestionText(label)
+        if (!label || !normalized || seen.has(normalized)) return
+        seen.add(normalized)
+
+        if (normalized === addressResidentLabelKey) {
+          const residents = residentialEntry?.residents
+          if (hasNonEmptyValue(residents)) {
+            details.push({ label, value: formatResidentSummary(residents) })
+          }
+          return
+        }
+
+        const mapped = addressFieldLabelMap.get(normalized)
+        if (mapped) {
+          const value =
+            mapped.fieldId === 'addressType'
+              ? residentialEntry?.addressType ?? fallbackAddressType ?? ''
+              : (mapped.target === 'mailing' ? mailingEntry : residentialEntry)?.[mapped.fieldId]
+          if (hasNonEmptyValue(value)) {
+            details.push({ label, value })
+          }
+          return
+        }
+
+        const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+        const value = customFieldValues?.address?.[customKey]
+        if (hasNonEmptyValue(value)) {
+          details.push({ label, value })
+        }
+      })
+      return details
+    }
+
+    residentialFields.forEach((field) => {
+      if (field.id === 'addressType' || field.id === 'address2') return
+      const value = residentialEntry?.[field.id]
+      if (hasNonEmptyValue(value)) {
+        details.push({ label: field.label, value })
+      }
+    })
+    return details
+  }
+  const primaryFullName = buildFullName(namedInsured)
+  const summaryValue = (value) => (value ? value : '-')
+  const householdFieldKeySet = householdQuestionsAvailable
+    ? householdQuestionFieldKeySet
+    : new Set(householdFields.map((field) => field.key))
+  const hasNameFieldsInSchema = householdQuestionsAvailable
+    ? Array.from(householdQuestionFieldKeySet).some((key) => nameFieldKeys.has(key))
+    : householdFields.some((field) => nameFieldKeys.has(field.key))
+  const primarySummaryRows = [
+    ...(hasNameFieldsInSchema ? [{ label: 'Full Name', value: primaryFullName }] : []),
+    { label: 'Phone', value: primaryContact?.phone1 || '' },
+    { label: 'Email', value: primaryContact?.email1 || '' },
+    ...buildHouseholdDetails(namedInsured, ''),
+  ]
+  const primaryAddressSummaryRows = buildAddressDetails(residential, mailing, '', residential?.addressType ?? '')
   const formatDriverSelection = (value) => {
     if (!Array.isArray(value)) {
       return typeof value === 'string' && value.trim() ? value : '-'
@@ -2348,32 +2640,40 @@ export default function CreateProfile({
       onFormDataChange(formsPayload)
     }
     if (typeof onShareSnapshotChange !== 'function') return
-    const buildSharePerson = (person, label) => ({
+    const buildSharePerson = (person, label, customKeyPrefix = '') => ({
       label,
       fullName: hasNameFieldsInSchema ? buildFullName(person || {}) : '',
       dob: householdFieldKeySet.has('dob') ? person?.dob || '' : '',
       gender: householdFieldKeySet.has('gender') ? person?.gender || '' : '',
-      details: buildHouseholdDetails(person || {}),
+      details: buildHouseholdDetails(person || {}, customKeyPrefix),
     })
     const primarySnapshot = buildSharePerson(
       namedInsured,
-      namedInsured.relation ? namedInsured.relation : 'Primary Applicant'
+      namedInsured.relation ? namedInsured.relation : 'Primary Applicant',
+      ''
     )
     const additionalHouseholdSnapshots = additionalHouseholds
       .filter((person) => hasNonEmptyValue(person))
-      .map((person) => buildSharePerson(person, person?.relation || 'Additional Household Member'))
+      .map((person, index) =>
+        buildSharePerson(person, person?.relation || 'Additional Household Member', `additional-${index}`)
+      )
     const primaryContactSnapshot = contacts[0] || createContact()
     const primaryAddressSnapshot = {
       label: primaryAddressLabel,
       street1: residential?.address1 || '',
-      details: buildAddressDetails(residential),
+      details: buildAddressDetails(residential, mailing, '', residential?.addressType ?? ''),
     }
     const additionalAddressSnapshots = additionalAddresses
       .filter((entry) => hasNonEmptyValue(entry))
       .map((entry, index) => ({
         label: getAdditionalAddressLabel(entry, index),
         street1: entry?.residential?.address1 || '',
-        details: buildAddressDetails(entry?.residential),
+        details: buildAddressDetails(
+          entry?.residential,
+          entry?.mailing,
+          `additional-${index}`,
+          entry?.addressType ?? entry?.residential?.addressType ?? ''
+        ),
       }))
     const snapshot = {
       household: {
@@ -2521,15 +2821,15 @@ export default function CreateProfile({
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Household Member</div>
                     <div className={gridClass}>
-                      <FieldRow
-                        id="hh-new-relation"
-                        label="Relation To Applicant"
-                        options={relationToApplicantOptions}
-                        value={newHousehold.relation}
-                        onChange={(event) => setNewHousehold((prev) => ({ ...prev, relation: event.target.value }))}
-                      />
                       {newHouseholdFields.map((field) => (
-                        <FieldRow key={field.id} {...field} />
+                        <div key={field.id} className="contents">
+                          <FieldRow {...field} />
+                          {field.errorKey && householdErrors[field.errorKey] && (
+                            <div className="col-span-2 text-xs text-rose-600">
+                              {householdErrors[field.errorKey]}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                     <div className="flex flex-wrap justify-end gap-3">
@@ -2600,34 +2900,16 @@ export default function CreateProfile({
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{activeHousehold.label}</div>
                       <div className={`mt-3 ${gridClass}`}>
-                        <div className="contents">
-                          <FieldRow
-                            id={`${activeHousehold.idPrefix}-relation`}
-                            label="Relation To Applicant"
-                            options={relationToApplicantOptions}
-                            value={activeHousehold.person.relation}
-                            onChange={(event) =>
-                              activeHousehold.setPerson((prev) => ({ ...prev, relation: event.target.value }))
-                            }
-                          />
-                          {householdErrors.relation && (
-                            <div className="col-span-2 text-xs text-rose-600">{householdErrors.relation}</div>
-                          )}
-                        </div>
-                        {activeHouseholdFieldRows.map((field) => {
-                          const { key: fieldKey, ...fieldProps } = field
-                          const errorKey = fieldKey || field.id
-                          return (
-                            <div key={field.id} className="contents">
-                              <FieldRow {...fieldProps} />
-                              {householdErrors[errorKey] && (
-                                <div className="col-span-2 text-xs text-rose-600">
-                                  {householdErrors[errorKey]}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                        {activeHouseholdFieldRows.map((field) => (
+                          <div key={field.id} className="contents">
+                            <FieldRow {...field} />
+                            {field.errorKey && householdErrors[field.errorKey] && (
+                              <div className="col-span-2 text-xs text-rose-600">
+                                {householdErrors[field.errorKey]}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div className="flex flex-wrap justify-end gap-3">
@@ -2700,7 +2982,10 @@ export default function CreateProfile({
                       ? person.relation
                       : `Additional Household Member ${index + 1}`
                     const fullName = buildFullName(person)
-                    const summaryRows = buildHouseholdSummaryRows(fullName)
+                    const summaryRows = [
+                      ...(hasNameFieldsInSchema ? buildHouseholdSummaryRows(fullName) : []),
+                      ...buildHouseholdDetails(person, `additional-${index}`),
+                    ]
                     return (
                       <div
                         key={`household-summary-${index}`}
@@ -2778,54 +3063,71 @@ export default function CreateProfile({
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Address</div>
                     <div className={`mt-3 ${gridClass}`}>
-                      {orderedResidentialFields.map((field) => {
-                        const isAddressType = field.id === 'addressType'
-                        const value = isAddressType
-                          ? newAddress.residential?.addressType ?? newAddress.addressType ?? ''
-                          : newAddress.residential?.[field.id] ?? ''
+                      {newAddressQuestionRows.map((row) => {
+                        if (row.type === 'residents') {
+                          return (
+                            <div key={row.id} className="contents">
+                              <label htmlFor="new-address-residents" className={labelClass}>
+                                {row.label}
+                              </label>
+                              {householdMemberOptions.length ? (
+                                <MultiSelectDropdown
+                                  id="new-address-residents"
+                                  options={householdMemberOptions}
+                                  selectedIds={newAddressResidents}
+                                  onToggle={toggleNewAddressResident}
+                                  placeholder="Select household members"
+                                />
+                              ) : (
+                                <div className="text-xs text-slate-500">
+                                  Add household members to select who lives here.
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+
+                        if (row.type === 'custom') {
+                          const value = customFieldValues?.address?.[row.customKey] ?? ''
+                          return (
+                            <div key={row.id} className="contents">
+                              <FieldRow
+                                id={row.id}
+                                label={row.label}
+                                type={row.fieldType}
+                                options={row.fieldOptions}
+                                value={value}
+                                onChange={(event) => setCustomFieldValue('address', row.customKey, event.target.value)}
+                              />
+                              {row.errorKey && addressErrors[row.errorKey] && (
+                                <div className="col-span-2 text-xs text-rose-600">
+                                  {addressErrors[row.errorKey]}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+
+                        const value =
+                          row.fieldTarget === 'mailing'
+                            ? newAddress.mailing?.[row.fieldId] ?? ''
+                            : row.fieldId === 'addressType'
+                              ? newAddress.residential?.addressType ?? newAddress.addressType ?? ''
+                              : newAddress.residential?.[row.fieldId] ?? ''
                         return (
-                          <FieldRow
-                            key={`new-res-${field.id}`}
-                            id={`new-res-${field.id}`}
-                            label={field.label}
-                            type={field.type}
-                            options={isAddressType ? addressTypeOptions : undefined}
-                            placeholder={isAddressType ? 'Select address type' : undefined}
-                            value={value}
-                            onChange={(event) =>
-                              isAddressType
-                                ? setNewAddress((prev) => ({
-                                    ...prev,
-                                    addressType: event.target.value,
-                                    residential: { ...(prev.residential ?? {}), addressType: event.target.value },
-                                  }))
-                                : setNewAddress((prev) => ({
-                                    ...prev,
-                                    residential: { ...(prev.residential ?? {}), [field.id]: event.target.value },
-                                  }))
-                            }
-                          />
+                          <div key={row.id} className="contents">
+                            <FieldRow
+                              id={row.id}
+                              label={row.label}
+                              type={row.fieldType}
+                              options={row.fieldOptions}
+                              placeholder={row.fieldId === 'addressType' ? 'Select address type' : undefined}
+                              value={value}
+                              onChange={(event) => setNewAddressField(row.fieldTarget, row.fieldId, event.target.value)}
+                            />
+                          </div>
                         )
                       })}
-                    </div>
-
-                    <div className={`mt-4 ${gridClass}`}>
-                      <label htmlFor="new-address-residents" className={labelClass}>
-                        Who lives in this address
-                      </label>
-                      {householdMemberOptions.length ? (
-                        <MultiSelectDropdown
-                          id="new-address-residents"
-                          options={householdMemberOptions}
-                          selectedIds={newAddressResidents}
-                          onToggle={toggleNewAddressResident}
-                          placeholder="Select household members"
-                        />
-                      ) : (
-                        <div className="text-xs text-slate-500">
-                          Add household members to select who lives here.
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-3">
@@ -2924,65 +3226,47 @@ export default function CreateProfile({
                             )
                           }
 
-                          if (row.type === 'customField') {
-                            const field = row.customField
-                            const { key: _fieldKey, ...fieldProps } = field || {}
-                            return (
-                              <div key={row.id} className="contents">
-                                <FieldRow {...fieldProps} />
-                                {fieldProps?.id && addressErrors[fieldProps.id] && (
-                                  <div className="col-span-2 text-xs text-rose-600">
-                                    {addressErrors[fieldProps.id]}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          }
-
                           if (row.type === 'custom') {
                             const value = customFieldValues?.address?.[row.customKey] ?? ''
-                            const config = resolveQuestionInputConfig(row.inputType, row.selectOptions)
                             return (
                               <div key={row.id} className="contents">
                                 <FieldRow
                                   id={row.id}
                                   label={row.label}
-                                  type={config.type}
-                                  options={config.options}
+                                  type={row.fieldType}
+                                  options={row.fieldOptions}
                                   value={value}
                                   onChange={(event) => setCustomFieldValue('address', row.customKey, event.target.value)}
                                 />
-                                {addressErrors[row.customKey] && (
+                                {row.errorKey && addressErrors[row.errorKey] && (
                                   <div className="col-span-2 text-xs text-rose-600">
-                                    {addressErrors[row.customKey]}
+                                    {addressErrors[row.errorKey]}
                                   </div>
                                 )}
                               </div>
                             )
                           }
 
-                          const isAddressType = row.fieldId === 'addressType'
-                          const value = isAddressType
-                            ? activeAddressType
-                            : activeAddressResidential?.[row.fieldId] ?? ''
-                          const handleChange = (event) =>
-                            isAddressType
-                              ? setActiveAddressType(event.target.value)
-                              : setActiveAddressResidentialField(row.fieldId, event.target.value)
+                          const value =
+                            row.fieldTarget === 'mailing'
+                              ? activeAddressMailing?.[row.fieldId] ?? ''
+                              : row.fieldId === 'addressType'
+                                ? activeAddressType
+                                : activeAddressResidential?.[row.fieldId] ?? ''
                           return (
                             <div key={row.id} className="contents">
                               <FieldRow
                                 id={row.id}
                                 label={row.label}
                                 type={row.fieldType}
-                                options={isAddressType ? addressTypeOptions : undefined}
-                                placeholder={isAddressType ? 'Select address type' : undefined}
+                                options={row.fieldOptions}
+                                placeholder={row.fieldId === 'addressType' ? 'Select address type' : undefined}
                                 value={value}
-                                onChange={handleChange}
+                                onChange={(event) => setActiveAddressField(row.fieldTarget, row.fieldId, event.target.value)}
                               />
-                              {addressErrors[row.fieldId] && (
+                              {row.errorKey && addressErrors[row.errorKey] && (
                                 <div className="col-span-2 text-xs text-rose-600">
-                                  {addressErrors[row.fieldId]}
+                                  {addressErrors[row.errorKey]}
                                 </div>
                               )}
                             </div>
@@ -3043,76 +3327,67 @@ export default function CreateProfile({
                       </button>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                      <div>
-                        <span className="font-semibold text-slate-900">Street Address:</span>{' '}
-                        {summaryValue(residential.address1)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">State:</span> {summaryValue(residential.state)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Zip Code:</span> {summaryValue(residential.zip)}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
-                        {formatResidentSummary(residential.residents || [])}
-                      </div>
+                      {primaryAddressSummaryRows.length ? (
+                        primaryAddressSummaryRows.map((item, index) => (
+                          <div key={`primary-address-summary-${index}`}>
+                            <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                            {summaryValue(item.value)}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-500">No address details added.</div>
+                      )}
                     </div>
                   </div>
 
-                  {additionalAddresses.map((address, index) => (
-                    <div
-                      key={`address-summary-${index}`}
-                      className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {getAdditionalAddressLabel(address, index)}
+                  {additionalAddresses.map((address, index) => {
+                    const summaryRows = buildAddressDetails(
+                      address?.residential,
+                      address?.mailing,
+                      `additional-${index}`,
+                      address?.addressType ?? address?.residential?.addressType ?? ''
+                    )
+                    return (
+                      <div
+                        key={`address-summary-${index}`}
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {getAdditionalAddressLabel(address, index)}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className={miniButton}
+                              onClick={() => handleEditSection('address', { addressIndex: index })}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className={miniButton}
+                              onClick={() => removeAdditionalAddress(index)}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => handleEditSection('address', { addressIndex: index })}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={miniButton}
-                            onClick={() => removeAdditionalAddress(index)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                        <div>
-                          <span className="font-semibold text-slate-900">Street Address:</span>{' '}
-                          {summaryValue(address.residential?.address1)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">City:</span>{' '}
-                          {summaryValue(address.residential?.city)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">State:</span>{' '}
-                          {summaryValue(address.residential?.state)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Zip Code:</span>{' '}
-                          {summaryValue(address.residential?.zip)}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
-                          {formatResidentSummary(address.residential?.residents || [])}
+                        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
+                          {summaryRows.length ? (
+                            summaryRows.map((item, idx) => (
+                              <div key={`additional-address-summary-${index}-${idx}`}>
+                                <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                                {summaryValue(item.value)}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-slate-500">No address details added.</div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
 
                   <div className="flex flex-wrap justify-end gap-3">
                     <button
@@ -3466,23 +3741,16 @@ export default function CreateProfile({
                   </button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-700">
-                  <div>
-                    <span className="font-semibold text-slate-900">Street Address:</span>{' '}
-                    {summaryValue(residential.address1)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">City:</span> {summaryValue(residential.city)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">State:</span> {summaryValue(residential.state)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Zip Code:</span> {summaryValue(residential.zip)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Who lives here:</span>{' '}
-                    {formatResidentSummary(residential.residents || [])}
-                  </div>
+                  {primaryAddressSummaryRows.length ? (
+                    primaryAddressSummaryRows.map((item, index) => (
+                      <div key={`summary-address-${index}`}>
+                        <span className="font-semibold text-slate-900">{item.label}:</span>{' '}
+                        {summaryValue(item.value)}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500">No address details added.</div>
+                  )}
                 </div>
                 {additionalAddresses.length ? (
                   <div className="mt-3 text-sm text-slate-700">

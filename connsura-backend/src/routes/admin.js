@@ -1,4 +1,4 @@
-const express = require('express')
+﻿const express = require('express')
 const bcrypt = require('bcrypt')
 const prisma = require('../prisma')
 const { adminGuard, ADMIN_AUTH_COOKIE } = require('../middleware/auth')
@@ -218,8 +218,61 @@ router.get('/email-otp', adminGuard, async (req, res) => {
 
 // Agents
 router.get('/agents', adminGuard, async (req, res) => {
-  const agents = await prisma.agent.findMany({ include: { user: true } })
-  res.json({ agents: agents.map(formatAgent) })
+  const query = String(req.query?.query || '').trim()
+  const statusRaw = String(req.query?.status || '').trim().toLowerCase()
+  const availabilityRaw = String(req.query?.availability || '').trim().toLowerCase()
+  const status = ['pending', 'approved', 'rejected', 'suspended'].includes(statusRaw) ? statusRaw : ''
+  const availability = ['online', 'busy', 'offline'].includes(availabilityRaw) ? availabilityRaw : ''
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 25), 200)
+  const page = parsePositiveInt(req.query?.page, 1)
+  const offsetParam = Number.parseInt(String(req.query?.offset || ''), 10)
+  const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit
+  const effectivePage =
+    Number.isFinite(offsetParam) && offsetParam >= 0 ? Math.floor(offset / limit) + 1 : page
+
+  const where = {
+    ...(status ? { status } : {}),
+    ...(availability ? { availability } : {}),
+  }
+
+  if (query) {
+    const numericId = Number(query)
+    const isNumeric = Number.isFinite(numericId)
+    const orFilters = []
+    if (isNumeric) {
+      orFilters.push({ id: numericId }, { userId: numericId })
+    }
+    orFilters.push(
+      { name: { contains: query, mode: 'insensitive' } },
+      { user: { email: { contains: query, mode: 'insensitive' } } }
+    )
+    where.OR = orFilters
+  }
+
+  const [total, rows] = await Promise.all([
+    prisma.agent.count({ where }),
+    prisma.agent.findMany({
+      where,
+      include: { user: true },
+      orderBy: { id: 'desc' },
+      skip: offset,
+      take: limit + 1,
+    }),
+  ])
+  const hasMore = rows.length > limit
+  const trimmed = rows.slice(0, limit)
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  res.json({
+    agents: trimmed.map(formatAgent),
+    page: effectivePage,
+    limit,
+    offset,
+    total,
+    totalPages,
+    hasMore,
+    nextPage: hasMore ? effectivePage + 1 : null,
+    nextOffset: hasMore ? offset + limit : null,
+  })
 })
 
 router.get('/agents/:id', adminGuard, async (req, res) => {
@@ -330,8 +383,59 @@ router.delete('/agents/:id', adminGuard, async (req, res) => {
 
 // Customers
 router.get('/clients', adminGuard, async (req, res) => {
-  const customers = await prisma.customer.findMany({ include: { user: true } })
-  res.json({ clients: customers.map(formatCustomer) })
+  const query = String(req.query?.query || '').trim()
+  const statusRaw = String(req.query?.status || '').trim().toLowerCase()
+  const status = statusRaw === 'disabled' ? 'disabled' : statusRaw === 'active' ? 'active' : ''
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 25), 200)
+  const page = parsePositiveInt(req.query?.page, 1)
+  const offsetParam = Number.parseInt(String(req.query?.offset || ''), 10)
+  const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit
+  const effectivePage =
+    Number.isFinite(offsetParam) && offsetParam >= 0 ? Math.floor(offset / limit) + 1 : page
+
+  const where = {
+    ...(status === 'disabled' ? { isDisabled: true } : {}),
+    ...(status === 'active' ? { isDisabled: false } : {}),
+  }
+
+  if (query) {
+    const numericId = Number(query)
+    const isNumeric = Number.isFinite(numericId)
+    const orFilters = []
+    if (isNumeric) {
+      orFilters.push({ id: numericId }, { userId: numericId })
+    }
+    orFilters.push(
+      { name: { contains: query, mode: 'insensitive' } },
+      { user: { email: { contains: query, mode: 'insensitive' } } }
+    )
+    where.OR = orFilters
+  }
+
+  const [total, rows] = await Promise.all([
+    prisma.customer.count({ where }),
+    prisma.customer.findMany({
+      where,
+      include: { user: true },
+      orderBy: { id: 'desc' },
+      skip: offset,
+      take: limit + 1,
+    }),
+  ])
+  const hasMore = rows.length > limit
+  const trimmed = rows.slice(0, limit)
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  res.json({
+    clients: trimmed.map(formatCustomer),
+    page: effectivePage,
+    limit,
+    offset,
+    total,
+    totalPages,
+    hasMore,
+    nextPage: hasMore ? effectivePage + 1 : null,
+    nextOffset: hasMore ? offset + limit : null,
+  })
 })
 
 router.get('/clients/:id', adminGuard, async (req, res) => {
@@ -1130,3 +1234,5 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
 })
 
 module.exports = router
+
+
