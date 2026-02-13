@@ -3,6 +3,7 @@ import { allOccupations, occupationMap } from '../data/occupationMap'
 import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
 import { getStoredToken } from '../utils/authStorage'
+import Modal from '../components/ui/Modal'
 
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
@@ -713,8 +714,10 @@ export default function CreateProfile({
   const prefillKeyRef = useRef('')
   const formsPayloadRef = useRef(null)
   const lastSavedSerializedRef = useRef(null)
+  const lastSavedFormsRef = useRef(null)
   const notificationTimerRef = useRef(null)
   const [notification, setNotification] = useState(null)
+  const [unsavedPrompt, setUnsavedPrompt] = useState({ open: false, saving: false, onYes: null, onNo: null })
   const baseAdditionalQuestionKeysRef = useRef([])
   const sectionProductIdsRef = useRef({ household: '', address: '' })
   const suppressModeResetRef = useRef(false)
@@ -1041,7 +1044,15 @@ export default function CreateProfile({
     return {}
   }
 
+  const resolveFormsOverride = (value) => {
+    if (value && typeof value === 'object' && 'nativeEvent' in value) {
+      return undefined
+    }
+    return value
+  }
+
   const handleHouseholdSaveContinue = async (formsOverride, options = {}) => {
+    const resolvedOverride = resolveFormsOverride(formsOverride)
     if (householdSaving) return
     setHouseholdSaving(true)
     const wasComplete = householdComplete
@@ -1054,7 +1065,7 @@ export default function CreateProfile({
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
         saveResult = await onSectionSave({
           section: householdSectionName,
           nextSection: addressSectionName,
@@ -1068,7 +1079,7 @@ export default function CreateProfile({
       setHouseholdSaving(false)
       return false
     }
-    const payloadForNotification = formsOverride || formsPayloadRef.current
+    const payloadForNotification = resolvedOverride || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -1090,6 +1101,7 @@ export default function CreateProfile({
   }
 
   const handleAddressSaveContinue = async (formsOverride, options = {}) => {
+    const resolvedOverride = resolveFormsOverride(formsOverride)
     if (addressSaving) return
     setAddressSaving(true)
     const errors = validateAddress()
@@ -1101,7 +1113,7 @@ export default function CreateProfile({
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
         saveResult = await onSectionSave({
           section: addressSectionName,
           nextSection: additionalSectionName,
@@ -1115,7 +1127,7 @@ export default function CreateProfile({
       setAddressSaving(false)
       return false
     }
-    const payloadForNotification = formsOverride || formsPayloadRef.current
+    const payloadForNotification = resolvedOverride || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -1133,6 +1145,7 @@ export default function CreateProfile({
   }
 
   const handleAdditionalSaveContinue = async (formsOverride, options = {}) => {
+    const resolvedOverride = resolveFormsOverride(formsOverride)
     if (additionalSaving && !options.skipSaving) return
     if (!options.skipSaving) {
       setAdditionalSaving(true)
@@ -1146,7 +1159,7 @@ export default function CreateProfile({
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
         saveResult = await onSectionSave({
           section: additionalSectionName,
           nextSection: additionalSectionName,
@@ -1160,7 +1173,7 @@ export default function CreateProfile({
       setAdditionalSaving(false)
       return false
     }
-    const payloadForNotification = formsOverride || formsPayloadRef.current
+    const payloadForNotification = resolvedOverride || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -1831,16 +1844,14 @@ export default function CreateProfile({
     startNewAdditionalForm()
   }, [onMobileEditNavigate, isMobile, isEditScreen])
 
-  const handleEditBack = async (options = {}) => {
-    if (!isEditScreen || options.skipAutoSave) {
-      navigateBack()
-      return
-    }
-    const choice = getSaveChoice()
-    if (choice === 'discard' || choice === 'none') {
-      navigateBack()
-      return
-    }
+  const saveAndContinueCurrentSection = useCallback(async () => {
+    if (activeSection === 'household') return handleHouseholdSaveContinue()
+    if (activeSection === 'address') return handleAddressSaveContinue()
+    if (activeSection === 'additional') return handleAdditionalSaveContinue()
+    return true
+  }, [activeSection, handleHouseholdSaveContinue, handleAddressSaveContinue, handleAdditionalSaveContinue])
+
+  const saveEditSectionAndNavigateBack = async () => {
     if (editSection === 'household') {
       if (showAddHouseholdModal) {
         if (!hasNonEmptyValue(newHousehold)) {
@@ -1921,6 +1932,21 @@ export default function CreateProfile({
     navigateBack()
   }
 
+  const handleEditBack = async (options = {}) => {
+    if (!isEditScreen || options.skipAutoSave) {
+      navigateBack()
+      return
+    }
+    if (!hasUnsavedChanges()) {
+      navigateBack()
+      return
+    }
+    requestUnsavedPrompt({
+      onYes: saveEditSectionAndNavigateBack,
+      onNo: navigateBack,
+    })
+  }
+
   const startKeyRef = useRef(null)
 
   useEffect(() => {
@@ -1962,16 +1988,6 @@ export default function CreateProfile({
       }
     }
   }, [editSection, editContext, openSection, editAdditionalForm])
-
-  useEffect(() => {
-    const handlePopState = (event) => {
-      const section = event.state?.clientFormSection
-      if (!section) return
-      openSection(section, { pushHistory: false })
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [openSection])
 
   useEffect(() => {
     if (!additionalEditing) return
@@ -2565,12 +2581,136 @@ export default function CreateProfile({
     serializeForms,
   ])
 
-  const getSaveChoice = useCallback(() => {
-    if (typeof window === 'undefined') return 'discard'
-    if (!hasUnsavedChanges()) return 'none'
-    const wantsSave = window.confirm('do you want to save changes?')
-    return wantsSave ? 'save' : 'discard'
-  }, [hasUnsavedChanges])
+  const openUnsavedPrompt = useCallback(
+    ({ onYes, onNo }) => {
+      setUnsavedPrompt((prev) => {
+        if (prev.open) return prev
+        return { open: true, saving: false, onYes, onNo }
+      })
+    },
+    [setUnsavedPrompt]
+  )
+
+  const requestUnsavedPrompt = useCallback(
+    ({ onYes, onNo }) => {
+      if (!hasUnsavedChanges()) {
+        if (typeof onNo === 'function') onNo()
+        return
+      }
+      openUnsavedPrompt({ onYes, onNo })
+    },
+    [hasUnsavedChanges, openUnsavedPrompt]
+  )
+
+  const closeUnsavedPrompt = useCallback(() => {
+    setUnsavedPrompt({ open: false, saving: false, onYes: null, onNo: null })
+  }, [])
+
+  const cloneFormsPayload = useCallback((payload) => {
+    if (!payload) return payload
+    if (typeof structuredClone === 'function') {
+      return structuredClone(payload)
+    }
+    return JSON.parse(JSON.stringify(payload))
+  }, [])
+
+  const applyFormsSnapshot = useCallback(
+    (snapshot) => {
+      if (!snapshot) return
+      const household = snapshot.household || {}
+      const address = snapshot.address || {}
+      const additional = snapshot.additional || {}
+      const customFields = snapshot.customFields || {}
+      setNamedInsured((prev) => ({
+        ...prev,
+        ...(household.namedInsured || {}),
+        relation: household.namedInsured?.relation || prev.relation || defaultApplicantRelation,
+      }))
+      setAdditionalHouseholds(Array.isArray(household.additionalHouseholds) ? household.additionalHouseholds : [])
+      const nextContacts =
+        Array.isArray(address.contacts) && address.contacts.length ? address.contacts : [createContact()]
+      setContacts(nextContacts)
+      setResidential(address.residential || { address1: '', city: '', state: '', zip: '' })
+      setMailing(address.mailing || { address1: '', city: '', state: '', zip: '' })
+      setAdditionalAddresses(Array.isArray(address.additionalAddresses) ? address.additionalAddresses : [])
+      setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
+      setCustomFieldValues({
+        household: customFields.household || {},
+        address: customFields.address || {},
+        additional: customFields.additional || {},
+      })
+      setHouseholdErrors({})
+      setAddressErrors({})
+      setAdditionalErrors({})
+      setShowAddHouseholdModal(false)
+      setShowAddAddressModal(false)
+      setNewHousehold(createHouseholdMember())
+      setNewAddress(createAddressEntry())
+    },
+    [createAddressEntry, createContact, createHouseholdMember]
+  )
+
+  const discardUnsavedChanges = useCallback(() => {
+    const snapshot = lastSavedFormsRef.current
+    if (!snapshot) return
+    const cloned = cloneFormsPayload(snapshot)
+    applyFormsSnapshot(cloned)
+    formsPayloadRef.current = cloned
+    lastSavedSerializedRef.current = serializeForms(snapshot)
+    if (typeof onFormDataChange === 'function') {
+      onFormDataChange(cloned)
+    }
+  }, [applyFormsSnapshot, cloneFormsPayload, serializeForms, onFormDataChange])
+
+  const handleUnsavedNo = useCallback(() => {
+    discardUnsavedChanges()
+    const onNo = unsavedPrompt.onNo
+    closeUnsavedPrompt()
+    if (typeof onNo === 'function') onNo()
+  }, [unsavedPrompt.onNo, closeUnsavedPrompt, discardUnsavedChanges])
+
+  const handleUnsavedYes = useCallback(async () => {
+    const onYes = unsavedPrompt.onYes
+    if (typeof onYes !== 'function') {
+      closeUnsavedPrompt()
+      return
+    }
+    setUnsavedPrompt((prev) => ({ ...prev, saving: true }))
+    const result = await onYes()
+    if (result === false) {
+      setUnsavedPrompt((prev) => ({ ...prev, saving: false }))
+      return
+    }
+    closeUnsavedPrompt()
+  }, [unsavedPrompt.onYes, closeUnsavedPrompt])
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const section = event.state?.clientFormSection
+      if (!section) return
+      if (!hasUnsavedChanges()) {
+        openSection(section, { pushHistory: false })
+        return
+      }
+      if (typeof window !== 'undefined') {
+        const currentSection = sectionHistoryRef.current || activeSection || section
+        window.history.pushState({ clientFormSection: currentSection }, '')
+        sectionHistoryRef.current = currentSection
+      }
+      requestUnsavedPrompt({
+        onYes: saveAndContinueCurrentSection,
+        onNo: () => {
+          openSection(section, { pushHistory: false })
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({ clientFormSection: section }, '')
+            sectionHistoryRef.current = section
+          }
+        },
+      })
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [openSection, hasUnsavedChanges, requestUnsavedPrompt, saveAndContinueCurrentSection, activeSection])
 
   const showNotification = useCallback((message) => {
     setNotification({ message })
@@ -2590,9 +2730,10 @@ export default function CreateProfile({
         showNotification('Changes saved.')
       }
       lastSavedSerializedRef.current = serialized
+      lastSavedFormsRef.current = cloneFormsPayload(payload)
       return serialized
     },
-    [serializeForms, showNotification]
+    [serializeForms, showNotification, cloneFormsPayload]
   )
 
   const saveSectionWithNotification = useCallback(
@@ -2615,19 +2756,6 @@ export default function CreateProfile({
     [onSectionSave, resolveSectionName, buildFormsPayload, notifySaveIfChanged, showNotification]
   )
 
-  const handleCancelWithPrompt = useCallback(
-    async ({ onSave, onDiscard }) => {
-      const choice = getSaveChoice()
-      if (choice === 'none' || choice === 'discard') {
-        if (typeof onDiscard === 'function') onDiscard()
-        return
-      }
-      const saveResult = typeof onSave === 'function' ? await onSave() : true
-      if (saveResult === false) return
-      if (typeof onDiscard === 'function') onDiscard()
-    },
-    [getSaveChoice]
-  )
 
   useEffect(() => {
     if (!hydrated) return
@@ -2635,6 +2763,7 @@ export default function CreateProfile({
     formsPayloadRef.current = formsPayload
     if (lastSavedSerializedRef.current === null) {
       lastSavedSerializedRef.current = serializeForms(formsPayload)
+      lastSavedFormsRef.current = cloneFormsPayload(formsPayload)
     }
     if (typeof onFormDataChange === 'function') {
       onFormDataChange(formsPayload)
@@ -2727,6 +2856,17 @@ export default function CreateProfile({
   return (
     <main className={`min-h-full ${isEditScreen && isMobile ? 'overflow-hidden' : ''}`}>
       <div className={`min-h-full w-full border border-slate-300 bg-white ${containerPadding} ${editSlideClass}`}>
+        <Modal title="Save changes?" open={unsavedPrompt.open} onClose={handleUnsavedNo} showClose={false} panelClassName="max-w-sm">
+          <div className="text-sm text-slate-700">Do you want to save your changes?</div>
+          <div className="mt-5 flex justify-end gap-3">
+            <button type="button" className={miniButton} onClick={handleUnsavedNo} disabled={unsavedPrompt.saving}>
+              No
+            </button>
+            <button type="button" className={nextButton} onClick={handleUnsavedYes} disabled={unsavedPrompt.saving}>
+              {unsavedPrompt.saving ? 'Saving...' : 'Yes'}
+            </button>
+          </div>
+        </Modal>
         {notification && (
           <div className="sticky top-0 z-20 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             <div className="font-semibold">{notification.message}</div>
@@ -2841,8 +2981,8 @@ export default function CreateProfile({
                             handleEditBack()
                             return
                           }
-                          handleCancelWithPrompt({
-                            onSave: async () => {
+                          requestUnsavedPrompt({
+                            onYes: async () => {
                               const nextAdditionalHouseholds = [...additionalHouseholds, newHousehold]
                               const formsPayload = buildFormsPayload({
                                 additionalHouseholds: nextAdditionalHouseholds,
@@ -2857,7 +2997,7 @@ export default function CreateProfile({
                               setHouseholdEditing(false)
                               return true
                             },
-                            onDiscard: () => {
+                            onNo: () => {
                               setShowAddHouseholdModal(false)
                               setNewHousehold(createHouseholdMember())
                             },
@@ -2921,9 +3061,9 @@ export default function CreateProfile({
                             handleEditBack()
                             return
                           }
-                          handleCancelWithPrompt({
-                            onSave: async () => saveSectionWithNotification('household'),
-                            onDiscard: () => {
+                          requestUnsavedPrompt({
+                            onYes: async () => handleHouseholdSaveContinue(),
+                            onNo: () => {
                               if (householdComplete) {
                                 setHouseholdEditing(false)
                               } else {
@@ -3139,8 +3279,8 @@ export default function CreateProfile({
                             handleEditBack()
                             return
                           }
-                          handleCancelWithPrompt({
-                            onSave: async () => {
+                          requestUnsavedPrompt({
+                            onYes: async () => {
                               const nextAdditionalAddresses = [...additionalAddresses, newAddress]
                               const formsPayload = buildFormsPayload({
                                 additionalAddresses: nextAdditionalAddresses,
@@ -3155,7 +3295,7 @@ export default function CreateProfile({
                               setAddressEditing(false)
                               return true
                             },
-                            onDiscard: () => {
+                            onNo: () => {
                               setShowAddAddressModal(false)
                               setNewAddress(createAddressEntry())
                             },
@@ -3284,9 +3424,9 @@ export default function CreateProfile({
                             handleEditBack()
                             return
                           }
-                          handleCancelWithPrompt({
-                            onSave: async () => saveSectionWithNotification('address'),
-                            onDiscard: () => {
+                          requestUnsavedPrompt({
+                            onYes: async () => handleAddressSaveContinue(),
+                            onNo: () => {
                               if (addressComplete) {
                                 setAddressEditing(false)
                               } else {
@@ -3594,9 +3734,9 @@ export default function CreateProfile({
                             handleEditBack()
                             return
                           }
-                          handleCancelWithPrompt({
-                            onSave: async () => handleAdditionalFormSave({ skipNavigate: true }),
-                            onDiscard: () => {
+                          requestUnsavedPrompt({
+                            onYes: async () => handleAdditionalFormSave(),
+                            onNo: () => {
                               if (additionalComplete) {
                                 setAdditionalEditing(false)
                               } else {
