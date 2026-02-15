@@ -3,6 +3,7 @@ import { allOccupations, occupationMap } from '../data/occupationMap'
 import { useAuth } from '../context/AuthContext'
 import { API_URL } from '../services/api'
 import { getStoredToken } from '../utils/authStorage'
+import { reportError } from '../utils/errorReporting'
 import Modal from '../components/ui/Modal'
 
 const labelClass = 'text-sm text-slate-900'
@@ -16,117 +17,6 @@ const miniButton = 'pill-btn-ghost px-3 py-1.5 text-xs'
 const tabButton = 'pill-btn-ghost px-2 py-1 text-sm'
 const defaultSelectPlaceholder = '- Please Select -'
 
-const genderOptions = ['Male', 'Female']
-const maritalStatusOptions = ['Single', 'Married', 'Divorced', 'Legally Separated', 'Living apart from Spouse']
-const driverStatusOptions = [
-  'Rated',
-  'Under 19 Permit Driver',
-  'Under 21 Never Licensed',
-  '21+ Never Licensed/Surrendered',
-  'Revoked License',
-  'Other Insurance',
-  'Military deployed spouse',
-]
-const driversLicenseTypeOptions = [
-  'Personal Auto',
-  'Commercial Vehicle/Business (non-chauffeur)',
-  'Chauffeur/Passenger Transport',
-  'Permit',
-  'Not Licensed/State ID',
-]
-const licenseStatusOptions = ['Valid', 'Suspended', 'Revoked', 'Expired', 'Other']
-const yearsLicensedOptions = ['3 or more', '2', '1', '0 - 12 months']
-const licenseStateOptions = [
-  'Virginia',
-  'Alabama',
-  'Alaska',
-  'Arizona',
-  'Arkansas',
-  'California',
-  'Colorado',
-  'Connecticut',
-  'Delaware',
-  'District of Columbia',
-  'Florida',
-  'Georgia',
-  'Hawaii',
-  'Idaho',
-  'Illinois',
-  'Indiana',
-  'Iowa',
-  'Kansas',
-  'Kentucky',
-  'Louisiana',
-  'Maine',
-  'Maryland',
-  'Massachusetts',
-  'Michigan',
-  'Minnesota',
-  'Mississippi',
-  'Missouri',
-  'Montana',
-  'Nebraska',
-  'Nevada',
-  'New Hampshire',
-  'New Jersey',
-  'New Mexico',
-  'New York',
-  'North Carolina',
-  'North Dakota',
-  'Ohio',
-  'Oklahoma',
-  'Oregon',
-  'Pennsylvania',
-  'Rhode Island',
-  'South Carolina',
-  'South Dakota',
-  'Tennessee',
-  'Texas',
-  'Utah',
-  'Vermont',
-  'Washington',
-  'West Virginia',
-  'Wisconsin',
-  'Wyoming',
-  'Canada',
-  'Guam',
-  'Puerto Rico',
-  'Virgin Islands',
-  'Foreign Country',
-]
-const employmentOptions = [
-  'Agriculture/Forestry/Fishing',
-  'Art/Design/Media',
-  'Banking/Finance/Real Estate',
-  'Business/Sales/Office',
-  'Construction / Energy / Mining',
-  'Education/Library',
-  'Engineer/Architect/Science/Math',
-  'Food Service / Hotel Services',
-  'Government/Military',
-  'Homemaker (full-time)',
-  'Information Technology',
-  'Insurance',
-  'Legal/Law Enforcement/Security',
-  'Medical/Social Services/Religion',
-  'Personal Care/Service',
-  'Production / Manufacturing',
-  'Repair / Maintenance / Grounds',
-  'Retired (full-time)',
-  'Sports/Recreation',
-  'Student (full-time)',
-  'Travel / Transportation / Storage',
-  'Unemployed',
-]
-const educationLevelOptions = [
-  'No high school diploma or GED',
-  'High school diploma or GED',
-  'Vocational or trade school degree',
-  'Some college',
-  'Currently in college',
-  'College degree',
-  'Graduate degree',
-]
 const yesNoOptions = ['No', 'Yes']
 const relationToApplicantOptions = ['Named Insured', 'Spouse', 'Child', 'Parent', 'Dependent', 'Other']
 const defaultApplicantRelation = 'Named Insured'
@@ -162,120 +52,6 @@ const sectionQuestionProductNames = {
   address: 'Address Information',
 }
 const sectionQuestionProductSlugSet = new Set(Object.values(sectionQuestionProductSlugs))
-
-const baseHouseholdFields = [
-  { id: 'ni-first-name', key: 'first-name', label: 'First Name' },
-  { id: 'ni-middle-initial', key: 'middle-initial', label: 'Middle Initial' },
-  { id: 'ni-last-name', key: 'last-name', label: 'Last Name' },
-  { id: 'ni-suffix', key: 'suffix', label: 'Suffix' },
-  { id: 'ni-dob', key: 'dob', label: 'Date of Birth', type: 'date' },
-  { id: 'ni-gender', key: 'gender', label: 'Gender', options: genderOptions },
-  { id: 'ni-marital-status', key: 'marital-status', label: 'Marital Status', options: maritalStatusOptions },
-  { id: 'ni-education-level', key: 'education-level', label: 'Education Level', options: educationLevelOptions },
-  { id: 'ni-employment', key: 'employment', label: 'Employment', options: employmentOptions },
-  { id: 'ni-occupation', key: 'occupation', label: 'Occupation' },
-  { id: 'ni-driver-status', key: 'driver-status', label: 'Driver Status', options: driverStatusOptions },
-  { id: 'ni-license-type', key: 'license-type', label: "Driver's License Type", options: driversLicenseTypeOptions },
-  { id: 'ni-license-status', key: 'license-status', label: 'License Status', options: licenseStatusOptions },
-  { id: 'ni-years-licensed', key: 'years-licensed', label: 'Years Licensed', options: yearsLicensedOptions },
-  { id: 'ni-license-state', key: 'license-state', label: 'License State', options: licenseStateOptions },
-  { id: 'ni-license-number', key: 'license-number', label: 'License Number' },
-  { id: 'ni-accident-prevention', key: 'accident-prevention', label: 'Accident Prevention Course', options: yesNoOptions },
-  { id: 'ni-sr22', key: 'sr22', label: 'SR-22 Required?', options: yesNoOptions },
-  { id: 'ni-fr44', key: 'fr44', label: 'FR-44 Required?', options: yesNoOptions },
-]
-
-const baseContactFields = [
-  { id: 'phone1', label: 'Phone #1', type: 'tel' },
-  { id: 'phone2', label: 'Phone #2', type: 'tel' },
-  { id: 'email1', label: 'Email Address #1', type: 'email' },
-  { id: 'email2', label: 'Email Address #2', type: 'email' },
-]
-
-const baseResidentialFields = [
-  { id: 'addressType', label: 'Address Type', type: 'select' },
-  { id: 'address1', label: 'Street Address 1' },
-  { id: 'address2', label: 'Street Address 2' },
-  { id: 'city', label: 'City' },
-  { id: 'state', label: 'State' },
-  { id: 'zip', label: 'Zip Code' },
-]
-
-const baseMailingFields = [
-  { id: 'address1', label: 'Street Address 1' },
-  { id: 'address2', label: 'Street Address 2' },
-  { id: 'city', label: 'City' },
-  { id: 'state', label: 'State' },
-  { id: 'zip', label: 'Zip Code' },
-]
-
-const baseAddressTypeOptions = ['Secondary Home', 'Rental Property']
-
-const buildDefaultSchema = () => ({
-  sections: {
-    household: {
-      label: 'Household Information',
-      fields: baseHouseholdFields.map((field) => ({
-        id: field.key,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      customFields: [],
-    },
-    address: {
-      label: 'Address Information',
-      contactFields: baseContactFields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      addressTypes: [...baseAddressTypeOptions],
-      residentialFields: baseResidentialFields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      mailingFields: baseMailingFields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        type: field.type || 'text',
-        visible: true,
-      })),
-      customFields: [],
-    },
-    additional: {
-      label: 'Additional Information',
-      customFields: [],
-    },
-  },
-})
-
-const applySchemaFields = (baseFields, schemaFields = [], getId = (field) => field.id) => {
-  const removedIds = new Set(schemaFields.filter((field) => field.removed).map((field) => field.id))
-  const schemaMap = new Map(schemaFields.map((field) => [field.id, field]))
-  const mapped = baseFields
-    .filter((field) => !removedIds.has(getId(field)))
-    .map((field) => {
-      const schemaField = schemaMap.get(getId(field))
-      return {
-        ...field,
-        label: schemaField?.label || field.label,
-        visible: schemaField?.visible !== false,
-      }
-    })
-  if (!schemaFields.length) {
-    return mapped.filter((field) => field.visible)
-  }
-  const ordered = schemaFields
-    .filter((field) => !field.removed)
-    .map((field) => mapped.find((item) => getId(item) === field.id))
-    .filter(Boolean)
-  const remaining = mapped.filter((field) => !schemaMap.has(getId(field)))
-  return [...ordered, ...remaining].filter((field) => field.visible)
-}
 
 function FieldRow({ id, label, type = 'text', value, onChange, placeholder, options, disabled }) {
   const inputProps = value === undefined ? {} : { value, onChange }
@@ -577,10 +353,6 @@ const resolveQuestionConfigWithFallback = (question, fallback) => {
 const buildQuestionCustomKey = (prefix, normalized) =>
   prefix ? `qb-${prefix}-${normalized}` : `qb-${normalized}`
 
-const householdFieldByLabel = new Map(
-  baseHouseholdFields.map((field) => [normalizeQuestionText(field.label), field])
-)
-const householdLabelByKey = new Map(baseHouseholdFields.map((field) => [field.key, normalizeQuestionText(field.label)]))
 const householdRelationLabelSet = new Set([
   normalizeQuestionText('Relation To Applicant'),
   normalizeQuestionText('Relation to applicant'),
@@ -642,9 +414,13 @@ export default function CreateProfile({
   onEditBack,
 }) {
   const { user } = useAuth()
-  const [formSchema, setFormSchema] = useState(() => buildDefaultSchema())
+  const [formSchema, setFormSchema] = useState(null)
   const [products, setProducts] = useState([])
   const [sectionBankQuestions, setSectionBankQuestions] = useState({ household: [], address: [] })
+  const [householdQuestionsError, setHouseholdQuestionsError] = useState('')
+  const householdQuestionsErrorReportedRef = useRef(false)
+  const [addressQuestionsError, setAddressQuestionsError] = useState('')
+  const addressQuestionsErrorReportedRef = useRef(false)
   const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
   const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
   const createAddressEntry = () => ({
@@ -775,7 +551,33 @@ export default function CreateProfile({
   }
 
   const loadSectionQuestions = async (sectionKey, productId) => {
-    if (!productId) return
+    if (!productId) {
+      if (sectionKey === 'household') {
+        const message = 'something went wrong please try again later'
+        setHouseholdQuestionsError(message)
+        if (!householdQuestionsErrorReportedRef.current) {
+          householdQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Household questions product not found',
+            metadata: { sectionKey, productId: null },
+          })
+        }
+      }
+      if (sectionKey === 'address') {
+        const message = 'something went wrong please try again later'
+        setAddressQuestionsError(message)
+        if (!addressQuestionsErrorReportedRef.current) {
+          addressQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Address questions product not found',
+            metadata: { sectionKey, productId: null },
+          })
+        }
+      }
+      return
+    }
     try {
       const token = getStoredToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
@@ -783,7 +585,33 @@ export default function CreateProfile({
         headers,
         credentials: 'include',
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        if (sectionKey === 'household') {
+          const message = 'something went wrong please try again later'
+          setHouseholdQuestionsError(message)
+          if (!householdQuestionsErrorReportedRef.current) {
+            householdQuestionsErrorReportedRef.current = true
+            reportError({
+              source: 'create-profile',
+              message: 'Household questions request failed',
+              metadata: { sectionKey, productId, status: res.status },
+            })
+          }
+        }
+        if (sectionKey === 'address') {
+          const message = 'something went wrong please try again later'
+          setAddressQuestionsError(message)
+          if (!addressQuestionsErrorReportedRef.current) {
+            addressQuestionsErrorReportedRef.current = true
+            reportError({
+              source: 'create-profile',
+              message: 'Address questions request failed',
+              metadata: { sectionKey, productId, status: res.status },
+            })
+          }
+        }
+        return
+      }
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
       const systemOnly = bankQuestions.filter((question) => question?.source === 'SYSTEM' || !question?.source)
@@ -795,12 +623,66 @@ export default function CreateProfile({
           selectOptions: normalizeSelectOptionsList(question?.selectOptions),
         }))
         .filter((entry) => entry.key)
+      if (sectionKey === 'household' && normalized.length === 0) {
+        const message = 'something went wrong please try again later'
+        setHouseholdQuestionsError(message)
+        if (!householdQuestionsErrorReportedRef.current) {
+          householdQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Household questions missing or empty',
+            metadata: { sectionKey, productId },
+          })
+        }
+      } else if (sectionKey === 'household') {
+        setHouseholdQuestionsError('')
+      }
+      if (sectionKey === 'address' && normalized.length === 0) {
+        const message = 'something went wrong please try again later'
+        setAddressQuestionsError(message)
+        if (!addressQuestionsErrorReportedRef.current) {
+          addressQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Address questions missing or empty',
+            metadata: { sectionKey, productId },
+          })
+        }
+      } else if (sectionKey === 'address') {
+        setAddressQuestionsError('')
+      }
       setSectionBankQuestions((prev) => ({
         ...prev,
         [sectionKey]: normalized,
       }))
     } catch (error) {
       console.warn(`Failed to load ${sectionKey} question bank`, error)
+      if (sectionKey === 'household') {
+        const message = 'something went wrong please try again later'
+        setHouseholdQuestionsError(message)
+        if (!householdQuestionsErrorReportedRef.current) {
+          householdQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Household questions load exception',
+            stack: error?.stack,
+            metadata: { sectionKey, productId },
+          })
+        }
+      }
+      if (sectionKey === 'address') {
+        const message = 'something went wrong please try again later'
+        setAddressQuestionsError(message)
+        if (!addressQuestionsErrorReportedRef.current) {
+          addressQuestionsErrorReportedRef.current = true
+          reportError({
+            source: 'create-profile',
+            message: 'Address questions load exception',
+            stack: error?.stack,
+            metadata: { sectionKey, productId },
+          })
+        }
+      }
     }
   }
 
@@ -819,7 +701,7 @@ export default function CreateProfile({
         }
       } catch (error) {
         if (error.name !== 'AbortError') {
-          setFormSchema(buildDefaultSchema())
+          setFormSchema(null)
         }
       }
     }
@@ -979,32 +861,27 @@ export default function CreateProfile({
     'Homemaker (full-time)': ['Homemaker (full-time)'],
     'Unemployed': ['Unemployed'],
   }
-  const schema = formSchema || buildDefaultSchema()
+  const schema = formSchema || { sections: {} }
   const householdSchemaFields = schema.sections?.household?.fields || []
-  const residentialSchemaFields = schema.sections?.address?.residentialFields || []
-
-  const householdFields = applySchemaFields(baseHouseholdFields, householdSchemaFields, (field) => field.key)
-  const residentialFields = applySchemaFields(baseResidentialFields, residentialSchemaFields)
-  const orderedResidentialFields = (() => {
-    const fields = [...residentialFields]
-    const ordered = []
-    const preferredOrder = ['addressType', 'address1', 'address2']
-    const used = new Set()
-    preferredOrder.forEach((fieldId) => {
-      const match = fields.find((field) => field.id === fieldId)
-      if (match) {
-        ordered.push(match)
-        used.add(fieldId)
-      }
-    })
-    fields.forEach((field) => {
-      if (!used.has(field.id)) ordered.push(field)
-    })
-    return ordered
-  })()
+  const householdFieldByLabel = useMemo(() => {
+    const map = new Map()
+    householdSchemaFields
+      .filter((field) => !field?.removed && field?.visible !== false)
+      .forEach((field) => {
+        const normalized = normalizeQuestionText(field?.label || '')
+        if (!normalized) return
+        map.set(normalized, {
+          key: field.id,
+          label: field.label,
+          type: field.type || 'text',
+          options: field.options,
+        })
+      })
+    return map
+  }, [householdSchemaFields])
   const rawAddressTypeOptions = Array.isArray(schema.sections?.address?.addressTypes)
     ? schema.sections.address.addressTypes
-    : baseAddressTypeOptions
+    : []
   const addressTypeOptions = rawAddressTypeOptions
     .map((option) => String(option ?? '').trim())
     .filter(Boolean)
@@ -1014,6 +891,8 @@ export default function CreateProfile({
   const householdSectionName = 'Household Information'
   const addressSectionName = 'Address Information'
   const additionalSectionName = 'Additional Information'
+  const householdQuestionsUnavailable = Boolean(householdQuestionsError)
+  const addressQuestionsUnavailable = Boolean(addressQuestionsError)
   const navigateBack = useCallback(() => {
     if (typeof onEditBack === 'function') {
       onEditBack()
@@ -1266,22 +1145,6 @@ export default function CreateProfile({
       })
       .filter(Boolean)
 
-  const buildHouseholdFallbackRows = (person, setPerson, idPrefix) => [
-    {
-      id: `${idPrefix}-relation`,
-      label: 'Relation To Applicant',
-      type: 'select',
-      options: relationToApplicantOptions,
-      value: person.relation ?? '',
-      errorKey: 'relation',
-      onChange: (event) => setPerson((prev) => ({ ...prev, relation: event.target.value })),
-    },
-    ...buildHouseholdFields(person, setPerson, idPrefix).map((field) => ({
-      ...field,
-      errorKey: field.key || field.id,
-    })),
-  ]
-
   const buildHouseholdQuestionRows = (person, setPerson, idPrefix, valueKeyPrefix = '') => {
     const occupationOptionsForEmployment =
       specialEmploymentOccupations[person.employment] ||
@@ -1396,55 +1259,8 @@ export default function CreateProfile({
       })
       .filter(Boolean)
   }
-  const buildHouseholdFields = (person, setPerson, idPrefix) => {
-    const occupationOptionsForEmployment =
-      specialEmploymentOccupations[person.employment] ||
-      (occupationMap[person.employment]?.length ? occupationMap[person.employment] : allOccupations)
-    const isOccupationLocked = Boolean(specialEmploymentOccupations[person.employment])
 
-    const handleEmploymentChange = (event) => {
-      const nextEmployment = event.target.value
-      const nextOptions =
-        specialEmploymentOccupations[nextEmployment] ||
-        (occupationMap[nextEmployment]?.length ? occupationMap[nextEmployment] : allOccupations)
-      const nextOccupation = Array.isArray(nextOptions) && nextOptions.length === 1 ? nextOptions[0] : ''
-      setPerson((prev) => ({
-        ...prev,
-        employment: nextEmployment,
-        occupation: nextOptions.includes(prev.occupation) ? prev.occupation : nextOccupation,
-      }))
-    }
-
-    return householdFields.map((field) => {
-      const fieldKey = field.key
-      const fieldId = `${idPrefix}-${fieldKey}`
-      if (fieldKey === 'employment') {
-        return { ...field, id: fieldId, value: person.employment ?? '', onChange: handleEmploymentChange }
-      }
-      if (fieldKey === 'occupation') {
-        return {
-          ...field,
-          id: fieldId,
-          options: occupationOptionsForEmployment,
-          value: person.occupation ?? '',
-          disabled: isOccupationLocked,
-          onChange: (event) => setPerson((prev) => ({ ...prev, occupation: event.target.value })),
-        }
-      }
-      return {
-        ...field,
-        id: fieldId,
-        value: person[fieldKey] ?? '',
-        onChange: (event) => setPerson((prev) => ({ ...prev, [fieldKey]: event.target.value })),
-      }
-    })
-  }
-
-  const householdQuestionsAvailable = sectionBankQuestions.household.length > 0
-  const addressQuestionsAvailable = sectionBankQuestions.address.length > 0
-  const newHouseholdFields = householdQuestionsAvailable
-    ? buildHouseholdQuestionRows(newHousehold, setNewHousehold, 'hh-new', 'new')
-    : buildHouseholdFallbackRows(newHousehold, setNewHousehold, 'hh-new')
+  const newHouseholdFields = buildHouseholdQuestionRows(newHousehold, setNewHousehold, 'hh-new', 'new')
   const updateAdditionalHousehold = (index, updater) => {
     setAdditionalHouseholds((prev) => {
       const next = [...prev]
@@ -2061,15 +1877,12 @@ export default function CreateProfile({
         }
   const householdQuestionKeyPrefix =
     activeHouseholdIndex === 'primary' ? '' : `additional-${activeAdditionalIndex ?? activeHouseholdIndex}`
-  const activeHouseholdFieldRows = householdQuestionsAvailable
-    ? buildHouseholdQuestionRows(
-        activeHousehold.person,
-        activeHousehold.setPerson,
-        `${activeHousehold.idPrefix}-bank`,
-        householdQuestionKeyPrefix
-      )
-    : buildHouseholdFallbackRows(activeHousehold.person, activeHousehold.setPerson, activeHousehold.idPrefix)
-  const primaryContact = contacts[0] || createContact()
+  const activeHouseholdFieldRows = buildHouseholdQuestionRows(
+    activeHousehold.person,
+    activeHousehold.setPerson,
+    `${activeHousehold.idPrefix}-bank`,
+    householdQuestionKeyPrefix
+  )
   const primaryAddressLabel = 'Primary Address'
   const getAdditionalAddressLabel = (entry, index) => {
     const rawType = entry?.addressType || entry?.residential?.addressType || ''
@@ -2153,32 +1966,11 @@ export default function CreateProfile({
     return rows
   }
 
-  const buildAddressFallbackRows = () => {
-    const rows = orderedResidentialFields.map((field, index) => ({
-      type: 'field',
-      id: `addr-fallback-${field.id}-${index}`,
-      label: field.label,
-      fieldId: field.id,
-      fieldTarget: 'residential',
-      fieldType: field.type || 'text',
-      fieldOptions: field.id === 'addressType' ? addressTypeOptions : undefined,
-      errorKey: field.id,
-    }))
-    rows.push({
-      type: 'residents',
-      id: 'addr-fallback-residents',
-      label: 'Who lives in this address',
-      errorKey: 'residents',
-    })
-    return rows
-  }
-
-  const addressQuestionRows = addressQuestionsAvailable
-    ? buildAddressQuestionRows(sectionBankQuestions.address, activeAddressCustomKeyPrefix)
-    : buildAddressFallbackRows()
-  const newAddressQuestionRows = addressQuestionsAvailable
-    ? buildAddressQuestionRows(sectionBankQuestions.address, 'new')
-    : buildAddressFallbackRows()
+  const addressQuestionRows = buildAddressQuestionRows(
+    sectionBankQuestions.address,
+    activeAddressCustomKeyPrefix
+  )
+  const newAddressQuestionRows = buildAddressQuestionRows(sectionBankQuestions.address, 'new')
   const showHouseholdSection = activeSection === 'household' && isSectionAllowed('household')
   const showAddressSection = activeSection === 'address' && isSectionAllowed('address')
   const showHouseholdForm =
@@ -2326,70 +2118,74 @@ export default function CreateProfile({
     }))
   }
   const nameFieldKeys = new Set(['first-name', 'middle-initial', 'last-name', 'suffix'])
-  const householdQuestionFieldKeySet = (() => {
-    const set = new Set()
-    if (!householdQuestionsAvailable) return set
-    sectionBankQuestions.household.forEach((question) => {
-      const normalized = normalizeQuestionText(question?.text || '')
-      if (!normalized) return
-      const mappedField = householdFieldByLabel.get(normalized)
-      if (mappedField?.key) {
-        set.add(mappedField.key)
-      }
-    })
-    return set
-  })()
   const buildHouseholdDetails = (person, customKeyPrefix = '') => {
     const details = []
-    if (householdQuestionsAvailable) {
-      const seen = new Set()
-      sectionBankQuestions.household.forEach((question) => {
-        const label = (question?.text || '').toString().trim()
-        const normalized = normalizeQuestionText(label)
-        if (!label || !normalized || seen.has(normalized)) return
-        seen.add(normalized)
+    const seen = new Set()
+    sectionBankQuestions.household.forEach((question) => {
+      const label = (question?.text || '').toString().trim()
+      const normalized = normalizeQuestionText(label)
+      if (!label || !normalized || seen.has(normalized)) return
+      seen.add(normalized)
 
-        if (householdRelationLabelSet.has(normalized)) {
-          if (hasNonEmptyValue(person?.relation)) {
-            details.push({ label, value: person.relation })
-          }
-          return
+      if (householdRelationLabelSet.has(normalized)) {
+        if (hasNonEmptyValue(person?.relation)) {
+          details.push({ label, value: person.relation })
         }
+        return
+      }
 
-        const mappedField = householdFieldByLabel.get(normalized)
-        if (mappedField) {
-          if (nameFieldKeys.has(mappedField.key)) return
-          const value = person?.[mappedField.key]
-          if (hasNonEmptyValue(value)) {
-            details.push({ label, value })
-          }
-          return
-        }
-
-        const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-        const value = customFieldValues?.household?.[customKey]
+      const mappedField = householdFieldByLabel.get(normalized)
+      if (mappedField) {
+        if (nameFieldKeys.has(mappedField.key)) return
+        const value = person?.[mappedField.key]
         if (hasNonEmptyValue(value)) {
           details.push({ label, value })
         }
-      })
-      return details
-    }
+        return
+      }
 
-    if (hasNonEmptyValue(person?.relation)) {
-      details.push({ label: 'Relation to Applicant', value: person.relation })
-    }
-    householdFields.forEach((field) => {
-      const fieldKey = field.key
-      if (nameFieldKeys.has(fieldKey)) return
-      const value = person?.[fieldKey]
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const value = customFieldValues?.household?.[customKey]
       if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
+        details.push({ label, value })
       }
     })
     return details
   }
-  const buildHouseholdSummaryRows = (fullName) =>
-    fullName ? [{ label: 'Full Name', value: fullName }] : []
+  const buildHouseholdSummaryRows = (person, customKeyPrefix = '', limit = 4) => {
+    const summary = []
+    const seen = new Set()
+    sectionBankQuestions.household.forEach((question) => {
+      if (summary.length >= limit) return
+      const label = (question?.text || '').toString().trim()
+      const normalized = normalizeQuestionText(label)
+      if (!label || !normalized || seen.has(normalized)) return
+      seen.add(normalized)
+
+      if (householdRelationLabelSet.has(normalized)) {
+        if (hasNonEmptyValue(person?.relation)) {
+          summary.push({ label, value: person.relation })
+        }
+        return
+      }
+
+      const mappedField = householdFieldByLabel.get(normalized)
+      if (mappedField) {
+        const value = person?.[mappedField.key]
+        if (hasNonEmptyValue(value)) {
+          summary.push({ label, value })
+        }
+        return
+      }
+
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const value = customFieldValues?.household?.[customKey]
+      if (hasNonEmptyValue(value)) {
+        summary.push({ label, value })
+      }
+    })
+    return summary
+  }
   const getFirstName = (value) => {
     const trimmed = (value || '').toString().trim()
     if (!trimmed) return ''
@@ -2407,67 +2203,88 @@ export default function CreateProfile({
   }
   const buildAddressDetails = (residentialEntry, mailingEntry = {}, customKeyPrefix = '', fallbackAddressType = '') => {
     const details = []
-    if (addressQuestionsAvailable) {
-      const seen = new Set()
-      sectionBankQuestions.address.forEach((question) => {
-        const label = (question?.text || '').toString().trim()
-        const normalized = normalizeQuestionText(label)
-        if (!label || !normalized || seen.has(normalized)) return
-        seen.add(normalized)
+    const seen = new Set()
+    sectionBankQuestions.address.forEach((question) => {
+      const label = (question?.text || '').toString().trim()
+      const normalized = normalizeQuestionText(label)
+      if (!label || !normalized || seen.has(normalized)) return
+      seen.add(normalized)
 
-        if (normalized === addressResidentLabelKey) {
-          const residents = residentialEntry?.residents
-          if (hasNonEmptyValue(residents)) {
-            details.push({ label, value: formatResidentSummary(residents) })
-          }
-          return
+      if (normalized === addressResidentLabelKey) {
+        const residents = residentialEntry?.residents
+        if (hasNonEmptyValue(residents)) {
+          details.push({ label, value: formatResidentSummary(residents) })
         }
+        return
+      }
 
-        const mapped = addressFieldLabelMap.get(normalized)
-        if (mapped) {
-          const value =
-            mapped.fieldId === 'addressType'
-              ? residentialEntry?.addressType ?? fallbackAddressType ?? ''
-              : (mapped.target === 'mailing' ? mailingEntry : residentialEntry)?.[mapped.fieldId]
-          if (hasNonEmptyValue(value)) {
-            details.push({ label, value })
-          }
-          return
-        }
-
-        const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-        const value = customFieldValues?.address?.[customKey]
+      const mapped = addressFieldLabelMap.get(normalized)
+      if (mapped) {
+        const value =
+          mapped.fieldId === 'addressType'
+            ? residentialEntry?.addressType ?? fallbackAddressType ?? ''
+            : (mapped.target === 'mailing' ? mailingEntry : residentialEntry)?.[mapped.fieldId]
         if (hasNonEmptyValue(value)) {
           details.push({ label, value })
         }
-      })
-      return details
-    }
+        return
+      }
 
-    residentialFields.forEach((field) => {
-      if (field.id === 'addressType' || field.id === 'address2') return
-      const value = residentialEntry?.[field.id]
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const value = customFieldValues?.address?.[customKey]
       if (hasNonEmptyValue(value)) {
-        details.push({ label: field.label, value })
+        details.push({ label, value })
       }
     })
     return details
   }
-  const primaryFullName = buildFullName(namedInsured)
+  const buildAddressSummaryRows = (
+    residentialEntry,
+    mailingEntry = {},
+    customKeyPrefix = '',
+    fallbackAddressType = '',
+    limit = 4
+  ) => {
+    const summary = []
+    const seen = new Set()
+    sectionBankQuestions.address.forEach((question) => {
+      if (summary.length >= limit) return
+      const label = (question?.text || '').toString().trim()
+      const normalized = normalizeQuestionText(label)
+      if (!label || !normalized || seen.has(normalized)) return
+      seen.add(normalized)
+
+      if (normalized === addressResidentLabelKey) {
+        const residents = residentialEntry?.residents
+        if (hasNonEmptyValue(residents)) {
+          summary.push({ label, value: formatResidentSummary(residents) })
+        }
+        return
+      }
+
+      const mapped = addressFieldLabelMap.get(normalized)
+      if (mapped) {
+        const value =
+          mapped.fieldId === 'addressType'
+            ? residentialEntry?.addressType ?? fallbackAddressType ?? ''
+            : (mapped.target === 'mailing' ? mailingEntry : residentialEntry)?.[mapped.fieldId]
+        if (hasNonEmptyValue(value)) {
+          summary.push({ label, value })
+        }
+        return
+      }
+
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const value = customFieldValues?.address?.[customKey]
+      if (hasNonEmptyValue(value)) {
+        summary.push({ label, value })
+      }
+    })
+    return summary
+  }
   const summaryValue = (value) => (value ? value : '-')
-  const householdFieldKeySet = householdQuestionsAvailable
-    ? householdQuestionFieldKeySet
-    : new Set(householdFields.map((field) => field.key))
-  const hasNameFieldsInSchema = householdQuestionsAvailable
-    ? Array.from(householdQuestionFieldKeySet).some((key) => nameFieldKeys.has(key))
-    : householdFields.some((field) => nameFieldKeys.has(field.key))
-  const primarySummaryRows = [
-    ...(hasNameFieldsInSchema ? [{ label: 'Full Name', value: primaryFullName }] : []),
-    { label: 'Phone', value: primaryContact?.phone1 || '' },
-    { label: 'Email', value: primaryContact?.email1 || '' },
-    ...buildHouseholdDetails(namedInsured, ''),
-  ]
-  const primaryAddressSummaryRows = buildAddressDetails(residential, mailing, '', residential?.addressType ?? '')
+  const primarySummaryRows = buildHouseholdSummaryRows(namedInsured, '', 4)
+  const primaryAddressSummaryRows = buildAddressSummaryRows(residential, mailing, '', residential?.addressType ?? '', 4)
   const formatDriverSelection = (value) => {
     if (!Array.isArray(value)) {
       return typeof value === 'string' && value.trim() ? value : '-'
@@ -2771,9 +2588,9 @@ export default function CreateProfile({
     if (typeof onShareSnapshotChange !== 'function') return
     const buildSharePerson = (person, label, customKeyPrefix = '') => ({
       label,
-      fullName: hasNameFieldsInSchema ? buildFullName(person || {}) : '',
-      dob: householdFieldKeySet.has('dob') ? person?.dob || '' : '',
-      gender: householdFieldKeySet.has('gender') ? person?.gender || '' : '',
+      fullName: buildFullName(person || {}),
+      dob: person?.dob || '',
+      gender: person?.gender || '',
       details: buildHouseholdDetails(person || {}, customKeyPrefix),
     })
     const primarySnapshot = buildSharePerson(
@@ -2955,6 +2772,14 @@ export default function CreateProfile({
 
         {showHouseholdSection && (
           <>
+            {householdQuestionsUnavailable ? (
+              <section className="mt-6 flex justify-center">
+                <div className="w-fit rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  {householdQuestionsError}
+                </div>
+              </section>
+            ) : (
+              <>
             {showAddHouseholdModal && (
               <section className="mt-6 flex justify-center">
                 <form className="w-full max-w-none rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
@@ -3121,11 +2946,7 @@ export default function CreateProfile({
                     const additionalTitle = person.relation
                       ? person.relation
                       : `Additional Household Member ${index + 1}`
-                    const fullName = buildFullName(person)
-                    const summaryRows = [
-                      ...(hasNameFieldsInSchema ? buildHouseholdSummaryRows(fullName) : []),
-                      ...buildHouseholdDetails(person, `additional-${index}`),
-                    ]
+                    const summaryRows = buildHouseholdSummaryRows(person, `additional-${index}`, 4)
                     return (
                       <div
                         key={`household-summary-${index}`}
@@ -3193,10 +3014,21 @@ export default function CreateProfile({
                 </div>
               </section>
             )}
+              </>
+            )}
           </>
         )}
         {showAddressSection && (
           <>
+            {addressQuestionsUnavailable ? (
+              <section className="mt-6 flex justify-center">
+                <div className="w-fit rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                  {addressQuestionsError}
+                </div>
+              </section>
+            ) : null}
+            {!addressQuestionsUnavailable && (
+              <>
             {showAddAddressModal && (
               <section className="mt-6 flex justify-center">
                 <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
@@ -3481,11 +3313,12 @@ export default function CreateProfile({
                   </div>
 
                   {additionalAddresses.map((address, index) => {
-                    const summaryRows = buildAddressDetails(
+                    const summaryRows = buildAddressSummaryRows(
                       address?.residential,
                       address?.mailing,
                       `additional-${index}`,
-                      address?.addressType ?? address?.residential?.addressType ?? ''
+                      address?.addressType ?? address?.residential?.addressType ?? '',
+                      4
                     )
                     return (
                       <div
@@ -3549,6 +3382,8 @@ export default function CreateProfile({
                   </div>
                 </div>
               </section>
+            )}
+              </>
             )}
           </>
         )}
