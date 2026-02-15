@@ -8,11 +8,10 @@ import Badge from '../components/ui/Badge'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
-import ShareSummary from '../components/share/ShareSummary'
 import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'My Insurance Passport', 'Forms', 'Settings']
+const navItems = ['Overview', 'Forms', 'Settings']
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -127,16 +126,6 @@ const buildPersonName = (person = {}) => {
   return baseName ? `${baseName}, ${person.suffix}` : person.suffix
 }
 
-const formatCountLabel = (count, singular, plural) => {
-  if (count === 1) return `1 ${singular}`
-  return `${count} ${plural || `${singular}s`}`
-}
-
-const resolveDetail = (detail, hasData, emptyText, filledText) => {
-  if (!hasData) return emptyText
-  return detail || filledText
-}
-
 const resolveFormsSectionKey = (value = '') => {
   const normalized = String(value || '').toLowerCase()
   if (normalized.includes('summary')) return 'summary'
@@ -151,7 +140,6 @@ const DEFAULT_NOTIFICATION_PREFS = {
   inapp: true,
   loginAlerts: true,
   groups: {
-    passport: true,
     system: true,
   },
 }
@@ -165,7 +153,6 @@ const normalizeNotificationPrefs = (value = {}) => {
     inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
     loginAlerts: true,
     groups: {
-      passport: typeof groups.passport === 'boolean' ? groups.passport : true,
       system: typeof groups.system === 'boolean' ? groups.system : true,
     },
   }
@@ -635,87 +622,10 @@ export default function ClientDashboard() {
   const householdForms = passportForms.household || {}
   const namedInsured = householdForms.namedInsured || {}
   const additionalHouseholds = safeArray(householdForms.additionalHouseholds)
-  const additionalHouseholdCount = additionalHouseholds.filter(hasNonEmptyValue).length
-  const primaryHouseholdFilled = hasNonEmptyValue(namedInsured)
-  const householdCount = (primaryHouseholdFilled ? 1 : 0) + additionalHouseholdCount
-  const primaryHouseholdName = buildPersonName(namedInsured)
-  const householdDetail = resolveDetail(
-    primaryHouseholdName ? `Primary: ${primaryHouseholdName}` : '',
-    householdCount > 0,
-    'Add household details in Forms.',
-    'Household details saved.'
-  )
-
   const addressForms = passportForms.address || {}
-  const contacts = safeArray(addressForms.contacts)
-  const primaryContact = contacts[0] || {}
   const residential = addressForms.residential || {}
-  const mailing = addressForms.mailing || {}
   const additionalAddresses = safeArray(addressForms.additionalAddresses)
-  const primaryAddressFilled =
-    hasNonEmptyValue(primaryContact) || hasNonEmptyValue(residential) || hasNonEmptyValue(mailing)
-  const additionalAddressCount = additionalAddresses.filter(hasNonEmptyValue).length
-  const addressCount = (primaryAddressFilled ? 1 : 0) + additionalAddressCount
-  const primaryAddressLine = [residential.address1, residential.city, residential.state, residential.zip]
-    .filter(Boolean)
-    .join(', ')
-  const addressDetail = resolveDetail(
-    primaryAddressLine,
-    addressCount > 0,
-    'Add address details in Forms.',
-    'Address details saved.'
-  )
-
   const additionalForms = safeArray(passportForms.additional?.additionalForms)
-  const additionalNames = additionalForms
-    .map((form) => form?.name || form?.productName)
-    .filter(Boolean)
-  const additionalCount = additionalForms.filter((form) =>
-    hasNonEmptyValue(form?.questions) || hasNonEmptyValue(form?.name) || hasNonEmptyValue(form?.productName)
-  ).length
-  const additionalDetail = resolveDetail(
-    additionalNames.length
-      ? `${additionalNames.slice(0, 2).join(', ')}${
-          additionalNames.length > 2 ? ` +${additionalNames.length - 2} more` : ''
-        }`
-      : '',
-    additionalCount > 0,
-    'Add custom forms in Forms.',
-    'Custom forms saved.'
-  )
-
-  const passportSections = [
-    {
-      id: 'household',
-      label: 'Household',
-      count: householdCount,
-      singular: 'member',
-      detail: householdDetail,
-    },
-    {
-      id: 'address',
-      label: 'Address',
-      count: addressCount,
-      singular: 'address',
-      plural: 'addresses',
-      detail: addressDetail,
-    },
-    {
-      id: 'additional',
-      label: 'Additional Forms',
-      count: additionalCount,
-      singular: 'form',
-      detail: additionalDetail,
-    },
-  ]
-  const passportCompletedCount = passportSections.filter((section) => section.count > 0).length
-  const passportHasData = passportCompletedCount > 0
-  const passportStatus = !passportHasData ? 'Not started' : formsCompleted ? 'Completed' : 'In progress'
-  const passportShareSections = {
-    household: householdCount > 0,
-    address: addressCount > 0,
-    additional: additionalCount > 0,
-  }
   const passportSnapshotFallback = useMemo(() => {
     const primaryLabel = namedInsured?.relation ? namedInsured.relation : 'Primary Applicant'
     const primary = {
@@ -763,7 +673,6 @@ export default function ClientDashboard() {
     additionalAddresses,
     additionalForms,
     additionalHouseholds,
-    contacts,
     namedInsured,
     passportForms,
     residential,
@@ -1652,11 +1561,6 @@ export default function ClientDashboard() {
                   )}
                 </p>
               )}
-              {activeTab === 'My Insurance Passport' && (
-                <p className="text-slate-600">
-                  Summary of the information you have saved in your forms.
-                </p>
-              )}
               {activeTab === 'Forms' && (
                 <p className="text-slate-600">Complete your insurance profile.</p>
               )}
@@ -1689,8 +1593,7 @@ export default function ClientDashboard() {
                 </div>
               )}
             </div>
-            {(activeTab === 'Overview' ||
-              (activeTab === 'My Insurance Passport' && passportHasData)) && (
+            {activeTab === 'Overview' && (
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -1742,36 +1645,6 @@ export default function ClientDashboard() {
                       Set up authenticator
                     </button>
                   </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!loading && activeTab === 'My Insurance Passport' && (
-            <div className="space-y-4">
-              {!passportHasData && (
-                <div className="surface p-5 space-y-3">
-                  <div className="text-sm text-slate-500">
-                    You have not filled out any forms yet. Start with the forms tab to build your insurance passport.
-                  </div>
-                  <button type="button" className="pill-btn-ghost px-4" onClick={() => updateTab('Forms')}>
-                    Start Forms
-                  </button>
-                </div>
-              )}
-
-              {passportHasData && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-end">
-                    <button
-                      type="button"
-                      className={reminderLinkClass}
-                      onClick={() => updateTab('Forms')}
-                    >
-                      Edit in Forms
-                    </button>
-                  </div>
-                  <ShareSummary snapshot={resolvedShareSnapshot} sections={passportShareSections} />
                 </div>
               )}
             </div>
@@ -2389,7 +2262,7 @@ export default function ClientDashboard() {
                   <button
                     type="button"
                     className="pill-btn-ghost px-3 text-xs"
-                    onClick={() => updateTab('My Insurance Passport')}
+                    onClick={() => updateTab('Overview')}
                   >
                     Manage sharing
                   </button>
@@ -2726,26 +2599,6 @@ export default function ClientDashboard() {
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                     <div className="text-sm font-semibold text-slate-900">Notification groups</div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                        Passport activity
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={currentNotificationPrefs.groups.passport}
-                          onChange={(event) => {
-                            const next = normalizeNotificationPrefs({
-                              ...currentNotificationPrefs,
-                              groups: {
-                                ...currentNotificationPrefs.groups,
-                                passport: event.target.checked,
-                              },
-                            })
-                            setNotificationPrefs(next)
-                            saveNotificationPreferences(next)
-                          }}
-                          disabled={notificationLoading}
-                        />
-                      </label>
                       <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                         System
                         <input
