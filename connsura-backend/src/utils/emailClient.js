@@ -1,6 +1,19 @@
 const nodemailer = require('nodemailer')
+const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses')
 
 let cachedTransporter = null
+let cachedSesClient = null
+
+const getSesRegion = () =>
+  process.env.SES_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || ''
+
+const getSesClient = () => {
+  if (cachedSesClient) return cachedSesClient
+  const region = getSesRegion()
+  if (!region) return null
+  cachedSesClient = new SESClient({ region })
+  return cachedSesClient
+}
 
 const getTransporter = () => {
   if (cachedTransporter) return cachedTransporter
@@ -29,29 +42,85 @@ const getTransporter = () => {
   return cachedTransporter
 }
 
-const getDefaultFrom = () => process.env.EMAIL_FROM || process.env.SMTP_FROM || 'no-reply@connsura.com'
+const DEFAULT_FROM =
+  process.env.EMAIL_FROM ||
+  process.env.SMTP_FROM ||
+  'Connsura (contact@connsura.com) <noreply@connsura.com>'
+
+const getDefaultFrom = () => DEFAULT_FROM
 
 const getDefaultReplyTo = () => process.env.EMAIL_REPLY_TO || process.env.SMTP_REPLY_TO || undefined
 
-const sendEmail = async ({ to, subject, text, html, from, replyTo }) => {
+const isDryRun = () =>
+  String(process.env.SES_DRY_RUN || '').toLowerCase() === 'true' ||
+  process.env.NODE_ENV === 'test'
+
+const normalizeList = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter(Boolean)
+  return [value]
+}
+
+const sendSesEmail = async ({ to, subject, text, html, from, replyTo }) => {
+  const client = getSesClient()
+  if (!client) return null
+  const toAddresses = normalizeList(to)
+  if (!toAddresses.length) return null
+
+  const command = new SendEmailCommand({
+    Source: from || getDefaultFrom(),
+    Destination: { ToAddresses: toAddresses },
+    ReplyToAddresses: replyTo ? [replyTo] : undefined,
+    Message: {
+      Subject: { Data: subject || '', Charset: 'UTF-8' },
+      Body: {
+        Text: text ? { Data: text, Charset: 'UTF-8' } : undefined,
+        Html: html ? { Data: html, Charset: 'UTF-8' } : undefined,
+      },
+    },
+  })
+
+  await client.send(command)
+  return { delivery: 'ses' }
+}
+
+const sendEmail = async ({ to, subject, text, html, from, replyTo, category }) => {
+  const payload = {
+    to,
+    subject,
+    text,
+    html,
+    from: from || getDefaultFrom(),
+    replyTo: replyTo || getDefaultReplyTo(),
+    category: category || undefined,
+  }
+
+  if (isDryRun()) {
+    console.log('[ses-dry-run] email payload', {
+      to: payload.to,
+      subject: payload.subject,
+      from: payload.from,
+      replyTo: payload.replyTo,
+      category: payload.category,
+    })
+    return { delivery: 'dry-run' }
+  }
+
+  const sesResult = await sendSesEmail(payload)
+  if (sesResult) return sesResult
+
   const transport = getTransporter()
   if (!transport) {
     return { delivery: 'disabled' }
   }
 
-  await transport.sendMail({
-    from: from || getDefaultFrom(),
-    to,
-    subject,
-    text,
-    html,
-    replyTo: replyTo || getDefaultReplyTo(),
-  })
-
+  const { category: _category, ...mailPayload } = payload
+  await transport.sendMail(mailPayload)
   return { delivery: 'smtp' }
 }
 
 module.exports = {
   getTransporter,
+  getSesClient,
   sendEmail,
 }

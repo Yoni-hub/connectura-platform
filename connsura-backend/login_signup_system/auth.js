@@ -7,6 +7,12 @@ const { authGuard } = require('../src/middleware/auth')
 const { sendEmail } = require('../src/utils/emailClient')
 const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
 const { logClientAudit } = require('../src/utils/auditLog')
+const { lookupGeoIp } = require('../src/utils/geoip')
+const {
+  notifyEmailChanged,
+  notifyLoginAlert,
+  notifyPasswordChanged,
+} = require('../src/utils/notifications/dispatcher')
 const {
   LEGAL_DOC_TYPES,
   getLatestDocuments,
@@ -34,6 +40,8 @@ const SESSION_COOKIE_SAMESITE = process.env.SESSION_COOKIE_SAMESITE || 'lax'
 const SESSION_COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN || ''
 const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE || ''
 const SESSION_COOKIE_MAX_AGE = process.env.SESSION_COOKIE_MAX_AGE || '7d'
+const DEVICE_COOKIE_NAME = process.env.DEVICE_COOKIE_NAME || 'connsura_device'
+const DEVICE_COOKIE_MAX_AGE = process.env.DEVICE_COOKIE_MAX_AGE || '365d'
 
 const parseDurationMs = (value) => {
   const raw = String(value || '').trim()
@@ -47,6 +55,23 @@ const parseDurationMs = (value) => {
   const unit = match[2].toLowerCase()
   const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 }
   return amount * multipliers[unit]
+}
+
+const getCookieValue = (req, name) => {
+  const header = req.headers?.cookie
+  if (!header) return null
+  const parts = header.split(';')
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    const eqIndex = trimmed.indexOf('=')
+    if (eqIndex === -1) continue
+    const key = trimmed.slice(0, eqIndex).trim()
+    if (key !== name) continue
+    const value = trimmed.slice(eqIndex + 1)
+    return decodeURIComponent(value)
+  }
+  return null
 }
 
 const getSessionCookieOptions = () => {
@@ -73,6 +98,20 @@ const setSessionCookie = (res, token) => {
   if (!token) return
   const options = getSessionCookieOptions()
   res.cookie(SESSION_COOKIE_NAME, token, { ...options, maxAge: getSessionCookieMaxAge() })
+}
+
+const getDeviceCookieOptions = () => {
+  const base = getSessionCookieOptions()
+  return { ...base, httpOnly: true }
+}
+
+const getDeviceCookieMaxAge = () =>
+  parseDurationMs(DEVICE_COOKIE_MAX_AGE) || 365 * 24 * 60 * 60 * 1000
+
+const setDeviceCookie = (res, token) => {
+  if (!token) return
+  const options = getDeviceCookieOptions()
+  res.cookie(DEVICE_COOKIE_NAME, token, { ...options, maxAge: getDeviceCookieMaxAge() })
 }
 
 const clearSessionCookie = (res) => {
@@ -110,6 +149,88 @@ const getRequestIp = (req) => {
 
 const hashValue = (value = '') => crypto.createHash('sha256').update(String(value)).digest('hex')
 
+const parseAuditDiff = (value) => {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return {}
+  }
+}
+
+const getIpPrefix = (ip) => {
+  if (!ip) return null
+  const value = String(ip).trim()
+  if (!value) return null
+  if (value.includes(':')) {
+    const parts = value.split(':').filter(Boolean)
+    if (!parts.length) return null
+    return `${parts.slice(0, 4).join(':')}::/64`
+  }
+  const octets = value.split('.')
+  if (octets.length < 4) return null
+  return `${octets.slice(0, 3).join('.')}.0/24`
+}
+
+const ensureUserDevice = async ({ userId, deviceId, ipPrefix, userAgent }) => {
+  const existing = await prisma.userDevice.findUnique({
+    where: { userId_deviceId: { userId, deviceId } },
+  })
+  if (!existing) {
+    const created = await prisma.userDevice.create({
+      data: {
+        userId,
+        deviceId,
+        lastIpPrefix: ipPrefix,
+        lastUserAgent: userAgent || null,
+        lastSeenAt: new Date(),
+      },
+    })
+    return { record: created, isNewDevice: true, ipChanged: false }
+  }
+  const previousPrefix = existing.lastIpPrefix || null
+  const ipChanged = Boolean(ipPrefix && previousPrefix && previousPrefix !== ipPrefix)
+  await prisma.userDevice.update({
+    where: { id: existing.id },
+    data: {
+      lastIpPrefix: ipPrefix || existing.lastIpPrefix,
+      lastUserAgent: userAgent || existing.lastUserAgent,
+      lastSeenAt: new Date(),
+    },
+  })
+  return { record: existing, isNewDevice: false, ipChanged }
+}
+
+const upsertUserSession = async ({
+  userId,
+  sessionId,
+  ip,
+  ipPrefix,
+  userAgent,
+  location,
+}) => {
+  if (!sessionId) return null
+  const payload = {
+    ip: ip || null,
+    ipPrefix: ipPrefix || null,
+    userAgent: userAgent || null,
+    city: location?.city || null,
+    region: location?.region || null,
+    country: location?.country || null,
+    locationLabel: location?.locationLabel || null,
+    latitude: location?.latitude ?? null,
+    longitude: location?.longitude ?? null,
+    lastSeenAt: new Date(),
+    revokedAt: null,
+  }
+  return prisma.userSession.upsert({
+    where: { userId_sessionId: { userId, sessionId } },
+    create: { userId, sessionId, ...payload },
+    update: payload,
+  })
+}
+
 const PASSWORD_CHANGE_SUBJECT = 'Your Connsura password was changed'
 const EMAIL_VERIFIED_SUBJECT = 'Your email was verified'
 const ACCOUNT_DELETED_SUBJECT = 'Your Connsura account was deleted'
@@ -118,28 +239,7 @@ const TWO_FACTOR_DISABLED_SUBJECT = 'Two-factor authentication disabled'
 const LOGOUT_OTHER_DEVICES_SUBJECT = 'You were logged out of other devices'
 const ACCOUNT_DEACTIVATED_SUBJECT = 'Your Connsura account was deactivated'
 
-const buildPasswordChangeEmail = () => ({
-  text:
-    'Your password was successfully changed.\n\nIf this was not you, contact support immediately at security@connsura.com.',
-  html: `
-    <div style="font-family: Arial, sans-serif; color: #111827;">
-      <h2 style="margin: 0 0 12px 0;">Password changed</h2>
-      <p style="margin: 0 0 12px 0;">Your password was successfully changed.</p>
-      <p style="margin: 0;">If this was not you, contact support immediately at security@connsura.com.</p>
-    </div>
-  `,
-})
-
-const sendPasswordChangeEmail = async (email) => {
-  const content = buildPasswordChangeEmail()
-  return sendEmail({
-    to: email,
-    subject: PASSWORD_CHANGE_SUBJECT,
-    text: content.text,
-    html: content.html,
-    replyTo: 'security@connsura.com',
-  })
-}
+const sendPasswordChangeEmail = async (email) => notifyPasswordChanged({ email })
 
 const buildEmailVerifiedEmail = () => ({
   text: 'Your email was verified.\n\nIf this was not you, contact us immediately at security@connsura.com.',
@@ -382,6 +482,18 @@ router.post('/register', async (req, res) => {
       },
       include: { customer: true },
     })
+    await prisma.notificationPreferences
+      .create({
+        data: {
+          userId: user.id,
+          emailProfileUpdatesEnabled: false,
+          emailFeatureUpdatesEnabled: true,
+          emailMarketingEnabled: false,
+          preferencesVersion: 1,
+          updatedByUserId: user.id,
+        },
+      })
+      .catch(() => {})
     const requiredDocTypes = getRequiredDocTypes(role)
     if (requiredDocTypes.length) {
       const latestDocs = await getLatestDocuments(prisma, requiredDocTypes)
@@ -600,6 +712,7 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
     return res.status(400).json({ error: 'Verification code is required' })
   }
   const pendingEmail = normalizeEmail(req.user?.emailPending || '')
+  const previousEmail = req.user.email
   const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
   const ip = getRequestIp(req)
   const userAgent = String(req.headers['user-agent'] || '')
@@ -648,23 +761,24 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
     if (pendingEmail && updated.role === 'CUSTOMER') {
       let emailDelivery = 'disabled'
       try {
-        const emailResult = await sendEmailVerifiedEmail(updated.email)
-        emailDelivery = emailResult?.delivery || 'smtp'
+        const emailResult = await notifyEmailChanged({ user: updated, previousEmail })
+        const deliveries = Array.isArray(emailResult?.delivery) ? emailResult.delivery : []
+        emailDelivery = deliveries.some((entry) => entry.status === 'fulfilled') ? 'ses' : 'disabled'
         await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
           session_id: sessionId,
           ip,
           user_agent: userAgent,
-          type: 'email_verified',
+          type: 'email_changed',
           result: 'success',
           delivery: emailDelivery,
         })
       } catch (err) {
-        console.error('email verified receipt error', err)
+        console.error('email change notification error', err)
         await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
           session_id: sessionId,
           ip,
           user_agent: userAgent,
-          type: 'email_verified',
+          type: 'email_changed',
           result: 'failed',
           reason: 'email_send_failed',
         })
@@ -1354,6 +1468,9 @@ router.post('/recovery/reset', async (req, res) => {
       include: { agent: true, customer: true },
     })
     recoveryAttempts.delete(attemptKey)
+    notifyPasswordChanged(updated).catch((err) =>
+      console.error('recovery password change notification error', err)
+    )
     const token = generateToken({ id: updated.id, role: updated.role })
     setSessionCookie(res, token)
     return res.json({ token, user: sanitizeUser(updated) })
@@ -1384,11 +1501,72 @@ router.post('/login', async (req, res) => {
     if (!match) return res.status(400).json({ error: 'Invalid credentials' })
     if (user.role === 'CUSTOMER') {
       const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
-      await logClientAudit(user.customer?.id || user.id, 'CLIENT_LOGIN_SUCCESS', {
+      const ip = getRequestIp(req)
+      const userAgent = String(req.headers['user-agent'] || '')
+      const customerId = user.customer?.id || user.id
+      let deviceId = getCookieValue(req, DEVICE_COOKIE_NAME)
+      let shouldAlert = false
+      if (!deviceId || deviceId.length < 16) {
+        deviceId = crypto.randomBytes(16).toString('hex')
+        setDeviceCookie(res, deviceId)
+        shouldAlert = true
+      }
+      const ipPrefix = getIpPrefix(ip)
+      let location = null
+      try {
+        location = await lookupGeoIp(ip)
+      } catch (err) {
+        console.error('geo lookup error', err)
+      }
+      try {
+        const deviceState = await ensureUserDevice({
+          userId: user.id,
+          deviceId,
+          ipPrefix,
+          userAgent,
+        })
+        if (deviceState.isNewDevice || deviceState.ipChanged) {
+          shouldAlert = true
+        }
+      } catch (err) {
+        console.error('login alert detection error', err)
+        shouldAlert = true
+      }
+      try {
+        await upsertUserSession({
+          userId: user.id,
+          sessionId,
+          ip,
+          ipPrefix,
+          userAgent,
+          location,
+        })
+      } catch (err) {
+        console.error('session upsert error', err)
+      }
+      await logClientAudit(customerId, 'CLIENT_LOGIN_SUCCESS', {
         session_id: sessionId,
-        ip: getRequestIp(req),
-        user_agent: String(req.headers['user-agent'] || ''),
+        ip,
+        ip_prefix: ipPrefix,
+        user_agent: userAgent,
+        device_id: deviceId,
+        city: location?.city || null,
+        region: location?.region || null,
+        country: location?.country || null,
+        location: location?.locationLabel || null,
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
       })
+      if (shouldAlert) {
+        notifyLoginAlert({
+          user,
+          ip,
+          userAgent,
+          location: location?.locationLabel || null,
+        }).catch((err) =>
+          console.error('login alert notification error', err)
+        )
+      }
     }
     const token = generateToken({ id: user.id, role: user.role })
     const consentStatus = await getConsentStatus(prisma, user)
@@ -1589,6 +1767,25 @@ router.get('/sessions', authGuard, async (req, res) => {
   const sessionId = req.query?.sessionId ? String(req.query.sessionId) : null
   const ip = getRequestIp(req)
   const userAgent = String(req.headers['user-agent'] || '')
+  const ipPrefix = getIpPrefix(ip)
+  let location = null
+  try {
+    location = await lookupGeoIp(ip)
+  } catch (err) {
+    console.error('geo lookup error', err)
+  }
+  try {
+    await upsertUserSession({
+      userId: req.user.id,
+      sessionId,
+      ip,
+      ipPrefix,
+      userAgent,
+      location,
+    })
+  } catch (err) {
+    console.error('session upsert error', err)
+  }
   if (req.user?.role === 'CUSTOMER') {
     await logClientAudit(req.user.customer?.id || req.user.id, 'CLIENT_ACTIVE_SESSIONS_VIEWED', {
       session_id: sessionId,
@@ -1603,6 +1800,10 @@ router.get('/sessions', authGuard, async (req, res) => {
         current: true,
         ip,
         userAgent,
+        location: location?.locationLabel || null,
+        city: location?.city || null,
+        region: location?.region || null,
+        country: location?.country || null,
         lastSeenAt: new Date().toISOString(),
       },
     ],
@@ -1652,6 +1853,12 @@ router.post('/sessions/revoke-others', authGuard, async (req, res) => {
           reason: 'email_send_failed',
         })
       }
+    }
+    if (sessionId) {
+      await prisma.userSession.updateMany({
+        where: { userId: updated.id, sessionId: { not: sessionId } },
+        data: { revokedAt: new Date() },
+      })
     }
     setSessionCookie(res, token)
     return res.json({ revoked: true, token, user: sanitizeUser(updated) })

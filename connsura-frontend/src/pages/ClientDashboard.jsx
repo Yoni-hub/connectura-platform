@@ -154,25 +154,28 @@ const resolveFormsSectionKey = (value = '') => {
 }
 
 const DEFAULT_NOTIFICATION_PREFS = {
-  email: 'all',
-  inapp: true,
-  loginAlerts: true,
-  groups: {
-    system: true,
-  },
+  emailProfileUpdatesEnabled: false,
+  emailFeatureUpdatesEnabled: true,
+  emailMarketingEnabled: false,
 }
 
 const normalizeNotificationPrefs = (value = {}) => {
   const prefs = value && typeof value === 'object' ? value : {}
-  const groups = prefs.groups && typeof prefs.groups === 'object' ? prefs.groups : {}
-  const email = ['all', 'important', 'none'].includes(prefs.email) ? prefs.email : 'all'
+  const readBool = (candidate, fallback) =>
+    typeof candidate === 'boolean' ? candidate : fallback
   return {
-    email,
-    inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
-    loginAlerts: true,
-    groups: {
-      system: typeof groups.system === 'boolean' ? groups.system : true,
-    },
+    emailProfileUpdatesEnabled: readBool(
+      prefs.emailProfileUpdatesEnabled ?? prefs.email_profile_updates_enabled,
+      DEFAULT_NOTIFICATION_PREFS.emailProfileUpdatesEnabled,
+    ),
+    emailFeatureUpdatesEnabled: readBool(
+      prefs.emailFeatureUpdatesEnabled ?? prefs.email_feature_updates_enabled,
+      DEFAULT_NOTIFICATION_PREFS.emailFeatureUpdatesEnabled,
+    ),
+    emailMarketingEnabled: readBool(
+      prefs.emailMarketingEnabled ?? prefs.email_marketing_enabled,
+      DEFAULT_NOTIFICATION_PREFS.emailMarketingEnabled,
+    ),
   }
 }
 
@@ -213,6 +216,7 @@ export default function ClientDashboard() {
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
   const [settingsView, setSettingsView] = useState(null)
+  const [notificationTab, setNotificationTab] = useState('email')
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordUpdating, setPasswordUpdating] = useState(false)
@@ -463,9 +467,7 @@ export default function ClientDashboard() {
     setNotificationMessage('')
     setNotificationLoading(true)
     api
-      .get(`/customers/${user.customerId}/notification-preferences`, {
-        params: { sessionId },
-      })
+      .get('/api/notifications/preferences')
       .then((res) => {
         if (!isActive) return
         setNotificationPrefs(normalizeNotificationPrefs(res.data?.preferences || {}))
@@ -1295,10 +1297,12 @@ export default function ClientDashboard() {
     setNotificationSaving(true)
     setNotificationMessage('')
     try {
-      const res = await api.put(`/customers/${user.customerId}/notification-preferences`, {
-        preferences: nextPrefs,
-        sessionId,
-      })
+      const payload = {
+        email_profile_updates_enabled: Boolean(nextPrefs.emailProfileUpdatesEnabled),
+        email_feature_updates_enabled: Boolean(nextPrefs.emailFeatureUpdatesEnabled),
+        email_marketing_enabled: Boolean(nextPrefs.emailMarketingEnabled),
+      }
+      const res = await api.patch('/api/notifications/preferences', payload)
       if (notificationSaveRef.current !== saveId) return
       setNotificationPrefs(normalizeNotificationPrefs(res.data?.preferences || nextPrefs))
       setNotificationMessage('Saved')
@@ -2338,120 +2342,236 @@ export default function ClientDashboard() {
                         )}
 
                         {settingsView === 'notifications' && (
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">Notifications</h3>
-                  <p className="text-xs text-slate-500">Control how we keep you updated.</p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs text-slate-500">Changes save automatically.</div>
-                    {notificationSaving && <div className="text-xs text-slate-500">Saving...</div>}
-                    {!notificationSaving && notificationMessage && (
-                      <div
-                        className={`text-xs font-semibold ${
-                          notificationMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {notificationMessage}
-                      </div>
-                    )}
-                  </div>
+                          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
+                            <div className="space-y-1">
+                              <h3 className="text-lg font-semibold">Notifications</h3>
+                              <p className="text-xs text-slate-500">
+                                Some notifications are required for security and core functionality and can't be turned off.
+                              </p>
+                            </div>
 
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Email notifications</div>
-                      <div className="text-xs text-slate-500">Updates about your profile and forms.</div>
-                    </div>
-                    <select
-                      className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                      value={currentNotificationPrefs.email}
-                      onChange={(event) => {
-                        const next = normalizeNotificationPrefs({
-                          ...currentNotificationPrefs,
-                          email: event.target.value,
-                        })
-                        setNotificationPrefs(next)
-                        saveNotificationPreferences(next)
-                      }}
-                      disabled={notificationLoading}
-                    >
-                      <option value="all">All</option>
-                      <option value="important">Important only</option>
-                      <option value="none">None</option>
-                    </select>
-                  </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                                  notificationTab === 'email'
+                                    ? 'bg-[#0b3b8c] text-white border-[#0b3b8c]'
+                                    : 'bg-white text-slate-600 border-slate-200'
+                                }`}
+                                onClick={() => setNotificationTab('email')}
+                              >
+                                Email notifications
+                              </button>
+                              <button
+                                type="button"
+                                className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                                  notificationTab === 'inapp'
+                                    ? 'bg-[#0b3b8c] text-white border-[#0b3b8c]'
+                                    : 'bg-white text-slate-600 border-slate-200'
+                                }`}
+                                onClick={() => setNotificationTab('inapp')}
+                              >
+                                In-app notifications
+                              </button>
+                            </div>
 
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">In-app notifications</div>
-                      <div className="text-xs text-slate-500">Badges and reminders in your dashboard.</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={currentNotificationPrefs.inapp}
-                      onChange={(event) => {
-                        const next = normalizeNotificationPrefs({
-                          ...currentNotificationPrefs,
-                          inapp: event.target.checked,
-                        })
-                        setNotificationPrefs(next)
-                        saveNotificationPreferences(next)
-                      }}
-                      disabled={notificationLoading}
-                    />
-                  </label>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs text-slate-500">Changes save automatically.</div>
+                              {notificationSaving && <div className="text-xs text-slate-500">Saving...</div>}
+                              {!notificationSaving && notificationMessage && (
+                                <div
+                                  className={`text-xs font-semibold ${
+                                    notificationMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
+                                  }`}
+                                >
+                                  {notificationMessage}
+                                </div>
+                              )}
+                            </div>
 
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm text-left"
-                    onClick={handleLoginAlertsView}
-                    disabled={notificationLoading}
-                  >
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Login alerts</div>
-                      <div className="text-xs text-slate-500">
-                        Enabled (required for security)
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked
-                      readOnly
-                      disabled
-                    />
-                  </button>
+                            {notificationTab === 'email' && (
+                              <div className="space-y-6">
+                                <div className="space-y-3">
+                                  <div className="text-sm font-semibold text-slate-900">
+                                    Security & Account Protection
+                                  </div>
+                                  <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                          Login alerts
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          Receive an email when a new sign-in is detected.
+                                        </div>
+                                      </div>
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        Always allowed
+                                      </span>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                          Password or email changes
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          Receive an email when your password or email is changed.
+                                        </div>
+                                      </div>
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        Always allowed
+                                      </span>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                          Legal & policy updates
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          Updates to Privacy Policy, Terms, or Data Sharing Policy.
+                                        </div>
+                                      </div>
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        Always allowed
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
 
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                    <div className="text-sm font-semibold text-slate-900">Notification groups</div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                        System
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={currentNotificationPrefs.groups.system}
-                          onChange={(event) => {
-                            const next = normalizeNotificationPrefs({
-                              ...currentNotificationPrefs,
-                              groups: {
-                                ...currentNotificationPrefs.groups,
-                                system: event.target.checked,
-                              },
-                            })
-                            setNotificationPrefs(next)
-                            saveNotificationPreferences(next)
-                          }}
-                          disabled={notificationLoading}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                                <div className="space-y-3">
+                                  <div className="text-sm font-semibold text-slate-900">Account & Profile Activity</div>
+                                  <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                          Profile sharing activity
+                                        </div>
+                                        <div className="text-xs text-slate-500">Receive notifications when your profile is:</div>
+                                        <ul className="mt-1 list-disc pl-4 text-xs text-slate-500 space-y-1">
+                                          <li>shared</li>
+                                          <li>access revoked</li>
+                                          <li>updated by a recipient</li>
+                                        </ul>
+                                      </div>
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        Always allowed
+                                      </span>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <label htmlFor="notif-profile-updates" className="text-sm font-semibold text-slate-900">
+                                          Insurance profile updates
+                                        </label>
+                                        <div className="text-xs text-slate-500">
+                                          Get notified when your profile information is updated.
+                                        </div>
+                                      </div>
+                                      <input
+                                        id="notif-profile-updates"
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={currentNotificationPrefs.emailProfileUpdatesEnabled}
+                                        onChange={(event) => {
+                                          const next = normalizeNotificationPrefs({
+                                            ...currentNotificationPrefs,
+                                            emailProfileUpdatesEnabled: event.target.checked,
+                                          })
+                                          setNotificationPrefs(next)
+                                          saveNotificationPreferences(next)
+                                        }}
+                                        disabled={notificationLoading}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
 
+                                <div className="space-y-3">
+                                  <div className="text-sm font-semibold text-slate-900">Product Updates</div>
+                                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <label htmlFor="notif-feature-updates" className="text-sm font-semibold text-slate-900">
+                                          Feature updates & improvements
+                                        </label>
+                                        <div className="text-xs text-slate-500">
+                                          Learn about new features and important improvements.
+                                        </div>
+                                      </div>
+                                      <input
+                                        id="notif-feature-updates"
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={currentNotificationPrefs.emailFeatureUpdatesEnabled}
+                                        onChange={(event) => {
+                                          const next = normalizeNotificationPrefs({
+                                            ...currentNotificationPrefs,
+                                            emailFeatureUpdatesEnabled: event.target.checked,
+                                          })
+                                          setNotificationPrefs(next)
+                                          saveNotificationPreferences(next)
+                                        }}
+                                        disabled={notificationLoading}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                  <div className="text-sm font-semibold text-slate-900">Marketing & Announcements</div>
+                                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <label htmlFor="notif-marketing" className="text-sm font-semibold text-slate-900">
+                                          Tips, announcements & offers
+                                        </label>
+                                        <div className="text-xs text-slate-500">
+                                          Occasional helpful updates and platform news.
+                                        </div>
+                                      </div>
+                                      <input
+                                        id="notif-marketing"
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={currentNotificationPrefs.emailMarketingEnabled}
+                                        onChange={(event) => {
+                                          const next = normalizeNotificationPrefs({
+                                            ...currentNotificationPrefs,
+                                            emailMarketingEnabled: event.target.checked,
+                                          })
+                                          setNotificationPrefs(next)
+                                          saveNotificationPreferences(next)
+                                        }}
+                                        disabled={notificationLoading}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {notificationTab === 'inapp' && (
+                              <div className="space-y-6">
+                                <div className="space-y-3">
+                                  <div className="text-sm font-semibold text-slate-900">System Notifications</div>
+                                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                          Dashboard reminders & activity badges
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          Alerts and reminders related to your account and insurance profile activity.
+                                        </div>
+                                      </div>
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        Always allowed
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
 
                       </div>

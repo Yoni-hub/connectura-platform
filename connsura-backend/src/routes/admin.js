@@ -5,6 +5,10 @@ const { adminGuard, ADMIN_AUTH_COOKIE } = require('../middleware/auth')
 const { generateToken } = require('../utils/token')
 const { parseJson } = require('../utils/transform')
 const { getEmailOtp } = require('../utils/emailOtp')
+const {
+  notifyFeatureUpdateBroadcast,
+  notifyMarketingBroadcast,
+} = require('../utils/notifications/dispatcher')
 const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = require('../utils/siteContent')
 const { DEFAULT_CREATE_PROFILE_SCHEMA } = require('../utils/formSchema')
 const { slugify, ensureProductCatalog } = require('../utils/productCatalog')
@@ -222,6 +226,36 @@ router.get('/email-otp', adminGuard, async (req, res) => {
   const otp = await getEmailOtp(email)
   if (!otp) return res.status(404).json({ error: 'No active verification code for this email.' })
   res.json({ code: otp.code, createdAt: otp.createdAt, expiresAt: otp.expiresAt, attempts: otp.attempts })
+})
+
+router.post('/notifications/broadcast', adminGuard, async (req, res) => {
+  const type = String(req.body?.type || '').trim().toLowerCase()
+  if (!['feature', 'marketing'].includes(type)) {
+    return res.status(400).json({ error: 'Type must be feature or marketing' })
+  }
+  const title = String(req.body?.title || '').trim()
+  const summary = String(req.body?.summary || '').trim()
+  const users = await prisma.user.findMany({
+    where: { role: 'CUSTOMER', email: { not: null }, emailVerified: true },
+    select: { id: true, email: true },
+  })
+  try {
+    if (type === 'feature') {
+      await notifyFeatureUpdateBroadcast({ users, title, summary })
+    } else {
+      await notifyMarketingBroadcast({ users, title, summary })
+    }
+    await logAudit(req.admin.id, 'Admin', req.admin.id, 'notification_broadcast', {
+      type,
+      title: title || null,
+      summary: summary || null,
+      targetCount: users.length,
+    })
+  } catch (err) {
+    console.error('notification broadcast error', err)
+    return res.status(500).json({ error: 'Failed to send notification broadcast' })
+  }
+  return res.json({ sent: true, targetCount: users.length })
 })
 
 // Agents

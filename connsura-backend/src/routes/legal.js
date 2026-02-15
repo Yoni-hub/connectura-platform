@@ -11,12 +11,18 @@ const {
   buildConsentItems,
   LEGAL_SOURCE_MAP,
 } = require('../utils/legalDocuments')
+const { notifyLegalUpdate } = require('../utils/notifications/dispatcher')
 
 const router = express.Router()
 
 const normalizeType = (value) => String(value || '').trim().toLowerCase()
 const LEGAL_TYPE_SET = new Set(Object.values(LEGAL_DOC_TYPES))
 const isValidType = (type) => LEGAL_TYPE_SET.has(type)
+const LEGAL_LABELS = {
+  [LEGAL_DOC_TYPES.TERMS]: 'Terms',
+  [LEGAL_DOC_TYPES.PRIVACY]: 'Privacy Policy',
+  [LEGAL_DOC_TYPES.DATA_SHARING]: 'Data Sharing Policy',
+}
 
 const getRequestIp = (req) => {
   const forwarded = req.headers['x-forwarded-for']
@@ -157,6 +163,19 @@ router.post('/admin/publish', adminGuard, async (req, res) => {
       publishedAt,
     },
   })
+  prisma.user
+    .findMany({
+      where: { role: 'CUSTOMER', email: { not: null }, emailVerified: true },
+      select: { id: true, email: true },
+    })
+    .then((users) =>
+      notifyLegalUpdate({
+        docLabel: LEGAL_LABELS[type] || 'policy',
+        publishedAt,
+        users,
+      })
+    )
+    .catch((err) => console.error('legal update notification error', err))
   res.status(201).json({ document: formatDoc(entry) })
 })
 
@@ -183,6 +202,19 @@ router.post('/admin/publish-from-source', adminGuard, async (req, res) => {
       publishedAt,
     },
   })
+  prisma.user
+    .findMany({
+      where: { role: 'CUSTOMER', email: { not: null }, emailVerified: true },
+      select: { id: true, email: true },
+    })
+    .then((users) =>
+      notifyLegalUpdate({
+        docLabel: LEGAL_LABELS[type] || 'policy',
+        publishedAt,
+        users,
+      })
+    )
+    .catch((err) => console.error('legal update notification error', err))
   res.status(201).json({ document: formatDoc(entry) })
 })
 
@@ -216,6 +248,19 @@ router.post('/admin/force-reconsent', adminGuard, async (req, res) => {
     })
     created.push(entry)
   }
+  prisma.user
+    .findMany({
+      where: { role: 'CUSTOMER', email: { not: null }, emailVerified: true },
+      select: { id: true, email: true },
+    })
+    .then((users) =>
+      notifyLegalUpdate({
+        docLabel: 'policy updates',
+        publishedAt,
+        users,
+      })
+    )
+    .catch((err) => console.error('legal update notification error', err))
   res.status(201).json({ created: created.map(formatDoc) })
 })
 

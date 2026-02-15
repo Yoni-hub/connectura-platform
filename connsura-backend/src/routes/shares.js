@@ -5,6 +5,11 @@ const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { sendEmail } = require('../utils/emailClient')
 const { LEGAL_DOC_TYPES, getLatestDocuments } = require('../utils/legalDocuments')
+const {
+  notifyProfileAccessRevoked,
+  notifyProfileShared,
+  notifyProfileUpdatedByRecipient,
+} = require('../utils/notifications/dispatcher')
 
 const router = express.Router()
 
@@ -78,7 +83,7 @@ const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code,
     'This code expires if the share is inactive for too long. If you did not request this, you can ignore this email.',
   ].join('\n')
 
-  await sendEmail({ to, subject, text })
+  await sendEmail({ to, subject, text, replyTo: 'privacy@connsura.com' })
 }
 
 const filterEditsBySections = (edits, sections) => {
@@ -205,6 +210,12 @@ router.post('/', authGuard, async (req, res) => {
       console.error('share email send error', { error: err.message })
     }
   }
+  if (customer.user) {
+    notifyProfileShared({
+      user: customer.user,
+      recipientName,
+    }).catch((err) => console.error('share activity notification error', err))
+  }
 
   res.status(201).json({ share: formatShare(share), code })
 })
@@ -303,6 +314,17 @@ router.post('/:token/edits', async (req, res) => {
       lastAccessedAt: new Date(),
     },
   })
+  if (share.customerId) {
+    const owner = await prisma.customer
+      .findUnique({ where: { id: share.customerId }, include: { user: true } })
+      .catch(() => null)
+    if (owner?.user) {
+      notifyProfileUpdatedByRecipient({
+        user: owner.user,
+        recipientName: share.recipientName,
+      }).catch((err) => console.error('profile edits notification error', err))
+    }
+  }
   res.json({ share: formatShare(updated) })
 })
 
@@ -353,7 +375,7 @@ router.post('/:token/approve', authGuard, async (req, res) => {
   const token = String(req.params.token || '').trim()
   const share = await prisma.profileShare.findUnique({
     where: { token },
-    include: { customer: true },
+    include: { customer: { include: { user: true } } },
   })
   if (!share) return res.status(404).json({ error: 'Share not found' })
   if (share.customer?.userId !== req.user.id) {
@@ -393,7 +415,7 @@ router.post('/:token/decline', authGuard, async (req, res) => {
   const token = String(req.params.token || '').trim()
   const share = await prisma.profileShare.findUnique({
     where: { token },
-    include: { customer: true },
+    include: { customer: { include: { user: true } } },
   })
   if (!share) return res.status(404).json({ error: 'Share not found' })
   if (share.customer?.userId !== req.user.id) {
@@ -408,6 +430,12 @@ router.post('/:token/decline', authGuard, async (req, res) => {
       pendingAt: null,
     },
   })
+  if (share.customer?.user) {
+    notifyProfileAccessRevoked({
+      user: share.customer.user,
+      recipientName: share.recipientName,
+    }).catch((err) => console.error('share declined notification error', err))
+  }
   res.json({ ok: true })
 })
 
@@ -433,6 +461,12 @@ router.post('/:token/revoke', authGuard, async (req, res) => {
       pendingAt: null,
     },
   })
+  if (share.customer?.user) {
+    notifyProfileAccessRevoked({
+      user: share.customer.user,
+      recipientName: share.recipientName,
+    }).catch((err) => console.error('share revoked notification error', err))
+  }
   res.json({ ok: true })
 })
 
@@ -443,7 +477,10 @@ router.post('/:token/close', async (req, res) => {
   const normalizedName = normalizeRecipientName(rawName)
   if (!token) return res.status(400).json({ error: 'Share token is required' })
   if (!code) return res.status(400).json({ error: 'Verification code is required' })
-  const share = await prisma.profileShare.findUnique({ where: { token } })
+  const share = await prisma.profileShare.findUnique({
+    where: { token },
+    include: { customer: { include: { user: true } } },
+  })
   if (!share) return res.status(404).json({ error: 'Share not found' })
   if (hashCode(code) !== share.codeHash) {
     return res.status(400).json({ error: 'Invalid code' })
@@ -464,6 +501,12 @@ router.post('/:token/close', async (req, res) => {
       pendingAt: nextPendingAt,
     },
   })
+  if (share.customer?.user) {
+    notifyProfileAccessRevoked({
+      user: share.customer.user,
+      recipientName: share.recipientName,
+    }).catch((err) => console.error('share closed notification error', err))
+  }
   res.json({ ok: true })
 })
 

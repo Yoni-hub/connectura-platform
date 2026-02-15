@@ -31,8 +31,65 @@ model User {
   updatedAt DateTime  @updatedAt
   agent     Agent?
   customer  Customer?
+  notificationPreferences NotificationPreferences?
+  devices   UserDevice[]
+  sessions  UserSession[]
   consents  UserConsent[]
   errorEvents ErrorEvent[]
+}
+
+model UserDevice {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  deviceId     String
+  lastIpPrefix String?
+  lastUserAgent String?
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+}
+
+model UserSession {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  sessionId     String
+  ip            String?
+  ipPrefix      String?
+  userAgent     String?
+  city          String?
+  region        String?
+  country       String?
+  locationLabel String?
+  latitude      Float?
+  longitude     Float?
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  revokedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId])
+  @@index([userId])
+}
+
+model NotificationPreferences {
+  id                          Int      @id @default(autoincrement())
+  userId                      Int      @unique
+  emailProfileUpdatesEnabled  Boolean  @default(false)
+  emailFeatureUpdatesEnabled  Boolean  @default(true)
+  emailMarketingEnabled       Boolean  @default(false)
+  preferencesVersion          Int?
+  updatedByUserId             Int?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Agent {

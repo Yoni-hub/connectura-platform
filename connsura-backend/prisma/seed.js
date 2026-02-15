@@ -118,6 +118,14 @@ async function seedAgents(hashedPassword) {
         email: agent.email,
         password: hashedPassword,
         role: 'AGENT',
+        notificationPreferences: {
+          create: {
+            emailProfileUpdatesEnabled: false,
+            emailFeatureUpdatesEnabled: true,
+            emailMarketingEnabled: false,
+            preferencesVersion: 1,
+          },
+        },
         agent: {
           create: {
             name: agent.name,
@@ -148,6 +156,14 @@ async function seedCustomers(hashedPassword) {
         email: customer.email,
         password: hashedPassword,
         role: 'CUSTOMER',
+        notificationPreferences: {
+          create: {
+            emailProfileUpdatesEnabled: false,
+            emailFeatureUpdatesEnabled: true,
+            emailMarketingEnabled: false,
+            preferencesVersion: 1,
+          },
+        },
         customer: {
           create: {
             name: customer.name,

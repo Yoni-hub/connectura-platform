@@ -9,6 +9,12 @@ const prisma = require('../prisma')
 const { authGuard } = require('../middleware/auth')
 const { parseJson } = require('../utils/transform')
 const { logClientAudit } = require('../utils/auditLog')
+const {
+  ensureNotificationPreferences,
+  deriveFromLegacyPreferences,
+  mapPreferencesToLegacy,
+} = require('../utils/notifications/preferences')
+const { notifyProfileUpdated } = require('../utils/notifications/dispatcher')
 
 const router = express.Router()
 const enableAgentFeatures = false
@@ -18,31 +24,6 @@ const getRequestIp = (req) => {
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded
   const ip = raw || req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ''
   return String(ip).split(',')[0].trim().replace(/^::ffff:/, '')
-}
-
-const DEFAULT_NOTIFICATION_PREFS = {
-  email: 'all',
-  inapp: true,
-  loginAlerts: true,
-  groups: {
-    passport: true,
-    system: true,
-  },
-}
-
-const normalizeNotificationPrefs = (value = {}) => {
-  const prefs = value && typeof value === 'object' ? value : {}
-  const groups = prefs.groups && typeof prefs.groups === 'object' ? prefs.groups : {}
-  const email = ['all', 'important', 'none'].includes(prefs.email) ? prefs.email : 'all'
-  return {
-    email,
-    inapp: typeof prefs.inapp === 'boolean' ? prefs.inapp : true,
-    loginAlerts: true,
-    groups: {
-      passport: typeof groups.passport === 'boolean' ? groups.passport : true,
-      system: typeof groups.system === 'boolean' ? groups.system : true,
-    },
-  }
 }
 
 const buildNotificationHash = (prefs) =>
@@ -304,6 +285,11 @@ router.post('/:id/profile', authGuard, async (req, res) => {
     },
     include: { drivers: true, vehicles: true },
   })
+  if (req.user.role === 'CUSTOMER') {
+    notifyProfileUpdated({ user: req.user }).catch((err) =>
+      console.error('profile update notification error', err)
+    )
+  }
   res.status(201).json({ profile: formatCustomerProfile(updated) })
 })
 
@@ -327,6 +313,11 @@ router.patch('/:id/profile-data', authGuard, async (req, res) => {
     },
     include: { drivers: true, vehicles: true },
   })
+  if (req.user.role === 'CUSTOMER') {
+    notifyProfileUpdated({ user: req.user }).catch((err) =>
+      console.error('profile update notification error', err)
+    )
+  }
   res.json({ profile: formatCustomerProfile(updated) })
 })
 
@@ -607,6 +598,15 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
         await logClientAudit(customerId, 'CLIENT_PROFILE_COMPLETED')
       }
     }
+    if (
+      req.user?.role === 'CUSTOMER' &&
+      (nextSection === 'Summary' ||
+        (currentProfileData.profile_status !== 'completed' && nextProfileStatus === 'completed'))
+    ) {
+      notifyProfileUpdated({ user: req.user }).catch((err) =>
+        console.error('profile update notification error', err)
+      )
+    }
     return res.json({ profile: formatCustomerProfile(updated) })
   } catch (error) {
     console.error('forms section-save update error', error)
@@ -682,8 +682,12 @@ router.get('/:id/notification-preferences', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Cannot access this customer' })
   }
   const profileData = parseJson(customer.profileData, {})
-  const prefs = normalizeNotificationPrefs(profileData.notification_prefs || {})
-  const hash = buildNotificationHash(prefs)
+  const prefs = await ensureNotificationPreferences(prisma, req.user.id, {
+    updatedByUserId: req.user.id,
+    legacyPreferences: profileData.notification_prefs,
+  })
+  const legacyPrefs = mapPreferencesToLegacy(prefs)
+  const hash = buildNotificationHash(legacyPrefs)
   const sessionId = req.query?.sessionId ? String(req.query.sessionId) : null
   const ip = getRequestIp(req)
   const userAgent = String(req.headers['user-agent'] || '')
@@ -693,7 +697,7 @@ router.get('/:id/notification-preferences', authGuard, async (req, res) => {
     user_agent: userAgent,
     new_preferences_hash: hash,
   })
-  res.json({ preferences: prefs })
+  res.json({ preferences: legacyPrefs })
 })
 
 router.put('/:id/notification-preferences', authGuard, async (req, res) => {
@@ -706,25 +710,34 @@ router.put('/:id/notification-preferences', authGuard, async (req, res) => {
     return res.status(403).json({ error: 'Cannot edit this customer' })
   }
   const profileData = parseJson(customer.profileData, {})
-  const previousPrefs = normalizeNotificationPrefs(profileData.notification_prefs || {})
-  const nextPrefs = normalizeNotificationPrefs(req.body?.preferences || {})
-  const previousHash = buildNotificationHash(previousPrefs)
-  const newHash = buildNotificationHash(nextPrefs)
+  const existing = await ensureNotificationPreferences(prisma, req.user.id, {
+    updatedByUserId: req.user.id,
+    legacyPreferences: profileData.notification_prefs,
+  })
+  const previousLegacy = mapPreferencesToLegacy(existing)
+  const nextLegacy = mapPreferencesToLegacy(deriveFromLegacyPreferences(req.body?.preferences || {}))
+  const previousHash = buildNotificationHash(previousLegacy)
+  const newHash = buildNotificationHash(nextLegacy)
   const channelChanged = []
-  if (previousPrefs.email !== nextPrefs.email) channelChanged.push('email')
-  if (previousPrefs.inapp !== nextPrefs.inapp) channelChanged.push('inapp')
-  if (previousPrefs.loginAlerts !== nextPrefs.loginAlerts) channelChanged.push('login_alerts')
+  if (previousLegacy.email !== nextLegacy.email) channelChanged.push('email')
+  if (previousLegacy.inapp !== nextLegacy.inapp) channelChanged.push('inapp')
+  if (previousLegacy.loginAlerts !== nextLegacy.loginAlerts) channelChanged.push('login_alerts')
   const groupsChanged =
-    previousPrefs.groups.passport !== nextPrefs.groups.passport ||
-    previousPrefs.groups.system !== nextPrefs.groups.system
+    previousLegacy.groups.passport !== nextLegacy.groups.passport ||
+    previousLegacy.groups.system !== nextLegacy.groups.system
   if (groupsChanged && !channelChanged.includes('inapp')) {
     channelChanged.push('inapp')
   }
-
-  const updatedProfileData = { ...profileData, notification_prefs: nextPrefs }
-  const updated = await prisma.customer.update({
-    where: { id: customerId },
-    data: { profileData: JSON.stringify(updatedProfileData) },
+  const nextDerived = deriveFromLegacyPreferences(req.body?.preferences || {})
+  const updated = await prisma.notificationPreferences.update({
+    where: { userId: req.user.id },
+    data: {
+      emailProfileUpdatesEnabled: nextDerived.emailProfileUpdatesEnabled,
+      emailFeatureUpdatesEnabled: nextDerived.emailFeatureUpdatesEnabled,
+      emailMarketingEnabled: nextDerived.emailMarketingEnabled,
+      preferencesVersion: (existing.preferencesVersion || 0) + 1,
+      updatedByUserId: req.user.id,
+    },
   })
   const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
   const ip = getRequestIp(req)
@@ -738,7 +751,7 @@ router.put('/:id/notification-preferences', authGuard, async (req, res) => {
     channel_changed: channelChanged,
   })
   res.json({
-    preferences: normalizeNotificationPrefs(parseJson(updated.profileData, {}).notification_prefs || nextPrefs),
+    preferences: mapPreferencesToLegacy(updated),
   })
 })
 
@@ -884,6 +897,10 @@ router.get('/:id/login-activity', authGuard, async (req, res) => {
       id: entry.id,
       ip: diff.ip || '',
       userAgent: diff.user_agent || '',
+      location: diff.location || null,
+      city: diff.city || null,
+      region: diff.region || null,
+      country: diff.country || null,
       timestamp: entry.createdAt,
     }
   })
@@ -899,22 +916,48 @@ router.get('/:id/active-sessions', authGuard, async (req, res) => {
   if (customer.userId !== req.user.id) {
     return res.status(403).json({ error: 'Cannot access this customer' })
   }
+  const sessionId = req.query?.sessionId ? String(req.query.sessionId) : null
+  const ip = getRequestIp(req)
+  const userAgent = String(req.headers['user-agent'] || '')
+  if (sessionId) {
+    await prisma.userSession
+      .updateMany({
+        where: { userId: req.user.id, sessionId },
+        data: { lastSeenAt: new Date() },
+      })
+      .catch(() => {})
+  }
+  const rows = await prisma.userSession.findMany({
+    where: { userId: req.user.id, revokedAt: null },
+    orderBy: { lastSeenAt: 'desc' },
+    take: 20,
+  })
   await logClientAudit(customerId, 'CLIENT_ACTIVE_SESSIONS_VIEWED', {
-    session_id: req.query?.sessionId ? String(req.query.sessionId) : null,
-    ip: getRequestIp(req),
-    user_agent: String(req.headers['user-agent'] || ''),
+    session_id: sessionId,
+    ip,
+    user_agent: userAgent,
   })
-  res.json({
-    sessions: [
-      {
-        id: req.query?.sessionId ? String(req.query.sessionId) : 'current',
-        current: true,
-        ip: getRequestIp(req),
-        userAgent: String(req.headers['user-agent'] || ''),
-        lastSeenAt: new Date().toISOString(),
-      },
-    ],
-  })
+  const sessions = rows.map((row) => ({
+    id: row.sessionId,
+    current: sessionId ? row.sessionId === sessionId : false,
+    ip: row.ip || '',
+    userAgent: row.userAgent || '',
+    location: row.locationLabel || null,
+    city: row.city || null,
+    region: row.region || null,
+    country: row.country || null,
+    lastSeenAt: row.lastSeenAt,
+  }))
+  if (!sessions.length) {
+    sessions.push({
+      id: sessionId || 'current',
+      current: true,
+      ip,
+      userAgent,
+      lastSeenAt: new Date().toISOString(),
+    })
+  }
+  res.json({ sessions })
 })
 
 router.get('/:id/shared-profile-activity', authGuard, async (req, res) => {
