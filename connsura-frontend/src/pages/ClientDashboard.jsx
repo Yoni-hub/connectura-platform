@@ -909,6 +909,7 @@ export default function ClientDashboard() {
       await api.post(`/shares/${token}/approve`)
       toast.success('Changes approved')
       setReviewShare(null)
+      setFormsDraft(null)
       await fetchProfile()
       await loadPendingShares()
       await loadActiveShares()

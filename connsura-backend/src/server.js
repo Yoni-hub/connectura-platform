@@ -25,6 +25,7 @@ const PORT = process.env.PORT || 8000
 const HOST = process.env.HOST || '127.0.0.1'
 const createApp = () => {
   const app = express()
+  app.set('etag', false)
   app.use(
     cors({
       origin: process.env.FRONTEND_URL || 'http://localhost:5173',

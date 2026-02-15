@@ -8,10 +8,10 @@ import Modal from '../components/ui/Modal'
 
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
-  'h-7 w-40 justify-self-start border border-slate-700/60 bg-white px-2 text-sm text-slate-900 focus:border-[#006aff] focus:outline-none focus:ring-1 focus:ring-[#006aff]/20'
+  'h-9 w-full justify-self-start border border-slate-700/60 bg-white px-2 text-sm text-slate-900 focus:border-[#006aff] focus:outline-none focus:ring-1 focus:ring-[#006aff]/20 sm:h-7 sm:w-40'
 const additionalQuestionInputClass =
-  'justify-self-start border-0 bg-transparent px-0 text-sm text-[#006aff] placeholder:text-[#7fb2ff] focus:outline-none focus:ring-0'
-const gridClass = 'grid grid-cols-[150px_1fr] items-center gap-x-4 gap-y-2'
+  'w-full justify-self-start border-0 bg-transparent px-0 text-sm text-[#006aff] placeholder:text-[#7fb2ff] focus:outline-none focus:ring-0'
+const gridClass = 'grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-[150px_1fr] sm:items-center'
 const nextButton = 'pill-btn-primary px-5 py-2 text-sm'
 const miniButton = 'pill-btn-ghost px-3 py-1.5 text-xs'
 const tabButton = 'pill-btn-ghost px-2 py-1 text-sm'
@@ -586,6 +586,9 @@ export default function CreateProfile({
         credentials: 'include',
         cache: 'no-store',
       })
+      if (res.status === 304) {
+        return
+      }
       if (!res.ok) {
         if (sectionKey === 'household') {
           const message = 'something went wrong please try again later'
@@ -2781,7 +2784,7 @@ export default function CreateProfile({
           <>
             {householdQuestionsUnavailable ? (
               <section className="mt-6 flex justify-center">
-                <div className="w-fit rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   {householdQuestionsError}
                 </div>
               </section>
@@ -2866,7 +2869,7 @@ export default function CreateProfile({
 
             {showHouseholdForm && (
               <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <form className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">{householdSectionLabel}</div>
                     <div>
@@ -3029,7 +3032,7 @@ export default function CreateProfile({
           <>
             {addressQuestionsUnavailable ? (
               <section className="mt-6 flex justify-center">
-                <div className="w-fit rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-700 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   {addressQuestionsError}
                 </div>
               </section>
@@ -3038,7 +3041,7 @@ export default function CreateProfile({
               <>
             {showAddAddressModal && (
               <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <form className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">Additional Address</div>
                     <div className={`mt-3 ${gridClass}`}>
@@ -3170,7 +3173,7 @@ export default function CreateProfile({
             )}
             {showAddressForm && (
               <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <form className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">{addressSectionLabel}</div>
                     <div>
@@ -3399,7 +3402,7 @@ export default function CreateProfile({
           <>
             {showAdditionalForm && (
               <section className="mt-6 flex justify-center">
-                <form className="w-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+                <form className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
                   <div className="space-y-4">
                     <div className="text-sm font-semibold text-slate-900">{additionalSectionLabel}</div>
                     {Object.keys(additionalErrors).length > 0 && (
