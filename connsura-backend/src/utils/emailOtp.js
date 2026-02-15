@@ -46,6 +46,12 @@ const OTP_TEMPLATES = {
   },
 }
 
+const OTP_EVENT_TYPES = {
+  email_verify: 'EMAIL_VERIFICATION',
+  name_change: 'NAME_CHANGE_VERIFICATION',
+  password_change: 'PASSWORD_CHANGE_VERIFICATION',
+}
+
 const resolveTemplate = (template) => {
   if (!template) return OTP_TEMPLATES.email_verify
   if (typeof template === 'string' && OTP_TEMPLATES[template]) return OTP_TEMPLATES[template]
@@ -87,7 +93,7 @@ const buildOtpHtml = ({ code, expiresMinutes, heading, intro }) => {
   `
 }
 
-const deliverEmail = async (email, code, { subject, heading, intro } = {}) => {
+const deliverEmail = async (email, code, { subject, heading, intro, log } = {}) => {
   const expiresMinutes = Math.max(1, Math.round(OTP_TTL_MS / 60000))
   const text = buildOtpText({ code, expiresMinutes, heading, intro })
   const html = buildOtpHtml({ code, expiresMinutes, heading, intro })
@@ -97,6 +103,7 @@ const deliverEmail = async (email, code, { subject, heading, intro } = {}) => {
     text,
     html,
     replyTo: VERIFY_EMAIL_REPLY_TO,
+    log,
   })
   if (delivery.delivery === 'disabled' && String(process.env.EMAIL_LOG_CODES || '').toLowerCase() === 'true') {
     console.log(`[email-otp] code for ${email}: ${code}`)
@@ -158,7 +165,7 @@ const checkRateLimit = async (email, ip) => {
   prisma.emailOtpRequest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => {})
 }
 
-const sendEmailOtp = async (email, { ip, subject, template } = {}) => {
+const sendEmailOtp = async (email, { ip, subject, template, userId } = {}) => {
   const normalized = normalizeEmail(email)
   await checkRateLimit(normalized, ip)
 
@@ -198,10 +205,24 @@ const sendEmailOtp = async (email, { ip, subject, template } = {}) => {
   })
 
   const resolvedTemplate = resolveTemplate(template)
+  const templateKey = typeof template === 'string' ? template : 'email_verify'
+  const eventType = OTP_EVENT_TYPES[templateKey] || OTP_EVENT_TYPES.email_verify
   const delivery = await deliverEmail(normalized, code, {
     subject: subject || resolvedTemplate.subject,
     heading: resolvedTemplate.heading,
     intro: resolvedTemplate.intro,
+    log: {
+      eventType,
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      metadata: {
+        template_name: templateKey,
+        template_version: 1,
+      },
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
   return { delivery: delivery.delivery }
 }

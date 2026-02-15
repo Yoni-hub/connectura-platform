@@ -10,6 +10,7 @@ const AdminErrorsTab = lazy(() => import('./admin/AdminErrorsTab'))
 const AdminContentTab = lazy(() => import('./admin/AdminContentTab'))
 const AdminFormsTab = lazy(() => import('./admin/AdminFormsTab'))
 const AdminLegalTab = lazy(() => import('./admin/AdminLegalTab'))
+const AdminNotificationLogsTab = lazy(() => import('./admin/AdminNotificationLogsTab'))
 
 const splitList = (value = '') =>
   value
@@ -263,6 +264,7 @@ export default function Admin({ initialView = 'clients' }) {
             { id: 'clients', label: 'Clients' },
             { id: 'audit', label: 'Audit logs' },
             { id: 'errors', label: 'Errors' },
+            { id: 'notifications', label: 'Notification Logs' },
             { id: 'content', label: 'Website Content Manager' },
             { id: 'forms', label: 'Forms Content Manager' },
             { id: 'legal', label: 'Legal & Consents' },
@@ -325,6 +327,7 @@ export default function Admin({ initialView = 'clients' }) {
             )}
             {view === 'audit' && <AdminAuditTab onSessionExpired={handleLogout} />}
             {view === 'errors' && <AdminErrorsTab onSessionExpired={handleLogout} />}
+            {view === 'notifications' && <AdminNotificationLogsTab onSessionExpired={handleLogout} />}
             {view === 'content' && <AdminContentTab onSessionExpired={handleLogout} />}
             {view === 'forms' && <AdminFormsTab onSessionExpired={handleLogout} />}
             {view === 'legal' && <AdminLegalTab onSessionExpired={handleLogout} />}

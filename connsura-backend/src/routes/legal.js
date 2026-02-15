@@ -171,8 +171,11 @@ router.post('/admin/publish', adminGuard, async (req, res) => {
     .then((users) =>
       notifyLegalUpdate({
         docLabel: LEGAL_LABELS[type] || 'policy',
+        docType: type,
+        version,
         publishedAt,
         users,
+        actor: { type: 'ADMIN', id: req.admin?.id || null },
       })
     )
     .catch((err) => console.error('legal update notification error', err))
@@ -210,8 +213,11 @@ router.post('/admin/publish-from-source', adminGuard, async (req, res) => {
     .then((users) =>
       notifyLegalUpdate({
         docLabel: LEGAL_LABELS[type] || 'policy',
+        docType: type,
+        version,
         publishedAt,
         users,
+        actor: { type: 'ADMIN', id: req.admin?.id || null },
       })
     )
     .catch((err) => console.error('legal update notification error', err))
@@ -258,6 +264,7 @@ router.post('/admin/force-reconsent', adminGuard, async (req, res) => {
         docLabel: 'policy updates',
         publishedAt,
         users,
+        actor: { type: 'ADMIN', id: req.admin?.id || null },
       })
     )
     .catch((err) => console.error('legal update notification error', err))

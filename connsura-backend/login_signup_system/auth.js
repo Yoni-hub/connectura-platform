@@ -6,6 +6,7 @@ const { generateToken } = require('../src/utils/token')
 const { authGuard } = require('../src/middleware/auth')
 const { sendEmail } = require('../src/utils/emailClient')
 const { sendEmailOtp, verifyEmailOtp } = require('../src/utils/emailOtp')
+const { logInAppNotification } = require('../src/utils/notifications/logging')
 const { logClientAudit } = require('../src/utils/auditLog')
 const { lookupGeoIp } = require('../src/utils/geoip')
 const {
@@ -252,7 +253,7 @@ const buildEmailVerifiedEmail = () => ({
   `,
 })
 
-const sendEmailVerifiedEmail = async (email) => {
+const sendEmailVerifiedEmail = async (email, userId) => {
   const content = buildEmailVerifiedEmail()
   return sendEmail({
     to: email,
@@ -260,6 +261,14 @@ const sendEmailVerifiedEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'security@connsura.com',
+    log: {
+      eventType: 'EMAIL_VERIFIED',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -275,7 +284,7 @@ const buildAccountDeletedEmail = () => ({
   `,
 })
 
-const sendAccountDeletedEmail = async (email) => {
+const sendAccountDeletedEmail = async (email, userId) => {
   const content = buildAccountDeletedEmail()
   return sendEmail({
     to: email,
@@ -283,6 +292,14 @@ const sendAccountDeletedEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'support@connsura.com',
+    log: {
+      eventType: 'ACCOUNT_DELETED',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -298,7 +315,7 @@ const buildTwoFactorEnabledEmail = () => ({
   `,
 })
 
-const sendTwoFactorEnabledEmail = async (email) => {
+const sendTwoFactorEnabledEmail = async (email, userId) => {
   const content = buildTwoFactorEnabledEmail()
   return sendEmail({
     to: email,
@@ -306,6 +323,14 @@ const sendTwoFactorEnabledEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'security@connsura.com',
+    log: {
+      eventType: 'TWO_FACTOR_ENABLED',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -321,7 +346,7 @@ const buildTwoFactorDisabledEmail = () => ({
   `,
 })
 
-const sendTwoFactorDisabledEmail = async (email) => {
+const sendTwoFactorDisabledEmail = async (email, userId) => {
   const content = buildTwoFactorDisabledEmail()
   return sendEmail({
     to: email,
@@ -329,6 +354,14 @@ const sendTwoFactorDisabledEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'security@connsura.com',
+    log: {
+      eventType: 'TWO_FACTOR_DISABLED',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -344,7 +377,7 @@ const buildLogoutOtherDevicesEmail = () => ({
   `,
 })
 
-const sendLogoutOtherDevicesEmail = async (email) => {
+const sendLogoutOtherDevicesEmail = async (email, userId) => {
   const content = buildLogoutOtherDevicesEmail()
   return sendEmail({
     to: email,
@@ -352,6 +385,14 @@ const sendLogoutOtherDevicesEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'security@connsura.com',
+    log: {
+      eventType: 'LOGOUT_OTHER_DEVICES',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -367,7 +408,7 @@ const buildAccountDeactivatedEmail = () => ({
   `,
 })
 
-const sendAccountDeactivatedEmail = async (email) => {
+const sendAccountDeactivatedEmail = async (email, userId) => {
   const content = buildAccountDeactivatedEmail()
   return sendEmail({
     to: email,
@@ -375,6 +416,14 @@ const sendAccountDeactivatedEmail = async (email) => {
     text: content.text,
     html: content.html,
     replyTo: 'support@connsura.com',
+    log: {
+      eventType: 'ACCOUNT_DEACTIVATED',
+      severity: 'SECURITY',
+      userId: userId || null,
+      required: true,
+      actorType: userId ? 'USER' : 'SYSTEM',
+      actorUserId: userId || null,
+    },
   })
 }
 
@@ -532,7 +581,7 @@ router.post('/register', async (req, res) => {
     }
     if (isCustomer) {
       try {
-        const result = await sendEmailOtp(email, { ip: getRequestIp(req) })
+        const result = await sendEmailOtp(email, { ip: getRequestIp(req), userId: user.id })
         await logClientAudit(user.customer?.id || user.id, 'EMAIL_VERIFY_SENT', { delivery: result.delivery })
         await logClientAudit(user.customer?.id || user.id, 'CLIENT_SIGN_UP_SUCCESS')
       } catch (err) {
@@ -622,7 +671,7 @@ router.post('/email-change/request', authGuard, async (req, res) => {
         new_email_hash: hashValue(nextEmail),
       })
     }
-    const result = await sendEmailOtp(nextEmail, { ip, subject: 'Verify your new email' })
+    const result = await sendEmailOtp(nextEmail, { ip, subject: 'Verify your new email', userId: user.id })
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -670,6 +719,7 @@ router.post('/email-otp/request', authGuard, async (req, res) => {
     const result = await sendEmailOtp(email, {
       ip,
       subject: pendingEmail ? 'Verify your new email' : undefined,
+      userId: user?.id || null,
     })
     if (req.user?.role === 'CUSTOMER') {
       await logClientAudit(req.user.customer?.id || req.user.id, 'EMAIL_VERIFY_SENT', {
@@ -888,7 +938,7 @@ router.post('/totp/confirm', authGuard, async (req, res) => {
     }
     let emailDelivery = 'disabled'
     try {
-      const emailResult = await sendTwoFactorEnabledEmail(updated.email)
+      const emailResult = await sendTwoFactorEnabledEmail(updated.email, updated.id)
       emailDelivery = emailResult?.delivery || 'smtp'
       if (updated.role === 'CUSTOMER') {
         await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
@@ -1076,7 +1126,7 @@ router.post('/totp/disable', authGuard, async (req, res) => {
     }
     let emailDelivery = 'disabled'
     try {
-      const emailResult = await sendTwoFactorDisabledEmail(updated.email)
+      const emailResult = await sendTwoFactorDisabledEmail(updated.email, updated.id)
       emailDelivery = emailResult?.delivery || 'smtp'
       if (updated.role === 'CUSTOMER') {
         await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {
@@ -1160,7 +1210,7 @@ router.post('/password/request', authGuard, async (req, res) => {
         passwordPendingRequestedAt: new Date(),
       },
     })
-    const result = await sendEmailOtp(user.email, { ip, template: 'password_change' })
+    const result = await sendEmailOtp(user.email, { ip, template: 'password_change', userId: user.id })
     return res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
     console.error('password change request error', err)
@@ -1191,7 +1241,7 @@ router.post('/password/resend', authGuard, async (req, res) => {
       })
       return res.status(400).json({ error: 'Password change request expired. Please start again.' })
     }
-    const result = await sendEmailOtp(user.email, { ip, template: 'password_change' })
+    const result = await sendEmailOtp(user.email, { ip, template: 'password_change', userId: user.id })
     return res.json({ sent: true, delivery: result.delivery })
   } catch (err) {
     console.error('password change resend error', err)
@@ -1506,6 +1556,7 @@ router.post('/login', async (req, res) => {
       const customerId = user.customer?.id || user.id
       let deviceId = getCookieValue(req, DEVICE_COOKIE_NAME)
       let shouldAlert = false
+      let deviceState = null
       if (!deviceId || deviceId.length < 16) {
         deviceId = crypto.randomBytes(16).toString('hex')
         setDeviceCookie(res, deviceId)
@@ -1519,7 +1570,7 @@ router.post('/login', async (req, res) => {
         console.error('geo lookup error', err)
       }
       try {
-        const deviceState = await ensureUserDevice({
+        deviceState = await ensureUserDevice({
           userId: user.id,
           deviceId,
           ipPrefix,
@@ -1563,6 +1614,7 @@ router.post('/login', async (req, res) => {
           ip,
           userAgent,
           location: location?.locationLabel || null,
+          wasNewDevice: Boolean(deviceState?.isNewDevice || deviceState?.ipChanged),
         }).catch((err) =>
           console.error('login alert notification error', err)
         )
@@ -1650,10 +1702,19 @@ router.post('/account/delete', authGuard, async (req, res) => {
         ...auditMeta,
         type: 'account_deleted',
       })
+      await logInAppNotification({
+        eventType: 'IN_APP_NOTICE',
+        severity: 'INFO',
+        userId: user.id,
+        required: true,
+        metadata: { type: 'account_deleted' },
+        actorType: 'USER',
+        actorUserId: user.id,
+      })
     }
     let emailDelivery = 'disabled'
     try {
-      const emailResult = await sendAccountDeletedEmail(email)
+      const emailResult = await sendAccountDeletedEmail(email, user.id)
       emailDelivery = emailResult?.delivery || 'smtp'
       if (user.role === 'CUSTOMER' && customerId) {
         await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
@@ -1735,7 +1796,7 @@ router.post('/account/deactivate', authGuard, async (req, res) => {
     })
     let emailDelivery = 'disabled'
     try {
-      const emailResult = await sendAccountDeactivatedEmail(user.email)
+      const emailResult = await sendAccountDeactivatedEmail(user.email, user.id)
       emailDelivery = emailResult?.delivery || 'smtp'
       await logClientAudit(customerId, 'SUPPORT_EMAIL_SENT', {
         session_id: sessionId,
@@ -1831,7 +1892,7 @@ router.post('/sessions/revoke-others', authGuard, async (req, res) => {
     }
     let emailDelivery = 'disabled'
     try {
-      const emailResult = await sendLogoutOtherDevicesEmail(updated.email)
+      const emailResult = await sendLogoutOtherDevicesEmail(updated.email, updated.id)
       emailDelivery = emailResult?.delivery || 'smtp'
       if (updated.role === 'CUSTOMER') {
         await logClientAudit(updated.customer?.id || updated.id, 'SECURITY_EMAIL_SENT', {

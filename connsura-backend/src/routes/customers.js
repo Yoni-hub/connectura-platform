@@ -15,6 +15,7 @@ const {
   mapPreferencesToLegacy,
 } = require('../utils/notifications/preferences')
 const { notifyProfileUpdated } = require('../utils/notifications/dispatcher')
+const { logInAppNotification } = require('../utils/notifications/logging')
 
 const router = express.Router()
 const enableAgentFeatures = false
@@ -385,7 +386,7 @@ router.post('/:id/name-change/request', authGuard, async (req, res) => {
   const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
   const userAgent = String(req.headers['user-agent'] || '')
   try {
-    const result = await sendEmailOtp(req.user.email, { ip, template: 'name_change' })
+    const result = await sendEmailOtp(req.user.email, { ip, template: 'name_change', userId: req.user.id })
     const updatedProfileData = {
       ...currentProfileData,
       nameChangePending: {
@@ -847,6 +848,15 @@ router.post('/:id/inapp-notice', authGuard, async (req, res) => {
     ip: getRequestIp(req),
     user_agent: String(req.headers['user-agent'] || ''),
     type: noticeType,
+  })
+  await logInAppNotification({
+    eventType: 'IN_APP_NOTICE',
+    severity: 'INFO',
+    userId: req.user.id,
+    required: true,
+    metadata: { type: noticeType || null },
+    actorType: 'USER',
+    actorUserId: req.user.id,
   })
   res.json({ ok: true })
 })

@@ -10,6 +10,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationSeverity {
+  INFO
+  SECURITY
+  LEGAL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
+enum NotificationActorType {
+  USER
+  SYSTEM
+  ADMIN
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique
@@ -205,6 +230,35 @@ model AuditLog {
   action     String
   diff       String?
   createdAt  DateTime  @default(now())
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  channel   NotificationChannel
+  eventType String
+  severity  NotificationSeverity
+  userId    Int?
+  recipientEmail String?
+  recipientUserAgentHash String?
+  subject   String?
+  provider  String?
+  providerMessageId String? @unique
+  status    NotificationStatus
+  failureReason String?
+  required  Boolean @default(true)
+  preferenceSnapshot Json?
+  metadata  Json?
+  actorType NotificationActorType @default(SYSTEM)
+  actorUserId Int?
+  correlationId String?
+  dedupeKey String?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([status, createdAt])
 }
 
 model ErrorEvent {

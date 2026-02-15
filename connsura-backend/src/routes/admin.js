@@ -18,6 +18,11 @@ const router = express.Router()
 
 const ADMIN_JWT_EXPIRY = process.env.ADMIN_JWT_EXPIRY || '2h'
 const enableAgentFeatures = false
+const NOTIFICATION_EXPORT_WINDOW_MS = Number(process.env.NOTIFICATION_EXPORT_WINDOW_MS || 30 * 1000)
+const NOTIFICATION_EXPORT_MAX = Number(process.env.NOTIFICATION_EXPORT_MAX || 3)
+const notificationExportRates = new Map()
+const NOTIFICATION_CHANNELS = new Set(['EMAIL', 'IN_APP'])
+const NOTIFICATION_STATUSES = new Set(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'])
 
 const requireAgentFeatures = (req, res, next) => {
   if (!enableAgentFeatures) {
@@ -123,6 +128,85 @@ const parsePositiveInt = (value, fallback) => {
   const raw = Number.parseInt(String(value), 10)
   if (!Number.isFinite(raw) || raw <= 0) return fallback
   return raw
+}
+
+const parseBoolean = (value) => {
+  if (value === undefined || value === null) return null
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes'].includes(normalized)) return true
+  if (['false', '0', 'no'].includes(normalized)) return false
+  return null
+}
+
+const parseNotificationDate = (value) => {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
+const encodeCursor = (entry) => {
+  if (!entry) return null
+  const payload = { createdAt: entry.createdAt, id: entry.id }
+  return Buffer.from(JSON.stringify(payload)).toString('base64')
+}
+
+const decodeCursor = (cursor) => {
+  if (!cursor) return null
+  try {
+    const raw = Buffer.from(String(cursor), 'base64').toString('utf8')
+    const payload = JSON.parse(raw)
+    const createdAt = parseNotificationDate(payload?.createdAt)
+    const id = String(payload?.id || '').trim()
+    if (!createdAt || !id) return null
+    return { createdAt, id }
+  } catch {
+    return null
+  }
+}
+
+const formatNotificationLogSummary = (row) => ({
+  id: row.id,
+  createdAt: row.createdAt,
+  channel: row.channel,
+  eventType: row.eventType,
+  severity: row.severity,
+  userId: row.userId,
+  recipientEmail: row.recipientEmail,
+  subject: row.subject,
+  provider: row.provider,
+  providerMessageId: row.providerMessageId,
+  status: row.status,
+  required: row.required,
+  actorType: row.actorType,
+  actorUserId: row.actorUserId,
+  correlationId: row.correlationId,
+  failureReason: row.failureReason,
+})
+
+const formatNotificationLogDetail = (row) => ({
+  ...formatNotificationLogSummary(row),
+  recipientUserAgentHash: row.recipientUserAgentHash,
+  preferenceSnapshot: row.preferenceSnapshot,
+  metadata: row.metadata,
+  dedupeKey: row.dedupeKey,
+})
+
+const checkNotificationExportRate = (adminId) => {
+  if (!adminId) return { ok: true }
+  const now = Date.now()
+  const existing = notificationExportRates.get(adminId)
+  if (!existing || now > existing.resetAt) {
+    const next = { count: 1, resetAt: now + NOTIFICATION_EXPORT_WINDOW_MS }
+    notificationExportRates.set(adminId, next)
+    return { ok: true, remaining: NOTIFICATION_EXPORT_MAX - 1, resetAt: next.resetAt }
+  }
+  if (existing.count >= NOTIFICATION_EXPORT_MAX) {
+    return { ok: false, remaining: 0, resetAt: existing.resetAt }
+  }
+  existing.count += 1
+  notificationExportRates.set(adminId, existing)
+  return { ok: true, remaining: NOTIFICATION_EXPORT_MAX - existing.count, resetAt: existing.resetAt }
 }
 
 const ensureSiteContentDefaults = async () => {
@@ -240,10 +324,11 @@ router.post('/notifications/broadcast', adminGuard, async (req, res) => {
     select: { id: true, email: true },
   })
   try {
+    const actor = { type: 'ADMIN', id: req.admin?.id || null }
     if (type === 'feature') {
-      await notifyFeatureUpdateBroadcast({ users, title, summary })
+      await notifyFeatureUpdateBroadcast({ users, title, summary, actor })
     } else {
-      await notifyMarketingBroadcast({ users, title, summary })
+      await notifyMarketingBroadcast({ users, title, summary, actor })
     }
     await logAudit(req.admin.id, 'Admin', req.admin.id, 'notification_broadcast', {
       type,
@@ -746,6 +831,191 @@ router.get('/errors', adminGuard, async (req, res) => {
     nextPage: hasMore ? effectivePage + 1 : null,
     nextOffset: hasMore ? offset + limit : null,
   })
+})
+
+// Notification logs
+router.get('/notification-logs', adminGuard, async (req, res) => {
+  const query = String(req.query?.q || '').trim()
+  const userIdParam = req.query?.user_id ?? req.query?.userId
+  const eventType = String(req.query?.event_type || req.query?.eventType || '').trim().toUpperCase()
+  const channelRaw = String(req.query?.channel || '').trim().toUpperCase()
+  const statusRaw = String(req.query?.status || '').trim().toUpperCase()
+  const required = parseBoolean(req.query?.required)
+  const recipientEmail = String(req.query?.recipient_email || req.query?.recipientEmail || '').trim()
+  const dateFrom = parseNotificationDate(req.query?.date_from || req.query?.dateFrom)
+  const dateTo = parseNotificationDate(req.query?.date_to || req.query?.dateTo)
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 50), 200)
+  const sortRaw = String(req.query?.sort || '').trim().toLowerCase()
+  const sortDir = sortRaw === 'asc' || sortRaw === 'oldest' ? 'asc' : 'desc'
+  const cursor = decodeCursor(req.query?.cursor)
+
+  const userId = userIdParam ? Number(userIdParam) : null
+  const where = {}
+  if (Number.isFinite(userId) && userId > 0) where.userId = userId
+  if (eventType) where.eventType = eventType
+  if (NOTIFICATION_CHANNELS.has(channelRaw)) where.channel = channelRaw
+  if (NOTIFICATION_STATUSES.has(statusRaw)) where.status = statusRaw
+  if (required !== null) where.required = required
+  if (recipientEmail) where.recipientEmail = { contains: recipientEmail, mode: 'insensitive' }
+  if (dateFrom || dateTo) {
+    where.createdAt = {
+      ...(dateFrom ? { gte: dateFrom } : {}),
+      ...(dateTo ? { lte: dateTo } : {}),
+    }
+  }
+
+  const andFilters = []
+  if (query) {
+    andFilters.push({
+      OR: [
+        { subject: { contains: query, mode: 'insensitive' } },
+        { recipientEmail: { contains: query, mode: 'insensitive' } },
+        { providerMessageId: { contains: query, mode: 'insensitive' } },
+        { correlationId: { contains: query, mode: 'insensitive' } },
+      ],
+    })
+  }
+
+  const countWhere = { ...where, ...(andFilters.length ? { AND: andFilters } : {}) }
+
+  if (cursor) {
+    const comparator = sortDir === 'asc' ? 'gt' : 'lt'
+    andFilters.push({
+      OR: [
+        { createdAt: { [comparator]: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { [comparator]: cursor.id } },
+      ],
+    })
+  }
+
+  const listWhere = { ...where, ...(andFilters.length ? { AND: andFilters } : {}) }
+  const [total, rows] = await Promise.all([
+    prisma.notificationLog.count({ where: countWhere }),
+    prisma.notificationLog.findMany({
+      where: listWhere,
+      orderBy: [{ createdAt: sortDir }, { id: sortDir }],
+      take: limit + 1,
+    }),
+  ])
+
+  const hasMore = rows.length > limit
+  const trimmed = rows.slice(0, limit)
+  const nextCursor = hasMore ? encodeCursor(trimmed[trimmed.length - 1]) : null
+  res.json({
+    logs: trimmed.map(formatNotificationLogSummary),
+    total,
+    limit,
+    hasMore,
+    nextCursor,
+  })
+})
+
+router.get('/notification-logs/export', adminGuard, async (req, res) => {
+  const rate = checkNotificationExportRate(req.admin?.id)
+  if (!rate.ok) {
+    const retryAfter = Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))
+    res.set('Retry-After', String(retryAfter))
+    return res.status(429).json({ error: 'Export rate limit exceeded. Try again shortly.' })
+  }
+
+  const query = String(req.query?.q || '').trim()
+  const userIdParam = req.query?.user_id ?? req.query?.userId
+  const eventType = String(req.query?.event_type || req.query?.eventType || '').trim().toUpperCase()
+  const channelRaw = String(req.query?.channel || '').trim().toUpperCase()
+  const statusRaw = String(req.query?.status || '').trim().toUpperCase()
+  const required = parseBoolean(req.query?.required)
+  const recipientEmail = String(req.query?.recipient_email || req.query?.recipientEmail || '').trim()
+  const dateFrom = parseNotificationDate(req.query?.date_from || req.query?.dateFrom)
+  const dateTo = parseNotificationDate(req.query?.date_to || req.query?.dateTo)
+  const limit = Math.min(parsePositiveInt(req.query?.limit, 1000), 5000)
+
+  const userId = userIdParam ? Number(userIdParam) : null
+  const where = {}
+  if (Number.isFinite(userId) && userId > 0) where.userId = userId
+  if (eventType) where.eventType = eventType
+  if (NOTIFICATION_CHANNELS.has(channelRaw)) where.channel = channelRaw
+  if (NOTIFICATION_STATUSES.has(statusRaw)) where.status = statusRaw
+  if (required !== null) where.required = required
+  if (recipientEmail) where.recipientEmail = { contains: recipientEmail, mode: 'insensitive' }
+  if (dateFrom || dateTo) {
+    where.createdAt = {
+      ...(dateFrom ? { gte: dateFrom } : {}),
+      ...(dateTo ? { lte: dateTo } : {}),
+    }
+  }
+
+  const andFilters = []
+  if (query) {
+    andFilters.push({
+      OR: [
+        { subject: { contains: query, mode: 'insensitive' } },
+        { recipientEmail: { contains: query, mode: 'insensitive' } },
+        { providerMessageId: { contains: query, mode: 'insensitive' } },
+        { correlationId: { contains: query, mode: 'insensitive' } },
+      ],
+    })
+  }
+
+  const exportWhere = { ...where, ...(andFilters.length ? { AND: andFilters } : {}) }
+  const rows = await prisma.notificationLog.findMany({
+    where: exportWhere,
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+
+  const header = [
+    'created_at',
+    'channel',
+    'event_type',
+    'severity',
+    'user_id',
+    'recipient_email',
+    'subject',
+    'provider',
+    'provider_message_id',
+    'status',
+    'required',
+    'actor_type',
+    'actor_user_id',
+    'correlation_id',
+    'failure_reason',
+    'metadata',
+  ]
+  const lines = [header.join(',')]
+  for (const row of rows) {
+    const metadataValue = row.metadata ? JSON.stringify(row.metadata) : ''
+    const values = [
+      row.createdAt.toISOString(),
+      row.channel,
+      row.eventType,
+      row.severity,
+      row.userId || '',
+      row.recipientEmail || '',
+      row.subject || '',
+      row.provider || '',
+      row.providerMessageId || '',
+      row.status,
+      row.required ? 'true' : 'false',
+      row.actorType || '',
+      row.actorUserId || '',
+      row.correlationId || '',
+      row.failureReason || '',
+      metadataValue.replace(/\n|\r/g, ' '),
+    ]
+    lines.push(values.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+  }
+
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader('Content-Disposition', 'attachment; filename=\"notification-logs.csv\"')
+  res.send(lines.join('\n'))
+})
+
+router.get('/notification-logs/:id', adminGuard, async (req, res) => {
+  const id = String(req.params.id || '').trim()
+  if (!id) return res.status(400).json({ error: 'Log id is required' })
+  const log = await prisma.notificationLog.findUnique({ where: { id } })
+  if (!log) return res.status(404).json({ error: 'Notification log not found' })
+  res.json({ log: formatNotificationLogDetail(log) })
 })
 
 // Site content management

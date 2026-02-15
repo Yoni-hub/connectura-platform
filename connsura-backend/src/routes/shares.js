@@ -46,6 +46,13 @@ const formatShare = (share) => ({
   createdAt: share.createdAt,
 })
 
+const buildShareScope = (sections = {}) => {
+  if (!sections || typeof sections !== 'object') return []
+  return Object.keys(sections)
+    .filter((key) => key !== 'additionalIndexes')
+    .filter((key) => Boolean(sections[key]))
+}
+
 const normalizeBaseUrl = (value) => {
   if (!value) return ''
   return value.replace(/\/+$/, '')
@@ -195,6 +202,7 @@ router.post('/', authGuard, async (req, res) => {
   })
 
   const shareUrl = buildShareUrl(token)
+  const shareScope = buildShareScope(sections || {})
   const emailTarget = customer.user?.email
   if (emailTarget) {
     try {
@@ -214,6 +222,8 @@ router.post('/', authGuard, async (req, res) => {
     notifyProfileShared({
       user: customer.user,
       recipientName,
+      shareId: share.id,
+      shareScope,
     }).catch((err) => console.error('share activity notification error', err))
   }
 
@@ -322,6 +332,7 @@ router.post('/:token/edits', async (req, res) => {
       notifyProfileUpdatedByRecipient({
         user: owner.user,
         recipientName: share.recipientName,
+        shareId: share.id,
       }).catch((err) => console.error('profile edits notification error', err))
     }
   }
@@ -434,6 +445,7 @@ router.post('/:token/decline', authGuard, async (req, res) => {
     notifyProfileAccessRevoked({
       user: share.customer.user,
       recipientName: share.recipientName,
+      shareId: share.id,
     }).catch((err) => console.error('share declined notification error', err))
   }
   res.json({ ok: true })
@@ -465,6 +477,7 @@ router.post('/:token/revoke', authGuard, async (req, res) => {
     notifyProfileAccessRevoked({
       user: share.customer.user,
       recipientName: share.recipientName,
+      shareId: share.id,
     }).catch((err) => console.error('share revoked notification error', err))
   }
   res.json({ ok: true })
@@ -505,6 +518,7 @@ router.post('/:token/close', async (req, res) => {
     notifyProfileAccessRevoked({
       user: share.customer.user,
       recipientName: share.recipientName,
+      shareId: share.id,
     }).catch((err) => console.error('share closed notification error', err))
   }
   res.json({ ok: true })
