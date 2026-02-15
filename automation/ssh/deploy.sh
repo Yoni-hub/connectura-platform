@@ -11,6 +11,8 @@ POSTGRES_DIR="${BASE_DIR}/postgres"
 LEGAL_DIR="${BASE_DIR}/legal"
 
 mkdir -p "$APP_DIR" "$DEPLOY_DIR" "$ENV_DIR" "$DATA_DIR" "$UPLOADS_DIR" "$POSTGRES_DIR" "$LEGAL_DIR"
+sudo chown -R 999:999 "$POSTGRES_DIR"
+sudo chmod 700 "$POSTGRES_DIR"
 
 ENV_FILE="/tmp/connsura.env"
 if [[ -f "${ENV_DIR}/backend.env" ]]; then
