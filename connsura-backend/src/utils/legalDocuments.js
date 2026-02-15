@@ -13,18 +13,43 @@ const REQUIRED_DOCS_BY_ROLE = {
 }
 
 const LEGAL_SOURCE_PATH = path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md')
+const LEGAL_OVERRIDE_DIR = process.env.LEGAL_SOURCE_DIR || path.resolve(path.sep, 'legal')
 const LEGAL_SOURCE_MAP = {
   [LEGAL_DOC_TYPES.TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md'),
   [LEGAL_DOC_TYPES.PRIVACY]: path.resolve(__dirname, '..', '..', '..', 'legal', 'privacy.md'),
   [LEGAL_DOC_TYPES.DATA_SHARING]: path.resolve(__dirname, '..', '..', '..', 'legal', 'data-sharing.md'),
 }
+const LEGAL_OVERRIDE_MAP = {
+  [LEGAL_DOC_TYPES.TERMS]: path.resolve(LEGAL_OVERRIDE_DIR, 'terms.md'),
+  [LEGAL_DOC_TYPES.PRIVACY]: path.resolve(LEGAL_OVERRIDE_DIR, 'privacy.md'),
+  [LEGAL_DOC_TYPES.DATA_SHARING]: path.resolve(LEGAL_OVERRIDE_DIR, 'data-sharing.md'),
+}
+
+const resolveLegalSourcePath = (type) => {
+  const override = type ? LEGAL_OVERRIDE_MAP[type] : null
+  if (override && fs.existsSync(override)) {
+    return { path: override, source: 'override' }
+  }
+  const candidate = type ? LEGAL_SOURCE_MAP[type] : null
+  return { path: candidate || LEGAL_SOURCE_PATH, source: 'repo' }
+}
 
 const readLegalSource = (type) => {
-  const candidate = type ? LEGAL_SOURCE_MAP[type] : null
-  if (candidate && fs.existsSync(candidate)) {
-    return fs.readFileSync(candidate, 'utf8')
+  const resolved = resolveLegalSourcePath(type)
+  if (resolved?.path && fs.existsSync(resolved.path)) {
+    return fs.readFileSync(resolved.path, 'utf8')
   }
   return fs.readFileSync(LEGAL_SOURCE_PATH, 'utf8')
+}
+
+const writeLegalSource = (type, content) => {
+  const target = type ? LEGAL_OVERRIDE_MAP[type] : null
+  if (!target) {
+    throw new Error('Invalid legal document type')
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, String(content || ''), 'utf8')
+  return target
 }
 
 const formatPublishDate = (date = new Date()) => {
@@ -158,4 +183,8 @@ module.exports = {
   ensureLegalDocuments,
   buildConsentItems,
   LEGAL_SOURCE_MAP,
+  LEGAL_OVERRIDE_DIR,
+  LEGAL_OVERRIDE_MAP,
+  resolveLegalSourcePath,
+  writeLegalSource,
 }

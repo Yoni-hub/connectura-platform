@@ -12,6 +12,15 @@ export default function AdminLegalTab({ onSessionExpired }) {
     content: '',
     useSource: true,
   })
+  const [sourceEditor, setSourceEditor] = useState({
+    type: 'terms',
+    content: '',
+    source: '',
+    updatedAt: '',
+    dirty: false,
+  })
+  const [sourceLoading, setSourceLoading] = useState(false)
+  const [sourceSaving, setSourceSaving] = useState(false)
   const [legalConsentLogs, setLegalConsentLogs] = useState([])
   const [legalConsentLoading, setLegalConsentLoading] = useState(false)
   const [legalConsentFilters, setLegalConsentFilters] = useState({ type: '', role: '' })
@@ -61,6 +70,44 @@ export default function AdminLegalTab({ onSessionExpired }) {
     loadLegalDocs()
     loadLegalConsents()
   }, [])
+
+  const loadLegalSource = async () => {
+    setSourceLoading(true)
+    try {
+      const res = await adminApi.get('/legal/admin/source', { params: { type: sourceEditor.type } })
+      setSourceEditor((prev) => ({
+        ...prev,
+        content: res.data?.content || '',
+        source: res.data?.source || '',
+        updatedAt: res.data?.updatedAt || '',
+        dirty: false,
+      }))
+    } catch (err) {
+      if (handleSessionError(err, 'Failed to load legal source')) return
+    } finally {
+      setSourceLoading(false)
+    }
+  }
+
+  const saveLegalSource = async () => {
+    if (!sourceEditor.content.trim()) {
+      toast.error('Content is required')
+      return
+    }
+    setSourceSaving(true)
+    try {
+      await adminApi.put('/legal/admin/source', {
+        type: sourceEditor.type,
+        content: sourceEditor.content,
+      })
+      toast.success('Source file saved')
+      await loadLegalSource()
+    } catch (err) {
+      if (handleSessionError(err, 'Failed to save legal source')) return
+    } finally {
+      setSourceSaving(false)
+    }
+  }
 
   const publishLegalDoc = async () => {
     if (!legalPublish.version.trim()) {
@@ -186,7 +233,7 @@ export default function AdminLegalTab({ onSessionExpired }) {
               checked={legalPublish.useSource}
               onChange={(e) => setLegalPublish((prev) => ({ ...prev, useSource: e.target.checked }))}
             />
-            Use legal source file (terms.md)
+            Use legal source file (server copy)
           </label>
           {!legalPublish.useSource && (
             <label className="block text-sm">
@@ -236,6 +283,79 @@ export default function AdminLegalTab({ onSessionExpired }) {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Edit legal source files</h3>
+            <p className="text-xs text-slate-500">
+              Update the markdown source used when publishing from source.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="pill-btn-ghost px-4"
+              onClick={loadLegalSource}
+              disabled={sourceLoading || sourceSaving}
+            >
+              {sourceLoading ? 'Loading...' : 'Load source'}
+            </button>
+            <button
+              type="button"
+              className="pill-btn-primary px-4"
+              onClick={saveLegalSource}
+              disabled={sourceSaving || sourceLoading}
+            >
+              {sourceSaving ? 'Saving...' : 'Save source'}
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            Document type
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              value={sourceEditor.type}
+              onChange={(e) =>
+                setSourceEditor((prev) => ({
+                  ...prev,
+                  type: e.target.value,
+                  content: '',
+                  source: '',
+                  updatedAt: '',
+                  dirty: false,
+                }))
+              }
+            >
+              {docTypes.map((type) => (
+                <option key={`source-${type}`} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="text-xs text-slate-500 space-y-1">
+            <div>Source: {sourceEditor.source || '—'}</div>
+            <div>
+              Last updated:{' '}
+              {sourceEditor.updatedAt ? new Date(sourceEditor.updatedAt).toLocaleString() : '—'}
+            </div>
+            {sourceEditor.dirty && <div className="text-amber-700">Unsaved changes</div>}
+          </div>
+        </div>
+        <label className="block text-sm">
+          Markdown content
+          <textarea
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 min-h-[200px]"
+            value={sourceEditor.content}
+            onChange={(e) =>
+              setSourceEditor((prev) => ({ ...prev, content: e.target.value, dirty: true }))
+            }
+            placeholder="Load the source file to edit..."
+          />
+        </label>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">

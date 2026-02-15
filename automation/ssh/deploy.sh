@@ -8,8 +8,9 @@ ENV_DIR="${BASE_DIR}/env"
 DATA_DIR="${BASE_DIR}/data"
 UPLOADS_DIR="${BASE_DIR}/uploads"
 POSTGRES_DIR="${BASE_DIR}/postgres"
+LEGAL_DIR="${BASE_DIR}/legal"
 
-mkdir -p "$APP_DIR" "$DEPLOY_DIR" "$ENV_DIR" "$DATA_DIR" "$UPLOADS_DIR" "$POSTGRES_DIR"
+mkdir -p "$APP_DIR" "$DEPLOY_DIR" "$ENV_DIR" "$DATA_DIR" "$UPLOADS_DIR" "$POSTGRES_DIR" "$LEGAL_DIR"
 
 ENV_FILE="/tmp/connsura.env"
 if [[ -f "${ENV_DIR}/backend.env" ]]; then
@@ -49,6 +50,14 @@ else
   git -C "${APP_DIR}" fetch origin "${REPO_BRANCH}"
   git -C "${APP_DIR}" checkout "${REPO_BRANCH}"
   git -C "${APP_DIR}" pull origin "${REPO_BRANCH}"
+fi
+
+if [[ -d "${APP_DIR}/legal" ]]; then
+  for file in terms.md privacy.md data-sharing.md; do
+    if [[ -f "${APP_DIR}/legal/${file}" && ! -f "${LEGAL_DIR}/${file}" ]]; then
+      cp "${APP_DIR}/legal/${file}" "${LEGAL_DIR}/${file}"
+    fi
+  done
 fi
 
 GIT_SHA="$(git -C "${APP_DIR}" rev-parse HEAD)"
@@ -235,6 +244,7 @@ cat >> "${DEPLOY_DIR}/docker-compose.yml" <<EOF
     volumes:
       - ${DATA_DIR}:/data
       - ${UPLOADS_DIR}:/app/uploads
+      - ${LEGAL_DIR}:/legal
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped

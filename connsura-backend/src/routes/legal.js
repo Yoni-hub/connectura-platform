@@ -1,4 +1,5 @@
-﻿const express = require('express')
+const express = require('express')
+const fs = require('fs')
 const prisma = require('../prisma')
 const { authGuard, adminGuard } = require('../middleware/auth')
 const {
@@ -10,6 +11,8 @@ const {
   hashContent,
   buildConsentItems,
   LEGAL_SOURCE_MAP,
+  resolveLegalSourcePath,
+  writeLegalSource,
 } = require('../utils/legalDocuments')
 const { notifyLegalUpdate } = require('../utils/notifications/dispatcher')
 
@@ -224,6 +227,41 @@ router.post('/admin/publish-from-source', adminGuard, async (req, res) => {
   res.status(201).json({ document: formatDoc(entry) })
 })
 
+router.get('/admin/source', adminGuard, async (req, res) => {
+  const type = normalizeType(req.query?.type)
+  if (!type || !isValidType(type)) {
+    return res.status(400).json({ error: 'Document type is required' })
+  }
+  const resolved = resolveLegalSourcePath(type)
+  if (!resolved?.path || !fs.existsSync(resolved.path)) {
+    return res.status(404).json({ error: 'Source file not found' })
+  }
+  const content = fs.readFileSync(resolved.path, 'utf8')
+  const stat = fs.statSync(resolved.path)
+  res.json({
+    type,
+    source: resolved.source,
+    updatedAt: stat.mtime,
+    content,
+  })
+})
+
+router.put('/admin/source', adminGuard, async (req, res) => {
+  const type = normalizeType(req.body?.type)
+  if (!type || !isValidType(type)) {
+    return res.status(400).json({ error: 'Document type is required' })
+  }
+  const content = String(req.body?.content || '')
+  if (!content.trim()) {
+    return res.status(400).json({ error: 'Content is required' })
+  }
+  if (content.length > 400000) {
+    return res.status(400).json({ error: 'Content is too large' })
+  }
+  const target = writeLegalSource(type, content)
+  res.json({ ok: true, path: target })
+})
+
 router.post('/admin/force-reconsent', adminGuard, async (req, res) => {
   const type = normalizeType(req.body?.type)
   const targetTypes = type ? [type] : Object.values(LEGAL_DOC_TYPES)
@@ -375,3 +413,4 @@ router.get('/:type', async (req, res) => {
 })
 
 module.exports = router
+
