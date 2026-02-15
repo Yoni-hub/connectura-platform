@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import { API_URL, api } from '../services/api'
+import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import ShareProfileModal from '../components/modals/ShareProfileModal'
@@ -12,6 +12,17 @@ import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'Forms', 'Settings']
+const SETTINGS_ITEMS = [
+  { id: 'account', label: 'Account' },
+  { id: 'security', label: 'Security' },
+  { id: 'privacy', label: 'Privacy' },
+  { id: 'notifications', label: 'Notifications' },
+]
+
+const resolveSettingsLabel = (id = '') => {
+  const match = SETTINGS_ITEMS.find((item) => item.id === id)
+  return match?.label || 'Settings'
+}
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -33,20 +44,27 @@ const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '
 const reminderLinkClass =
   'inline-flex text-sm font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:hover:no-underline'
 
-const getInitials = (name = '', fallback = 'CL') => {
-  const parts = name.trim().split(' ').filter(Boolean)
-  if (!parts.length) return fallback
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
+
+const resolveBrowserName = (userAgent = '') => {
+  const ua = String(userAgent || '').toLowerCase()
+  if (!ua) return 'Unknown browser'
+  if (ua.includes('edg/')) return 'Microsoft Edge'
+  if (ua.includes('opr/') || ua.includes('opera')) return 'Opera'
+  if (ua.includes('chrome') && !ua.includes('edg/') && !ua.includes('opr/')) return 'Chrome'
+  if (ua.includes('safari') && !ua.includes('chrome')) return 'Safari'
+  if (ua.includes('firefox')) return 'Firefox'
+  if (ua.includes('msie') || ua.includes('trident')) return 'Internet Explorer'
+  return 'Unknown browser'
 }
 
-const resolvePhotoUrl = (value = '') => {
-  if (!value) return ''
-  if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) return value
-  return `${API_URL}${value}`
+const resolveDeviceLocation = (entry = {}) => {
+  const explicit = entry?.location
+  if (explicit && String(explicit).trim()) return String(explicit).trim()
+  const parts = [entry?.city, entry?.region || entry?.state, entry?.country]
+    .map((value) => (value ? String(value).trim() : ''))
+    .filter(Boolean)
+  if (parts.length) return parts.join(', ')
+  return 'Location unavailable'
 }
 
 const hasNonEmptyValue = (value) => {
@@ -170,7 +188,7 @@ const getSessionId = () => {
 }
 
 export default function ClientDashboard() {
-  const { user, lastPassword, setLastPassword, logout, setUser, completeAuth } = useAuth()
+  const { user, lastPassword, setLastPassword, logout, setUser, completeAuth, consentStatus, setConsentStatus } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
   const params = useParams()
@@ -194,10 +212,7 @@ export default function ClientDashboard() {
   const formsSaveRef = useRef(null)
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
-  const [settingsModal, setSettingsModal] = useState(null)
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState('')
-  const [photoUploading, setPhotoUploading] = useState(false)
+  const [settingsView, setSettingsView] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordUpdating, setPasswordUpdating] = useState(false)
@@ -212,9 +227,6 @@ export default function ClientDashboard() {
   const [emailSaving, setEmailSaving] = useState(false)
   const [emailMessage, setEmailMessage] = useState(null)
   const [emailDraft, setEmailDraft] = useState(user?.email || '')
-  const [languageDraft, setLanguageDraft] = useState('')
-  const [preferencesSaving, setPreferencesSaving] = useState(false)
-  const [preferencesMessage, setPreferencesMessage] = useState('')
   const [loginActivity, setLoginActivity] = useState([])
   const [loginActivityLoading, setLoginActivityLoading] = useState(false)
   const [loginActivityOpen, setLoginActivityOpen] = useState(false)
@@ -230,8 +242,6 @@ export default function ClientDashboard() {
   const [sharedActivityPage, setSharedActivityPage] = useState(1)
   const [consentHistory, setConsentHistory] = useState([])
   const [consentLoading, setConsentLoading] = useState(false)
-  const [consentHistoryOpen, setConsentHistoryOpen] = useState(false)
-  const [consentHistoryPage, setConsentHistoryPage] = useState(1)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [deactivatePassword, setDeactivatePassword] = useState('')
   const [deactivating, setDeactivating] = useState(false)
@@ -246,9 +256,7 @@ export default function ClientDashboard() {
   const [notificationSaving, setNotificationSaving] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState('')
   const notificationSaveRef = useRef(0)
-  const [cookiePref, setCookiePref] = useState('all')
-  const [cookieSaving, setCookieSaving] = useState(false)
-  const [cookieMessage, setCookieMessage] = useState('')
+  const [legalDocs, setLegalDocs] = useState([])
   const [verificationSent, setVerificationSent] = useState(false)
   const [verificationSending, setVerificationSending] = useState(false)
   const [verificationOpen, setVerificationOpen] = useState(false)
@@ -297,6 +305,37 @@ export default function ClientDashboard() {
   }, [location.search, isFormsEditRoute])
 
   useEffect(() => {
+    if (activeTab !== 'Settings') {
+      setSettingsView(null)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (settingsView !== 'privacy') return
+    let active = true
+    api
+      .get('/legal')
+      .then((res) => {
+        if (!active) return
+        setLegalDocs(res.data?.documents || [])
+      })
+      .catch(() => {
+        if (!active) return
+        setLegalDocs([])
+      })
+    return () => {
+      active = false
+    }
+  }, [settingsView])
+
+  useEffect(() => {
+    if (activeTab !== 'Settings') return
+    if (settingsView !== 'privacy') return
+    if (!user?.customerId) return
+    loadConsentHistory()
+  }, [activeTab, settingsView, user?.customerId])
+
+  useEffect(() => {
     if (isFormsEditRoute) return
     const nextTab = resolveTabFromSearch(location.search)
     if (nextTab !== 'Forms') return
@@ -317,17 +356,6 @@ export default function ClientDashboard() {
     if (!user?.email) return
     setForm((prev) => ({ ...prev, email: user.email }))
   }, [user?.email])
-
-  useEffect(() => {
-    if (!client?.profileData) return
-    setLanguageDraft(client.profileData.language || '')
-    if (client.profileData.cookie_preference) {
-      setCookiePref(client.profileData.cookie_preference)
-    }
-  }, [
-    client?.profileData?.language,
-    client?.profileData?.cookie_preference,
-  ])
 
   useEffect(() => {
     if (emailEditing) return
@@ -354,9 +382,6 @@ export default function ClientDashboard() {
       setClient(profile)
       const nameParts = parseFullName(profile?.name || '')
       const details = profile?.profileData || {}
-      const photoValue = details.photo || ''
-      setPhotoPreview(resolvePhotoUrl(photoValue))
-      setPhotoFile(null)
       setForm({
         firstName: details.firstName || nameParts.firstName,
         middleName: details.middleName || nameParts.middleName,
@@ -397,93 +422,6 @@ export default function ClientDashboard() {
       if (err.response?.status !== 404) {
         console.warn('Failed to load active shares', err)
       }
-    }
-  }
-
-  const handlePhotoChange = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file.')
-      return
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be under 2MB.')
-      return
-    }
-    if (photoPreview && photoPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(photoPreview)
-    }
-    const previewUrl = URL.createObjectURL(file)
-    setPhotoFile(file)
-    setPhotoPreview(previewUrl)
-    handlePhotoUpload(file, previewUrl)
-  }
-
-  const handlePhotoReset = () => {
-    if (photoPreview && photoPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(photoPreview)
-    }
-    setPhotoFile(null)
-    const existing = client?.profileData?.photo || ''
-    setPhotoPreview(resolvePhotoUrl(existing))
-  }
-
-  const handlePhotoUpload = async (fileOverride, previewOverride) => {
-    if (!user?.customerId) {
-      toast.error('Customer profile not found')
-      return
-    }
-    const uploadFile = fileOverride || photoFile
-    if (!uploadFile) {
-      toast.error('Select a photo to upload')
-      return
-    }
-    if (photoUploading) return
-    setPhotoUploading(true)
-    try {
-      const data = new FormData()
-      data.append('photo', uploadFile)
-      data.append('sessionId', sessionId)
-      const res = await api.post(`/customers/${user.customerId}/photo`, data)
-      const updatedProfile = res.data?.profile
-      if (updatedProfile) {
-        setClient(updatedProfile)
-      }
-      const updatedPhoto = updatedProfile?.profileData?.photo || res.data?.photo || ''
-      setPhotoPreview(resolvePhotoUrl(updatedPhoto))
-      setPhotoFile(null)
-      toast.success('Profile photo updated')
-    } catch (err) {
-      if (previewOverride && previewOverride.startsWith('blob:')) {
-        URL.revokeObjectURL(previewOverride)
-      }
-      handlePhotoReset()
-      toast.error(err.response?.data?.error || 'Photo upload failed')
-    } finally {
-      setPhotoUploading(false)
-    }
-  }
-
-  const handlePhotoRemove = async () => {
-    if (!user?.customerId) {
-      toast.error('Customer profile not found')
-      return
-    }
-    if (photoUploading) return
-    setPhotoUploading(true)
-    try {
-      const res = await api.post(`/customers/${user.customerId}/photo/remove`, { sessionId })
-      if (res.data?.profile) {
-        setClient(res.data.profile)
-      }
-      setPhotoPreview('')
-      setPhotoFile(null)
-      toast.success('Profile photo removed')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to remove photo')
-    } finally {
-      setPhotoUploading(false)
     }
   }
 
@@ -544,14 +482,6 @@ export default function ClientDashboard() {
       isActive = false
     }
   }, [activeTab, user?.customerId, sessionId])
-
-  useEffect(() => {
-    return () => {
-      if (photoPreview && photoPreview.startsWith('blob:')) {
-        URL.revokeObjectURL(photoPreview)
-      }
-    }
-  }, [photoPreview])
 
   useEffect(() => {
     if (!user?.customerId || !formsDraft) return
@@ -1165,27 +1095,6 @@ export default function ClientDashboard() {
     }
   }
 
-  const handlePreferencesSave = async (nextLanguage) => {
-    if (!user?.customerId) return
-    if (preferencesSaving) return
-    setPreferencesSaving(true)
-    setPreferencesMessage('')
-    try {
-      const res = await api.patch(`/customers/${user.customerId}/preferences`, {
-        language: nextLanguage,
-        sessionId,
-      })
-      if (res.data?.profile) {
-        setClient(res.data.profile)
-      }
-      setPreferencesMessage('Saved')
-    } catch (err) {
-      setPreferencesMessage(err.response?.data?.error || 'Unable to save preferences')
-    } finally {
-      setPreferencesSaving(false)
-    }
-  }
-
   const loadLoginActivity = async () => {
     if (!user?.customerId) return
     setLoginActivityLoading(true)
@@ -1290,21 +1199,14 @@ export default function ClientDashboard() {
         params: { sessionId },
       })
       setConsentHistory(res.data?.consents || [])
-      setConsentHistoryPage(1)
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Unable to load consent history')
+      if (err.response?.status !== 404) {
+        toast.error(err.response?.data?.error || 'Unable to load consent history')
+      }
+      setConsentHistory([])
     } finally {
       setConsentLoading(false)
     }
-  }
-
-  const toggleConsentHistory = async () => {
-    if (consentHistoryOpen) {
-      setConsentHistoryOpen(false)
-      return
-    }
-    await loadConsentHistory()
-    setConsentHistoryOpen(true)
   }
 
   const logInappNotice = async (type) => {
@@ -1316,28 +1218,6 @@ export default function ClientDashboard() {
       })
     } catch (err) {
       console.warn('Unable to log in-app notice', err)
-    }
-  }
-
-  const handleCookiePreferenceChange = async (nextPref) => {
-    if (!user?.customerId) return
-    setCookieSaving(true)
-    setCookieMessage('')
-    setCookiePref(nextPref)
-    try {
-      await api.put(`/customers/${user.customerId}/cookie-preferences`, {
-        preference: nextPref,
-        sessionId,
-      })
-      toast.success(
-        'Cookies preference updated. Some features that rely on cookies may not work as expected.'
-      )
-      setCookieMessage('Saved')
-      await logInappNotice('cookie_change')
-    } catch (err) {
-      setCookieMessage(err.response?.data?.error || 'Unable to save cookie preference')
-    } finally {
-      setCookieSaving(false)
     }
   }
 
@@ -1436,54 +1316,62 @@ export default function ClientDashboard() {
   const resolveShareRecipient = (share) => share?.recipientName || 'Shared link'
   const accountName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
   const emailValue = form.email || user?.email || ''
-  const fallbackLanguage =
-    typeof navigator !== 'undefined' && navigator.language ? navigator.language : ''
-  const languageLabel = languageDraft || client?.profileData?.language || fallbackLanguage || 'Not set'
-  const languageOptions = [
-    { value: 'Amharic', label: 'Amharic' },
-    { value: 'Arabic', label: 'Arabic' },
-    { value: 'Bengali', label: 'Bengali' },
-    { value: 'Cherokee', label: 'Cherokee' },
-    { value: 'Chinese', label: 'Chinese' },
-    { value: 'English', label: 'English' },
-    { value: 'French', label: 'French' },
-    { value: 'German', label: 'German' },
-    { value: 'Gujarati', label: 'Gujarati' },
-    { value: 'Haitian Creole', label: 'Haitian Creole' },
-    { value: 'Hawaiian', label: 'Hawaiian' },
-    { value: 'Hindi', label: 'Hindi' },
-    { value: 'Igbo', label: 'Igbo' },
-    { value: 'Inuktitut', label: 'Inuktitut' },
-    { value: 'Italian', label: 'Italian' },
-    { value: 'Japanese', label: 'Japanese' },
-    { value: 'Korean', label: 'Korean' },
-    { value: 'Navajo', label: 'Navajo' },
-    { value: 'Oromo', label: 'Oromo' },
-    { value: 'Persian (Farsi)', label: 'Persian (Farsi)' },
-    { value: 'Polish', label: 'Polish' },
-    { value: 'Portuguese', label: 'Portuguese' },
-    { value: 'Punjabi', label: 'Punjabi' },
-    { value: 'Russian', label: 'Russian' },
-    { value: 'Somali', label: 'Somali' },
-    { value: 'Spanish', label: 'Spanish' },
-    { value: 'Swahili', label: 'Swahili' },
-    { value: 'Tagalog (Filipino)', label: 'Tagalog (Filipino)' },
-    { value: 'Tamil', label: 'Tamil' },
-    { value: 'Telugu', label: 'Telugu' },
-    { value: 'Urdu', label: 'Urdu' },
-    { value: 'Vietnamese', label: 'Vietnamese' },
-    { value: 'Yoruba', label: 'Yoruba' },
-    { value: 'Yupik', label: 'Yupik' },
-  ]
+  const latestDocByType = useMemo(
+    () =>
+      (legalDocs || []).reduce((acc, doc) => {
+        if (doc?.type) {
+          acc[doc.type] = doc
+        }
+        return acc
+      }, {}),
+    [legalDocs],
+  )
+  const latestConsentByType = useMemo(
+    () =>
+      (consentHistory || []).reduce((acc, consent) => {
+        if (!consent?.documentType) return acc
+        if (!acc[consent.documentType]) {
+          acc[consent.documentType] = consent
+        }
+        return acc
+      }, {}),
+    [consentHistory],
+  )
+  const buildConsentStatus = (type) => {
+    const consent = latestConsentByType[type] || null
+    const latestDoc = latestDocByType[type] || null
+    const acceptedVersion = consent?.version || ''
+    const latestVersion = latestDoc?.version || ''
+    const isLatest = Boolean(acceptedVersion && latestVersion && acceptedVersion === latestVersion)
+    const hasNewer = Boolean(acceptedVersion && latestVersion && acceptedVersion !== latestVersion)
+    return { consent, acceptedVersion, latestVersion, isLatest, hasNewer }
+  }
+  const privacyConsentStatus = buildConsentStatus('privacy')
+  const termsConsentStatus = buildConsentStatus('terms')
+  const dataSharingConsentStatus = buildConsentStatus('data-sharing')
+  const formatConsentLabel = (consent, fallback) => {
+    if (!consent) return fallback
+    if (consent.version) return `Version ${consent.version}`
+    return consent.documentType || fallback
+  }
+  const openConsentModal = (type) => {
+    const latestDoc = latestDocByType[type]
+    if (!latestDoc?.version || !setConsentStatus) return
+    const existingMissing = consentStatus?.missing || []
+    const required = consentStatus?.required || []
+    const nextMissing = [
+      ...existingMissing.filter((entry) => entry.type !== type),
+      { type, version: latestDoc.version },
+    ]
+    setConsentStatus({ required, missing: nextMissing })
+  }
   const activityPageSize = 5
   const loginActivityTotalPages = Math.max(1, Math.ceil(loginActivity.length / activityPageSize))
   const sessionsTotalPages = Math.max(1, Math.ceil(sessions.length / activityPageSize))
   const sharedActivityTotalPages = Math.max(1, Math.ceil(sharedActivity.length / activityPageSize))
-  const consentHistoryTotalPages = Math.max(1, Math.ceil(consentHistory.length / activityPageSize))
   const loginActivityPageSafe = Math.min(loginActivityPage, loginActivityTotalPages)
   const sessionsPageSafe = Math.min(sessionsPage, sessionsTotalPages)
   const sharedActivityPageSafe = Math.min(sharedActivityPage, sharedActivityTotalPages)
-  const consentHistoryPageSafe = Math.min(consentHistoryPage, consentHistoryTotalPages)
   const pagedLoginActivity = loginActivity.slice(
     (loginActivityPageSafe - 1) * activityPageSize,
     loginActivityPageSafe * activityPageSize,
@@ -1496,22 +1384,6 @@ export default function ClientDashboard() {
     (sharedActivityPageSafe - 1) * activityPageSize,
     sharedActivityPageSafe * activityPageSize,
   )
-  const pagedConsentHistory = consentHistory.slice(
-    (consentHistoryPageSafe - 1) * activityPageSize,
-    consentHistoryPageSafe * activityPageSize,
-  )
-  const termsVersion = client?.profileData?.terms_version || client?.profileData?.termsVersion || ''
-  const termsAcceptedAt =
-    client?.profileData?.terms_accepted_at || client?.profileData?.termsAcceptedAt || ''
-  const privacyVersion = client?.profileData?.privacy_version || client?.profileData?.privacyVersion || ''
-  const privacyAcceptedAt =
-    client?.profileData?.privacy_accepted_at || client?.profileData?.privacyAcceptedAt || ''
-  const formatAcceptance = (version, date) => {
-    if (!version && !date) return 'Not recorded yet'
-    if (version && date) return `Version ${version} on ${formatTimestamp(date)}`
-    if (version) return `Version ${version}`
-    return `Accepted ${formatTimestamp(date)}`
-  }
   const currentNotificationPrefs = notificationPrefs || DEFAULT_NOTIFICATION_PREFS
 
   return (
@@ -1693,76 +1565,47 @@ export default function ClientDashboard() {
 
           {!loading && activeTab === 'Settings' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                <div className="space-y-3">
-                  {[
-                    { id: 'account', label: 'Account' },
-                    { id: 'security', label: 'Security' },
-                    { id: 'privacy', label: 'Privacy' },
-                    { id: 'notifications', label: 'Notifications' },
-                    { id: 'terms', label: 'Terms and conditions' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-                      onClick={() => setSettingsModal(item.id)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <Modal
-                title="Account"
-                open={settingsModal === 'account'}
-                onClose={() => setSettingsModal(null)}
-                panelClassName="max-w-4xl"
-              >
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center overflow-hidden border border-slate-200">
-                      {photoPreview ? (
-                        <img src={photoPreview} alt="Profile" className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-semibold">{getInitials(accountName || displayName, 'CL')}</span>
-                      )}
-                    </div>
-                    <div className="min-w-[180px] flex-1 space-y-1">
-                      <div className="text-sm font-semibold text-slate-900">Profile picture</div>
-                      <div className="text-xs text-slate-500">Upload a square image under 2MB.</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <label
-                        className={`pill-btn-ghost px-4 py-1.5 text-sm inline-flex items-center gap-2 ${
-                          photoUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                        }`}
-                      >
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handlePhotoChange}
-                          disabled={photoUploading}
-                        />
-                        Upload photo
-                      </label>
-                      {photoPreview && (
-                        <button
-                          type="button"
-                          className="pill-btn-ghost px-4"
-                          onClick={handlePhotoRemove}
-                          disabled={photoUploading}
-                        >
-                          {photoUploading ? 'Saving...' : 'Remove'}
-                        </button>
-                      )}
+              <div className="relative overflow-hidden">
+                <div
+                  className={`flex w-[200%] transition-transform duration-300 ease-out ${
+                    settingsView ? '-translate-x-1/2' : 'translate-x-0'
+                  }`}
+                >
+                  <div className="w-1/2 pr-4">
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                      <div className="space-y-3">
+                        {SETTINGS_ITEMS.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                            onClick={() => setSettingsView(item.id)}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
 
+                  <div className="w-1/2 pl-4">
+                    {settingsView && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-4"
+                            onClick={() => setSettingsView(null)}
+                          >
+                            Back
+                          </button>
+                          <div className="text-sm font-semibold text-slate-700">
+                            {resolveSettingsLabel(settingsView)}
+                          </div>
+                        </div>
+
+                        {settingsView === 'account' && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                 <div className="space-y-3">
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -1909,61 +1752,13 @@ export default function ClientDashboard() {
                       <div className="text-xs text-amber-600">Check your email for the verification code.</div>
                     )}
                   </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Language</div>
-                    <select
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                      value={languageLabel === 'Not set' ? '' : languageLabel}
-                      onChange={(event) => {
-                        const next = event.target.value
-                        setLanguageDraft(next)
-                        handlePreferencesSave(next)
-                      }}
-                      disabled={preferencesSaving}
-                    >
-                      <option value="">Select language</option>
-                      {languageOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                      {languageLabel &&
-                        languageLabel !== 'Not set' &&
-                        languageLabel !== fallbackLanguage &&
-                        !languageOptions.some((option) => option.value === languageLabel) && (
-                          <option value={languageLabel}>{languageLabel}</option>
-                        )}
-                      {fallbackLanguage &&
-                        !languageOptions.some((option) => option.value === fallbackLanguage) && (
-                          <option value={fallbackLanguage}>{fallbackLanguage}</option>
-                        )}
-                    </select>
-                    {preferencesMessage && (
-                      <div
-                        className={`mt-2 text-xs font-semibold ${
-                          preferencesMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {preferencesMessage}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
-              </Modal>
+                        )}
 
-              <Modal
-                title="Security"
-                open={settingsModal === 'security'}
-                onClose={() => setSettingsModal(null)}
-                panelClassName="max-w-4xl"
-              >
+                        {settingsView === 'security' && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">Security</h3>
-                </div>
-
                 <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-1">
@@ -2078,7 +1873,7 @@ export default function ClientDashboard() {
 
                 <AuthenticatorPanel />
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-3">
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm text-slate-500">Login activity</div>
@@ -2096,13 +1891,19 @@ export default function ClientDashboard() {
                     )}
                     {loginActivityOpen && loginActivity.length > 0 && (
                       <div className="space-y-2">
-                        {pagedLoginActivity.map((entry) => (
-                          <div key={entry.id} className="text-xs text-slate-600">
-                            <div className="font-semibold text-slate-800">{entry.ip || 'Unknown IP'}</div>
-                            <div className="truncate">{entry.userAgent || 'Unknown device'}</div>
-                            <div className="text-slate-400">{formatTimestamp(entry.timestamp)}</div>
-                          </div>
-                        ))}
+                        {pagedLoginActivity.map((entry) => {
+                          const browserName = resolveBrowserName(entry.userAgent)
+                          const locationLabel = resolveDeviceLocation(entry)
+                          return (
+                            <div key={entry.id} className="text-xs text-slate-600">
+                              <div className="font-semibold text-slate-800 break-words">{browserName}</div>
+                              <div className="text-xs text-slate-600 break-words">
+                                {entry.ip || 'Unknown IP'} · {locationLabel}
+                              </div>
+                              <div className="text-slate-400">{formatTimestamp(entry.timestamp)}</div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                     {loginActivityOpen && loginActivity.length > activityPageSize && (
@@ -2148,16 +1949,22 @@ export default function ClientDashboard() {
                     )}
                     {sessionsOpen && sessions.length > 0 && (
                       <div className="space-y-2">
-                        {pagedSessions.map((session) => (
-                          <div key={session.id} className="text-xs text-slate-600">
-                            <div className="font-semibold text-slate-800">
-                              {session.current ? 'Current session' : 'Session'}
+                        {pagedSessions.map((session) => {
+                          const browserName = resolveBrowserName(session.userAgent)
+                          const locationLabel = resolveDeviceLocation(session)
+                          return (
+                            <div key={session.id} className="text-xs text-slate-600">
+                              <div className="font-semibold text-slate-800">
+                                {session.current ? 'Current session' : 'Session'}
+                              </div>
+                              <div className="text-xs text-slate-600 break-words">{browserName}</div>
+                              <div className="text-xs text-slate-600 break-words">
+                                {session.ip || 'Unknown IP'} · {locationLabel}
+                              </div>
+                              <div className="text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
                             </div>
-                            <div className="text-slate-500">{session.ip || 'Unknown IP'}</div>
-                            <div className="truncate">{session.userAgent || 'Unknown device'}</div>
-                            <div className="text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                     {sessionsOpen && sessions.length > activityPageSize && (
@@ -2401,115 +2208,136 @@ export default function ClientDashboard() {
                 </div>
               </div>
 
-              </Modal>
+                        )}
 
-              <Modal
-                title="Privacy"
-                open={settingsModal === 'privacy'}
-                onClose={() => setSettingsModal(null)}
-                panelClassName="max-w-4xl"
-              >
+                        {settingsView === 'privacy' && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">Privacy</h3>
-                  <p className="text-xs text-slate-500">Consent history and policy details.</p>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+                  <div className="text-sm text-slate-500">Cookies</div>
+                  <div className="text-xs text-slate-600">
+                    We only use essential cookies for sign-in, security, and session management. No ads or tracking.
+                  </div>
                 </div>
-                <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  We only use essential cookies for sign-in, security, and session management. No ads or tracking.
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm text-slate-500">Consent history</div>
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-[#0b3b8c] hover:underline"
-                        onClick={toggleConsentHistory}
-                        disabled={consentLoading}
-                      >
-                        {consentLoading ? 'Loading...' : consentHistoryOpen ? 'Hide' : 'View'}
-                      </button>
-                    </div>
-                    {consentHistoryOpen && consentHistory.length === 0 && !consentLoading && (
-                      <div className="text-sm text-slate-700">No consent history recorded yet.</div>
-                    )}
-                    {consentHistoryOpen && consentHistory.length > 0 && (
-                      <div className="space-y-2 text-xs text-slate-600">
-                        {pagedConsentHistory.map((entry, index) => (
-                          <div key={`${entry.type || 'consent'}-${index}`} className="rounded-lg border border-slate-100 px-2 py-1.5">
-                            <div className="font-semibold text-slate-800">{entry.type || 'Consent'}</div>
-                            {entry.version && <div className="text-slate-500">Version {entry.version}</div>}
-                            {entry.acceptedAt && <div className="text-slate-400">{formatTimestamp(entry.acceptedAt)}</div>}
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">
+                  <div className="text-sm text-slate-500">Consent history</div>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <div className="text-sm font-semibold text-slate-900">Privacy policy</div>
+                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      {!consentLoading && !privacyConsentStatus.consent && (
+                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                      )}
+                      {!consentLoading && privacyConsentStatus.consent && (
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <div className="font-semibold text-slate-800">
+                            {formatConsentLabel(privacyConsentStatus.consent, 'Privacy policy')}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    {consentHistoryOpen && consentHistory.length > activityPageSize && (
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
-                          onClick={() => setConsentHistoryPage((page) => Math.max(1, page - 1))}
-                          disabled={consentHistoryPageSafe <= 1}
-                        >
-                          Back
-                        </button>
-                        <span>
-                          Page {consentHistoryPageSafe} of {consentHistoryTotalPages}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-[#0b3b8c] disabled:text-slate-300"
-                          onClick={() =>
-                            setConsentHistoryPage((page) => Math.min(consentHistoryTotalPages, page + 1))
-                          }
-                          disabled={consentHistoryPageSafe >= consentHistoryTotalPages}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
+                          {privacyConsentStatus.consent.consentedAt && (
+                            <div className="text-slate-500">
+                              {formatTimestamp(privacyConsentStatus.consent.consentedAt)}
+                            </div>
+                          )}
+                          {privacyConsentStatus.isLatest && (
+                            <div className="text-emerald-600 font-semibold">Latest version accepted.</div>
+                          )}
+                          {privacyConsentStatus.hasNewer && (
+                            <button
+                              type="button"
+                              className="text-amber-600 font-semibold hover:underline"
+                              onClick={() => openConsentModal('privacy')}
+                            >
+                              Newer version available.
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-sm font-semibold text-slate-900">Terms &amp; conditions</div>
+                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      {!consentLoading && !termsConsentStatus.consent && (
+                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                      )}
+                      {!consentLoading && termsConsentStatus.consent && (
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <div className="font-semibold text-slate-800">
+                            {formatConsentLabel(termsConsentStatus.consent, 'Terms')}
+                          </div>
+                          {termsConsentStatus.consent.consentedAt && (
+                            <div className="text-slate-500">
+                              {formatTimestamp(termsConsentStatus.consent.consentedAt)}
+                            </div>
+                          )}
+                          {termsConsentStatus.isLatest && (
+                            <div className="text-emerald-600 font-semibold">Latest version accepted.</div>
+                          )}
+                          {termsConsentStatus.hasNewer && (
+                            <button
+                              type="button"
+                              className="text-amber-600 font-semibold hover:underline"
+                              onClick={() => openConsentModal('terms')}
+                            >
+                              Newer version available.
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-sm font-semibold text-slate-900">Data sharing policy</div>
+                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      {!consentLoading && !dataSharingConsentStatus.consent && (
+                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                      )}
+                      {!consentLoading && dataSharingConsentStatus.consent && (
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <div className="font-semibold text-slate-800">
+                            {formatConsentLabel(dataSharingConsentStatus.consent, 'Data sharing')}
+                          </div>
+                          {dataSharingConsentStatus.consent.consentedAt && (
+                            <div className="text-slate-500">
+                              {formatTimestamp(dataSharingConsentStatus.consent.consentedAt)}
+                            </div>
+                          )}
+                          {dataSharingConsentStatus.isLatest && (
+                            <div className="text-emerald-600 font-semibold">Latest version accepted.</div>
+                          )}
+                          {dataSharingConsentStatus.hasNewer && (
+                            <button
+                              type="button"
+                              className="text-amber-600 font-semibold hover:underline"
+                              onClick={() => openConsentModal('data-sharing')}
+                            >
+                              Newer version available.
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                    <div className="text-sm text-slate-500">Cookies preferences</div>
-                    <div className="text-xs text-slate-500">Choose how Connsura uses cookies.</div>
-                    <select
-                      className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                      value={cookiePref}
-                      onChange={(event) => handleCookiePreferenceChange(event.target.value)}
-                      disabled={cookieSaving}
-                    >
-                      <option value="all">All cookies</option>
-                      <option value="essential">Essential only</option>
-                      <option value="none">No cookies</option>
-                    </select>
-                    {cookieMessage && (
-                      <div
-                        className={`text-xs font-semibold ${
-                          cookieMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {cookieMessage}
-                      </div>
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm sm:col-span-2">
-                    <div className="text-sm text-slate-500">Privacy policy</div>
-                    <Link to="/privacy" className="text-sm font-semibold text-[#0b3b8c] hover:underline">
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
+                  <div className="text-sm text-slate-500">Read policies</div>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <Link to="/privacy" className="font-semibold text-[#0b3b8c] hover:underline">
                       Read privacy policy
+                    </Link>
+                    <Link to="/terms" className="font-semibold text-[#0b3b8c] hover:underline">
+                      Read terms and conditions
+                    </Link>
+                    <Link to="/data-sharing" className="font-semibold text-[#0b3b8c] hover:underline">
+                      Read data sharing policy
                     </Link>
                   </div>
                 </div>
               </div>
 
-              </Modal>
+                        )}
 
-              <Modal
-                title="Notifications"
-                open={settingsModal === 'notifications'}
-                onClose={() => setSettingsModal(null)}
-                panelClassName="max-w-4xl"
-              >
+                        {settingsView === 'notifications' && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold">Notifications</h3>
@@ -2624,31 +2452,13 @@ export default function ClientDashboard() {
                 </div>
               </div>
 
-              </Modal>
+                        )}
 
-              <Modal
-                title="Terms and conditions"
-                open={settingsModal === 'terms'}
-                onClose={() => setSettingsModal(null)}
-                panelClassName="max-w-4xl"
-              >
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">Terms & Conditions</h3>
-                  <p className="text-xs text-slate-500">Accepted policy versions for your account.</p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Terms accepted</div>
-                    <div className="text-sm text-slate-700">{formatAcceptance(termsVersion, termsAcceptedAt)}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Privacy policy accepted</div>
-                    <div className="text-sm text-slate-700">{formatAcceptance(privacyVersion, privacyAcceptedAt)}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              </Modal>
             </div>
           )}
         </section>

@@ -6,12 +6,11 @@ const LEGAL_DOC_TYPES = {
   TERMS: 'terms',
   PRIVACY: 'privacy',
   DATA_SHARING: 'data-sharing',
-  AGENT_TERMS: 'agent-terms',
 }
 
 const REQUIRED_DOCS_BY_ROLE = {
   CUSTOMER: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY],
-  AGENT: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY, LEGAL_DOC_TYPES.AGENT_TERMS],
+  AGENT: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY],
 }
 
 const LEGAL_SOURCE_PATH = path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md')
@@ -19,7 +18,6 @@ const LEGAL_SOURCE_MAP = {
   [LEGAL_DOC_TYPES.TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md'),
   [LEGAL_DOC_TYPES.PRIVACY]: path.resolve(__dirname, '..', '..', '..', 'legal', 'privacy.md'),
   [LEGAL_DOC_TYPES.DATA_SHARING]: path.resolve(__dirname, '..', '..', '..', 'legal', 'data-sharing.md'),
-  [LEGAL_DOC_TYPES.AGENT_TERMS]: path.resolve(__dirname, '..', '..', '..', 'legal', 'agent-terms.md'),
 }
 
 const readLegalSource = (type) => {

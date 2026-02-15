@@ -37,7 +37,6 @@ const normalizeAgentNotificationPrefs = (value = {}) => {
 const LEGAL_DOC_META = [
   { type: 'terms', label: 'Terms & Conditions', href: '/terms' },
   { type: 'privacy', label: 'Privacy Policy', href: '/privacy' },
-  { type: 'agent-terms', label: 'Agent Responsibilities', href: '/agent-responsibilities' },
   { type: 'data-sharing', label: 'Data Sharing', href: '/data-sharing' },
 ]
 
