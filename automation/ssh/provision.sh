@@ -97,12 +97,8 @@ sudo systemctl restart nginx
 echo "Installing certbot..."
 sudo apt-get install -y certbot python3-certbot-nginx
 
-if sudo certbot certificates 2>/dev/null | grep -q "${DOMAIN}"; then
-  sudo certbot renew --quiet
-else
-  sudo certbot --nginx -d "${DOMAIN}" -d "${API_DOMAIN}" \
-    --agree-tos -m "${LETSENCRYPT_EMAIL}" --non-interactive --redirect
-fi
+sudo certbot --nginx -d "${DOMAIN}" -d "${API_DOMAIN}" \
+  --agree-tos -m "${LETSENCRYPT_EMAIL}" --non-interactive --redirect --keep-until-expiring
 
 sudo systemctl reload nginx
 echo "Provisioning complete."
