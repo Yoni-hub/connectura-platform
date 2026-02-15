@@ -91,7 +91,7 @@ export default function AccountRecovery() {
               />
             </label>
             <label className="block text-sm">
-              Backup code
+              Backup code (optional)
               <input
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={form.backupCode}
@@ -134,6 +134,13 @@ export default function AccountRecovery() {
               {loading ? 'Recovering...' : 'Reset password'}
             </button>
           </div>
+          <p className="text-xs text-slate-600">
+            If you do not have access to any recovery options, contact{' '}
+            <a className="text-slate-900 underline" href="mailto:security@connsura.com">
+              security@connsura.com
+            </a>
+            .
+          </p>
         </form>
       </div>
     </main>
