@@ -31,19 +31,16 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
   const nav = useNavigate()
   const initialMode = startMode === 'create' ? 'create' : 'login'
   const [mode, setMode] = useState(initialMode)
-  const [remember, setRemember] = useState(false)
   const [form, setForm] = useState(createEmptyForm)
 
   useEffect(() => {
     if (!open) return
     setMode(initialMode)
-    setRemember(false)
     setForm(createEmptyForm())
   }, [open, initialMode])
 
   const resetState = () => {
     setMode(initialMode)
-    setRemember(false)
     setForm(createEmptyForm())
   }
 
@@ -57,7 +54,7 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (mode === 'login') {
-      const user = await login(form.email, form.password, { remember })
+      const user = await login(form.email, form.password)
       if (user) {
         handleClose()
         const redirectTarget = consumePostAuthRedirect()
@@ -197,6 +194,10 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
                   I agree to the{' '}
                   <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
                     Privacy Policy
+                  </a>{' '}
+                  &{' '}
+                  <a className="font-semibold text-slate-900 underline" href="/data-sharing" target="_blank" rel="noreferrer">
+                    Data Sharing Policy
                   </a>
                 </span>
               </label>
@@ -209,7 +210,7 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
                     setForm({ ...form, consents: { ...form.consents, emailCommunications: e.target.checked } })
                   }
                 />
-                I consent to receive email communications from Connsura
+                I agree to receive required system emails related to security, legal updates, and account activity.
               </label>
               <label className="flex items-start gap-2">
                 <input
@@ -227,11 +228,7 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
         )}
 
         {mode === 'login' && (
-          <div className="flex items-center justify-between text-sm text-slate-600">
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4" />
-              Remember me
-            </label>
+          <div className="flex items-center justify-end text-sm text-slate-600">
             <button
               type="button"
               className="font-semibold text-[#006aff]"
