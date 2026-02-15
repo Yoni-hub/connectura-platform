@@ -10,7 +10,6 @@ const versions = {
   [LEGAL_DOC_TYPES.TERMS]: '1.1',
   [LEGAL_DOC_TYPES.PRIVACY]: '1.1',
   [LEGAL_DOC_TYPES.DATA_SHARING]: '1.1',
-  [LEGAL_DOC_TYPES.AGENT_TERMS]: '1.1',
 }
 
 const run = async () => {

@@ -54,7 +54,6 @@ model User {
   totpBackupCodesUpdatedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  agent     Agent?
   customer  Customer?
   notificationPreferences NotificationPreferences?
   devices   UserDevice[]
@@ -117,34 +116,6 @@ model NotificationPreferences {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Agent {
-  id           Int        @id @default(autoincrement())
-  userId       Int        @unique
-  name         String
-  bio          String
-  photo        String
-  languages    String
-  states       String
-  specialty    String
-  producerNumber String?
-  address        String?
-  zip            String?
-  phone          String?
-  products       String   @default("[]")
-  appointedCarriers String @default("[]")
-  status        String    @default("approved")
-  isSuspended   Boolean   @default(false)
-  underReview   Boolean   @default(false)
-  availability String
-  rating       Float
-  reviews      String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  shares       ProfileShare[]
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 model Customer {
   id               Int       @id @default(autoincrement())
   userId           Int       @unique
@@ -180,12 +151,10 @@ model ProfileShare {
   recipientNameNormalized String?
   lastAccessedAt DateTime?
   customerId Int
-  agentId   Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  agent    Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
 }
 
 model Driver {

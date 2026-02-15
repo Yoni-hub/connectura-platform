@@ -18,7 +18,6 @@ const { notifyProfileUpdated } = require('../utils/notifications/dispatcher')
 const { logInAppNotification } = require('../utils/notifications/logging')
 
 const router = express.Router()
-const enableAgentFeatures = false
 
 const getRequestIp = (req) => {
   const forwarded = req.headers['x-forwarded-for']
@@ -622,12 +621,6 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
   }
 })
 
-if (!enableAgentFeatures) {
-  router.post('/:id/agent-search/click', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-  router.post('/:id/agent-search/view', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-  router.post('/:id/agent-profile/view', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-}
-
 router.post('/:id/tab-view', authGuard, async (req, res) => {
   const customerId = Number(req.params.id)
   const tabName = String(req.body?.tabName || '').trim()
@@ -1085,11 +1078,5 @@ router.post('/:id/forms/additional/remove', authGuard, async (req, res) => {
   })
   res.json({ ok: true })
 })
-
-if (!enableAgentFeatures) {
-  router.get('/:id/saved-agents', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-  router.post('/:id/saved-agents', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-  router.delete('/:id/saved-agents/:agentId', authGuard, (req, res) => res.status(404).json({ error: 'Not found' }))
-}
 
 module.exports = router

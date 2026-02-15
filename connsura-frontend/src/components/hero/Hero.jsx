@@ -8,11 +8,11 @@ export default function Hero({ onCreateProfile }) {
               Connsura - Your Insurance Passport
             </p>
             <h1 className="text-2xl font-semibold leading-tight text-white sm:text-3xl">
-              Create Your Insurance Profile - Once
+              Fill Insurance Forms Once
             </h1>
             <p className="text-sm text-white/90">
-              Build a reusable insurance profile you control. Share it securely with a link or PDF whenever you need
-              coverage.
+              Build a secure insurance profile you control. Store your insurance information and share it by link or PDF
+              whenever you need it.
             </p>
 
             <div className="flex flex-wrap justify-center gap-3 pt-1">

@@ -145,7 +145,7 @@ PostgreSQL is the only supported database for local, staging, and production. SQ
 
 4.4 Retention Policy
 
-- Accounts (User/Agent/Customer): retain until deletion request; 30-day recovery window.
+- Accounts (User/Customer): retain until deletion request; 30-day recovery window.
 - Profile shares: retain 90 days after status becomes closed/revoked.
 - Messages: retain 24 months.
 - Audit logs: retain 24 months minimum.
@@ -265,7 +265,7 @@ PostgreSQL is the only supported database for local, staging, and production. SQ
   - Client sends message; server writes to DB then emits to recipient.
   - Server sends ack; client retries on timeout.
 - Unread counts:
-  - Add a `MessageReadState` table keyed by agentId/customerId.
+  - Add a `MessageReadState` table keyed by senderId/recipientId.
   - Store `lastReadAt` and `unreadCount`.
   - On new message, increment unreadCount for the recipient.
   - On conversation open, set lastReadAt and reset unreadCount.
@@ -301,7 +301,7 @@ PostgreSQL is the only supported database for local, staging, and production. SQ
 7.4 Implementation Plan
 
 - Seed generator:
-  - Users (agents/customers), messages, audit logs, profile shares.
+  - Users (customers/admins), messages, audit logs, profile shares.
   - Edge cases: long names, missing fields, multi-language arrays.
 - Use Prisma seed:
   - Seed script in `connsura-backend/prisma/seed.js`.
@@ -310,6 +310,6 @@ PostgreSQL is the only supported database for local, staging, and production. SQ
 
 7.5 Done / Acceptance Checks
 
-- Staging DB contains synthetic agents/customers/messages.
+- Staging DB contains synthetic customers/admins/messages.
 - App UI loads without null-data errors.
 - Reset command completes without prompts.

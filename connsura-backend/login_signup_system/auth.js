@@ -485,7 +485,7 @@ router.post('/register', async (req, res) => {
     } = req.body
     const requestedRole = String(req.body?.role || 'CUSTOMER').toUpperCase()
     if (requestedRole !== 'CUSTOMER') {
-      return res.status(403).json({ error: 'Agent accounts are disabled' })
+      return res.status(403).json({ error: 'Only customer accounts are supported' })
     }
     const role = 'CUSTOMER'
     const isCustomer = true
@@ -679,7 +679,7 @@ router.post('/email-change/request', authGuard, async (req, res) => {
         emailPendingRequestedAt: new Date(),
         emailVerified: false,
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (user.role === 'CUSTOMER') {
       await logClientAudit(auditTarget, 'CLIENT_EMAIL_VERIFICATION_SENT', {
@@ -782,7 +782,7 @@ router.post('/email-otp/confirm', authGuard, async (req, res) => {
       data: pendingEmail
         ? { email: pendingEmail, emailVerified: true, emailPending: null, emailPendingRequestedAt: null }
         : { emailVerified: true },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (pendingEmail && updated.customer?.id) {
       const customer = await prisma.customer.findUnique({ where: { id: updated.customer.id } })
@@ -848,7 +848,7 @@ router.post('/totp/setup', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     if (!user.email) return res.status(400).json({ error: 'Email is required for authenticator setup' })
@@ -878,7 +878,7 @@ router.post('/totp/setup', authGuard, async (req, res) => {
         totpBackupCodes: JSON.stringify(records),
         totpBackupCodesUpdatedAt: new Date(),
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     return res.json({
       secret,
@@ -905,7 +905,7 @@ router.post('/totp/confirm', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user || !user.totpSecret) {
       return res.status(400).json({ error: 'Authenticator setup not started' })
@@ -926,7 +926,7 @@ router.post('/totp/confirm', authGuard, async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: { totpEnabled: true },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (updated.role === 'CUSTOMER') {
       await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_2FA_ENABLED', {
@@ -974,7 +974,7 @@ router.post('/totp/cancel', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     if (user.totpEnabled) {
@@ -989,7 +989,7 @@ router.post('/totp/cancel', authGuard, async (req, res) => {
         totpBackupCodes: '[]',
         totpBackupCodesUpdatedAt: null,
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     return res.json({ cancelled: true, user: sanitizeUser(updated) })
   } catch (err) {
@@ -1007,7 +1007,7 @@ router.post('/totp/backup-codes', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user || !user.totpEnabled || !user.totpSecret) {
       return res.status(400).json({ error: 'Authenticator is not enabled yet' })
@@ -1032,7 +1032,7 @@ router.post('/totp/backup-codes', authGuard, async (req, res) => {
         totpBackupCodes: JSON.stringify(records),
         totpBackupCodesUpdatedAt: new Date(),
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     return res.json({ backupCodes: codes, user: sanitizeUser(updated) })
   } catch (err) {
@@ -1057,7 +1057,7 @@ router.post('/totp/disable', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user || !user.totpEnabled || !user.totpSecret) {
       return res.status(400).json({ error: 'Authenticator is not enabled' })
@@ -1106,7 +1106,7 @@ router.post('/totp/disable', authGuard, async (req, res) => {
         totpBackupCodes: '[]',
         totpBackupCodesUpdatedAt: null,
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (updated.role === 'CUSTOMER') {
       await logClientAudit(updated.customer?.id || updated.id, 'CLIENT_2FA_DISABLE_CONFIRMED', {
@@ -1167,7 +1167,7 @@ router.post('/password/request', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -1225,7 +1225,7 @@ router.post('/password/resend', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -1260,7 +1260,7 @@ router.post('/password/confirm', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -1289,7 +1289,7 @@ router.post('/password/confirm', authGuard, async (req, res) => {
         passwordPendingHash: null,
         passwordPendingRequestedAt: null,
       },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     const token = generateToken({ id: updated.id, role: updated.role })
     setSessionCookie(res, token)
@@ -1364,7 +1364,7 @@ router.post('/password', authGuard, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -1404,7 +1404,7 @@ router.post('/password', authGuard, async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: { password: hashed, passwordChangedAt },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     const token = generateToken({ id: updated.id, role: updated.role })
     setSessionCookie(res, token)
@@ -1481,14 +1481,14 @@ router.post('/recovery/reset', async (req, res) => {
     if (looksLikeEmail) {
       user = await prisma.user.findUnique({
         where: { email: normalizedEmail },
-        include: { agent: true, customer: true },
+        include: { customer: true },
       })
     }
     if (!user) {
       const recoveryId = identifier.replace(/\s+/g, '').toUpperCase()
       user = await prisma.user.findUnique({
         where: { totpRecoveryId: recoveryId },
-        include: { agent: true, customer: true },
+        include: { customer: true },
       })
     }
     if (!user || !user.totpEnabled || !user.totpSecret) {
@@ -1515,7 +1515,7 @@ router.post('/recovery/reset', async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: { password: hashed, totpBackupCodes: updatedBackupCodes, passwordChangedAt: new Date() },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     recoveryAttempts.delete(attemptKey)
     notifyPasswordChanged(updated).catch((err) =>
@@ -1538,11 +1538,11 @@ router.post('/login', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     if (!user) return res.status(400).json({ error: 'Invalid credentials' })
     if (user.role === 'AGENT') {
-      return res.status(403).json({ error: 'Agent access is disabled' })
+      return res.status(403).json({ error: 'This account type is disabled' })
     }
     if (user.customer?.isDisabled) {
       return res.status(403).json({ error: 'Account is deactivated' })
@@ -1879,7 +1879,7 @@ router.post('/sessions/revoke-others', authGuard, async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: req.user.id },
       data: { sessionsRevokedAt: new Date() },
-      include: { agent: true, customer: true },
+      include: { customer: true },
     })
     const token = generateToken({ id: updated.id, role: updated.role })
     if (updated.role === 'CUSTOMER') {
@@ -1932,7 +1932,7 @@ router.post('/sessions/revoke-others', authGuard, async (req, res) => {
 router.get('/me', authGuard, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    include: { agent: true, customer: true },
+    include: { customer: true },
   })
   const consentStatus = await getConsentStatus(prisma, user)
   res.json({ user: sanitizeUser(user), consent: consentStatus })

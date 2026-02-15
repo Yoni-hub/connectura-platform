@@ -75,7 +75,7 @@ export default function SearchBar({ onSearch, onFilterChange, busy, variant = 'c
           </select>
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agent name</label>
+          <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Name</label>
           <input
             className="w-full rounded-2xl border border-[#cfd9eb] bg-white px-3 py-3 shadow-[0_10px_24px_rgba(0,42,92,0.06)] focus:border-[#006aff] focus:ring-[#006aff]/25"
             placeholder="Search by name"

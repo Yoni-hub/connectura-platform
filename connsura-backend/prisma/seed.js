@@ -7,69 +7,6 @@ if (!seedPassword) {
   throw new Error('SEED_USER_PASSWORD is required to run the seed script')
 }
 
-const agentsData = [
-  {
-    name: 'Sarah Tesfaye',
-    email: 'sarah@connsura.test',
-    bio: 'Bilingual agent focused on personal lines. Quick on renewals and transparent on coverage.',
-    languages: ['English', 'Amharic', 'Spanish'],
-    states: ['TX', 'VA', 'NY'],
-    specialty: 'Auto / Home / Renters',
-    availability: 'online',
-    rating: 4.9,
-    photo: '/uploads/agents/agent1.svg',
-    producerNumber: 'PN-1001',
-    address: '123 Market St, Dallas, TX',
-    zip: '75201',
-    products: ['Auto', 'Home', 'Renters'],
-    appointedCarriers: ['Travelers', 'Progressive', 'Nationwide'],
-    reviews: [
-      { author: 'Luis', comment: 'Sarah explained coverages clearly.', rating: 5 },
-      { author: 'Aisha', comment: 'Great bilingual support.', rating: 5 },
-    ],
-  },
-  {
-    name: 'Miguel Alvarez',
-    email: 'miguel@connsura.test',
-    bio: 'Motorcycle friendly agent with fast turnaround and weekend availability.',
-    languages: ['English', 'Spanish'],
-    states: ['NM', 'AZ', 'TX'],
-    specialty: 'Auto / Motorcycle',
-    availability: 'busy',
-    rating: 4.7,
-    photo: '/uploads/agents/agent2.svg',
-    producerNumber: 'PN-2002',
-    address: '456 Canyon Rd, Albuquerque, NM',
-    zip: '87101',
-    products: ['Auto', 'Motorcycle'],
-    appointedCarriers: ['Geico', 'Progressive'],
-    reviews: [
-      { author: 'Renee', comment: 'Understood my bike coverage needs.', rating: 4.5 },
-      { author: 'Jorge', comment: 'Quick quote and follow up.', rating: 4.7 },
-    ],
-  },
-  {
-    name: 'Priya Raman',
-    email: 'priya@connsura.test',
-    bio: 'Home/auto bundling expert with clear explanations.',
-    languages: ['English', 'Hindi', 'Tamil'],
-    states: ['IL', 'IN', 'MI'],
-    specialty: 'Auto / Home / Umbrella',
-    availability: 'offline',
-    rating: 4.8,
-    photo: '/uploads/agents/agent3.svg',
-    producerNumber: 'PN-3003',
-    address: '789 Lake Shore Dr, Chicago, IL',
-    zip: '60601',
-    products: ['Auto', 'Home', 'Umbrella'],
-    appointedCarriers: ['State Farm', 'Liberty Mutual'],
-    reviews: [
-      { author: 'Marcus', comment: 'Helpful with condo questions.', rating: 4.8 },
-      { author: 'Lakshmi', comment: 'Loved the bilingual guidance.', rating: 5 },
-    ],
-  },
-]
-
 const customersData = [
   {
     name: 'Jordan Lee',
@@ -107,46 +44,7 @@ async function reset() {
   await prisma.driver.deleteMany()
   await prisma.vehicle.deleteMany()
   await prisma.customer.deleteMany()
-  await prisma.agent.deleteMany()
   await prisma.user.deleteMany()
-}
-
-async function seedAgents(hashedPassword) {
-  for (const agent of agentsData) {
-    await prisma.user.create({
-      data: {
-        email: agent.email,
-        password: hashedPassword,
-        role: 'AGENT',
-        notificationPreferences: {
-          create: {
-            emailProfileUpdatesEnabled: false,
-            emailFeatureUpdatesEnabled: true,
-            emailMarketingEnabled: false,
-            preferencesVersion: 1,
-          },
-        },
-        agent: {
-          create: {
-            name: agent.name,
-            bio: agent.bio,
-            languages: JSON.stringify(agent.languages),
-            states: JSON.stringify(agent.states),
-            specialty: agent.specialty,
-            producerNumber: agent.producerNumber,
-            address: agent.address,
-            zip: agent.zip,
-            products: JSON.stringify(agent.products),
-            appointedCarriers: JSON.stringify(agent.appointedCarriers || []),
-            availability: agent.availability,
-            rating: agent.rating,
-            reviews: JSON.stringify(agent.reviews),
-            photo: agent.photo,
-          },
-        },
-      },
-    })
-  }
 }
 
 async function seedCustomers(hashedPassword) {
@@ -191,7 +89,7 @@ async function seedCustomers(hashedPassword) {
           },
         },
       },
-      include: { agent: true },
+      include: { customer: true },
     })
   }
 }
@@ -199,9 +97,8 @@ async function seedCustomers(hashedPassword) {
 async function main() {
   await reset()
   const hashedPassword = await bcrypt.hash(seedPassword, 10)
-  await seedAgents(hashedPassword)
   await seedCustomers(hashedPassword)
-  console.log('Seed data created: 3 agents, 2 customers')
+  console.log('Seed data created: 2 customers')
 }
 
 main()

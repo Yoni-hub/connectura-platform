@@ -17,19 +17,11 @@ const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBa
 const router = express.Router()
 
 const ADMIN_JWT_EXPIRY = process.env.ADMIN_JWT_EXPIRY || '2h'
-const enableAgentFeatures = false
 const NOTIFICATION_EXPORT_WINDOW_MS = Number(process.env.NOTIFICATION_EXPORT_WINDOW_MS || 30 * 1000)
 const NOTIFICATION_EXPORT_MAX = Number(process.env.NOTIFICATION_EXPORT_MAX || 3)
 const notificationExportRates = new Map()
 const NOTIFICATION_CHANNELS = new Set(['EMAIL', 'IN_APP'])
 const NOTIFICATION_STATUSES = new Set(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'])
-
-const requireAgentFeatures = (req, res, next) => {
-  if (!enableAgentFeatures) {
-    return res.status(404).json({ error: 'Not found' })
-  }
-  return next()
-}
 
 const parseDurationMs = (value) => {
   const raw = String(value || '').trim()
@@ -65,29 +57,6 @@ const getAdminCookieOptions = () => {
 
 const getAdminCookieMaxAge = () => parseDurationMs(ADMIN_JWT_EXPIRY) || 2 * 60 * 60 * 1000
 
-const formatAgent = (agent) => ({
-  id: agent.id,
-  name: agent.name,
-  bio: agent.bio,
-  photo: agent.photo,
-  email: agent.user?.email,
-  userPassword: agent.user?.password,
-  phone: agent.phone,
-  languages: parseJson(agent.languages, []),
-  states: parseJson(agent.states, []),
-  specialty: agent.specialty,
-  producerNumber: agent.producerNumber,
-  address: agent.address,
-  zip: agent.zip,
-  products: parseJson(agent.products, []),
-  appointedCarriers: parseJson(agent.appointedCarriers, []),
-  availability: agent.availability,
-  rating: agent.rating,
-  reviews: parseJson(agent.reviews, []),
-  status: agent.status,
-  isSuspended: agent.isSuspended,
-  underReview: agent.underReview,
-})
 
 const formatCustomer = (customer) => ({
   id: customer.id,
@@ -343,171 +312,6 @@ router.post('/notifications/broadcast', adminGuard, async (req, res) => {
   return res.json({ sent: true, targetCount: users.length })
 })
 
-// Agents
-router.get('/agents', adminGuard, requireAgentFeatures, async (req, res) => {
-  const query = String(req.query?.query || '').trim()
-  const statusRaw = String(req.query?.status || '').trim().toLowerCase()
-  const availabilityRaw = String(req.query?.availability || '').trim().toLowerCase()
-  const status = ['pending', 'approved', 'rejected', 'suspended'].includes(statusRaw) ? statusRaw : ''
-  const availability = ['online', 'busy', 'offline'].includes(availabilityRaw) ? availabilityRaw : ''
-  const limit = Math.min(parsePositiveInt(req.query?.limit, 25), 200)
-  const page = parsePositiveInt(req.query?.page, 1)
-  const offsetParam = Number.parseInt(String(req.query?.offset || ''), 10)
-  const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit
-  const effectivePage =
-    Number.isFinite(offsetParam) && offsetParam >= 0 ? Math.floor(offset / limit) + 1 : page
-
-  const where = {
-    ...(status ? { status } : {}),
-    ...(availability ? { availability } : {}),
-  }
-
-  if (query) {
-    const numericId = Number(query)
-    const isNumeric = Number.isFinite(numericId)
-    const orFilters = []
-    if (isNumeric) {
-      orFilters.push({ id: numericId }, { userId: numericId })
-    }
-    orFilters.push(
-      { name: { contains: query, mode: 'insensitive' } },
-      { user: { email: { contains: query, mode: 'insensitive' } } }
-    )
-    where.OR = orFilters
-  }
-
-  const [total, rows] = await Promise.all([
-    prisma.agent.count({ where }),
-    prisma.agent.findMany({
-      where,
-      include: { user: true },
-      orderBy: { id: 'desc' },
-      skip: offset,
-      take: limit + 1,
-    }),
-  ])
-  const hasMore = rows.length > limit
-  const trimmed = rows.slice(0, limit)
-  const totalPages = Math.max(1, Math.ceil(total / limit))
-  res.json({
-    agents: trimmed.map(formatAgent),
-    page: effectivePage,
-    limit,
-    offset,
-    total,
-    totalPages,
-    hasMore,
-    nextPage: hasMore ? effectivePage + 1 : null,
-    nextOffset: hasMore ? offset + limit : null,
-  })
-})
-
-router.get('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
-  const agent = await prisma.agent.findUnique({ where: { id: Number(req.params.id) }, include: { user: true } })
-  if (!agent) return res.status(404).json({ error: 'Agent not found' })
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.post('/agents/:id/approve', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: { status: 'approved', underReview: false, isSuspended: false },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'approve')
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.post('/agents/:id/reject', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: { status: 'rejected', underReview: false },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'reject')
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.post('/agents/:id/suspend', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: { isSuspended: true, status: 'suspended' },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'suspend')
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.post('/agents/:id/restore', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: { isSuspended: false, status: 'approved', underReview: false },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'restore')
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.post('/agents/:id/review', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: { underReview: true, status: 'pending' },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'mark_under_review')
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.put('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const payload = req.body || {}
-  const data = {}
-  const userUpdates = {}
-  if (payload.email !== undefined) userUpdates.email = payload.email
-  if (payload.password !== undefined) userUpdates.password = await bcrypt.hash(payload.password, 10)
-  if (payload.name !== undefined) data.name = payload.name
-  if (payload.bio !== undefined) data.bio = payload.bio
-  if (payload.phone !== undefined) data.phone = payload.phone
-  if (payload.address !== undefined) data.address = payload.address
-  if (payload.zip !== undefined) data.zip = payload.zip
-  if (payload.availability !== undefined) data.availability = payload.availability
-  if (payload.specialty !== undefined) data.specialty = payload.specialty
-  if (payload.producerNumber !== undefined) data.producerNumber = payload.producerNumber
-  if (payload.languages !== undefined) data.languages = JSON.stringify(payload.languages)
-  if (payload.states !== undefined) data.states = JSON.stringify(payload.states)
-  if (payload.products !== undefined) data.products = JSON.stringify(payload.products)
-  if (payload.appointedCarriers !== undefined) data.appointedCarriers = JSON.stringify(payload.appointedCarriers)
-  if (payload.status !== undefined) data.status = payload.status
-  if (payload.underReview !== undefined) data.underReview = payload.underReview
-  if (payload.isSuspended !== undefined) data.isSuspended = payload.isSuspended
-  if (payload.rating !== undefined) data.rating = payload.rating
-
-  const agent = await prisma.agent.update({
-    where: { id },
-    data: {
-      ...data,
-      ...(Object.keys(userUpdates).length ? { user: { update: userUpdates } } : {}),
-    },
-    include: { user: true },
-  })
-  await logAudit(req.admin.id, 'Agent', id, 'update', { ...data, ...(Object.keys(userUpdates).length ? { user: userUpdates } : {}) })
-  res.json({ agent: formatAgent(agent) })
-})
-
-router.delete('/agents/:id', adminGuard, requireAgentFeatures, async (req, res) => {
-  const id = Number(req.params.id)
-  const agent = await prisma.agent.findUnique({ where: { id } })
-  if (!agent) return res.status(404).json({ error: 'Agent not found' })
-  await prisma.user.delete({ where: { id: agent.userId } })
-  await logAudit(req.admin.id, 'Agent', id, 'delete')
-  res.json({ success: true })
-})
-
 // Customers
 router.get('/clients', adminGuard, async (req, res) => {
   const query = String(req.query?.query || '').trim()
@@ -659,8 +463,8 @@ router.get('/audit', adminGuard, async (req, res) => {
 
   let where = baseWhere
 
-  if (type === 'client' || (type === 'agent' && enableAgentFeatures)) {
-    const targetType = type === 'client' ? 'Client' : 'Agent'
+  if (type === 'client') {
+    const targetType = 'Client'
     if (!query) {
       where = {
         ...baseWhere,
@@ -672,37 +476,20 @@ router.get('/audit', adminGuard, async (req, res) => {
       const isNumeric = Number.isFinite(numericId)
       const matches = []
 
-      if (type === 'client') {
-        const customerWhere = { OR: [] }
-        if (isNumeric) {
-          customerWhere.OR.push({ id: numericId }, { userId: numericId })
-        }
-        customerWhere.OR.push(
-          { name: { contains: query, mode: 'insensitive' } },
-          { user: { email: { contains: query, mode: 'insensitive' } } }
-        )
-        const customers = await prisma.customer.findMany({
-          where: customerWhere,
-          select: { id: true },
-          take: 50,
-        })
-        matches.push(...customers.map((customer) => String(customer.id)))
-      } else {
-        const agentWhere = { OR: [] }
-        if (isNumeric) {
-          agentWhere.OR.push({ id: numericId }, { userId: numericId })
-        }
-        agentWhere.OR.push(
-          { name: { contains: query, mode: 'insensitive' } },
-          { user: { email: { contains: query, mode: 'insensitive' } } }
-        )
-        const agents = await prisma.agent.findMany({
-          where: agentWhere,
-          select: { id: true },
-          take: 50,
-        })
-        matches.push(...agents.map((agent) => String(agent.id)))
+      const customerWhere = { OR: [] }
+      if (isNumeric) {
+        customerWhere.OR.push({ id: numericId }, { userId: numericId })
       }
+      customerWhere.OR.push(
+        { name: { contains: query, mode: 'insensitive' } },
+        { user: { email: { contains: query, mode: 'insensitive' } } }
+      )
+      const customers = await prisma.customer.findMany({
+        where: customerWhere,
+        select: { id: true },
+        take: 50,
+      })
+      matches.push(...customers.map((customer) => String(customer.id)))
 
       const orFilters = [
         { targetId: { equals: query } },
@@ -724,7 +511,7 @@ router.get('/audit', adminGuard, async (req, res) => {
   } else if (type === 'admin') {
     where = {
       ...baseWhere,
-      targetType: { notIn: ['Client', 'Agent'] },
+      targetType: { notIn: ['Client'] },
     }
   } else if (type) {
     return res.status(400).json({ error: 'Invalid audit log type' })

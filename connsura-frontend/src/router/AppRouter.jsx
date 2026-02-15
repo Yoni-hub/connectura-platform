@@ -13,6 +13,7 @@ import Admin from '../pages/Admin'
 import ShareProfile from '../pages/ShareProfile'
 import AccountRecovery from '../pages/AccountRecovery'
 import AccountDeleted from '../pages/AccountDeleted'
+import NotFound from '../pages/NotFound'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
@@ -34,10 +35,6 @@ function CustomerOnly({ children }) {
   return children
 }
 
-function RedirectHome() {
-  return <Navigate to="/" replace />
-}
-
 function Layout() {
   const location = useLocation()
   const footerHiddenOnMobile =
@@ -51,8 +48,6 @@ function Layout() {
       <div className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/agents" element={<RedirectHome />} />
-          <Route path="/agents/:id" element={<RedirectHome />} />
           <Route path="/profile/create" element={<CreateProfile />} />
           <Route
             path="/dashboard"
@@ -84,14 +79,11 @@ function Layout() {
               </CustomerOnly>
             }
           />
-          <Route path="/agent/dashboard" element={<RedirectHome />} />
-          <Route path="/agent/onboarding" element={<RedirectHome />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/about" element={<About />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/data-sharing" element={<DataSharing />} />
-          <Route path="/agent-responsibilities" element={<RedirectHome />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/share/:token" element={<ShareProfile />} />
@@ -99,6 +91,7 @@ function Layout() {
           <Route path="/account-deleted" element={<AccountDeleted />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/errors" element={<Admin initialView="errors" />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
       {footerHiddenOnMobile ? (

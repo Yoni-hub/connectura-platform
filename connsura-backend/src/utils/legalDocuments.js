@@ -10,7 +10,6 @@ const LEGAL_DOC_TYPES = {
 
 const REQUIRED_DOCS_BY_ROLE = {
   CUSTOMER: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY],
-  AGENT: [LEGAL_DOC_TYPES.TERMS, LEGAL_DOC_TYPES.PRIVACY],
 }
 
 const LEGAL_SOURCE_PATH = path.resolve(__dirname, '..', '..', '..', 'legal', 'terms.md')

@@ -483,7 +483,6 @@ export default function ShareProfileModal({ open, onClose, snapshot }) {
                   setStep('sections')
                   setActiveMethod(null)
                   setLinkShare(null)
-                  setAgentShare(null)
                 }}
               >
                 Change sections
