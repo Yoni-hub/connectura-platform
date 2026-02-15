@@ -719,7 +719,7 @@ router.post('/email-otp/request', authGuard, async (req, res) => {
     const result = await sendEmailOtp(email, {
       ip,
       subject: pendingEmail ? 'Verify your new email' : undefined,
-      userId: user?.id || null,
+      userId: req.user?.id || null,
     })
     if (req.user?.role === 'CUSTOMER') {
       await logClientAudit(req.user.customer?.id || req.user.id, 'EMAIL_VERIFY_SENT', {

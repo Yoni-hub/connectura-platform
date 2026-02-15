@@ -366,6 +366,18 @@ export default function ClientDashboard() {
     setEmailDraft(user?.emailPending || user?.email || '')
   }, [user?.emailPending, user?.email, emailEditing])
 
+  useEffect(() => {
+    if (!user || user.emailVerified || verificationOpen) return
+    const pending = sessionStorage.getItem('connsura_pending_email_verification') === 'true'
+    if (!pending) return
+    sessionStorage.removeItem('connsura_pending_email_verification')
+    setVerificationPurpose('email')
+    setVerificationSent(true)
+    setVerificationCode('')
+    setVerificationError('')
+    setVerificationOpen(true)
+  }, [user, verificationOpen])
+
 
   const updateTab = (nextTab) => {
     setActiveTab(nextTab)

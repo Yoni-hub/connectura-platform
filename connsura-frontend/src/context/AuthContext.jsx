@@ -87,6 +87,9 @@ export function AuthProvider({ children }) {
       applyAuth(res.data.token, res.data.user, payload.password, { persist: true, consent: res.data.consent || null })
       if (res.data.user.role === 'CUSTOMER') {
         sessionStorage.setItem('connsura_force_dashboard', 'true')
+        if (!res.data.user.emailVerified) {
+          sessionStorage.setItem('connsura_pending_email_verification', 'true')
+        }
       }
       toast.success('Account created')
       return res.data.user
@@ -110,6 +113,7 @@ export function AuthProvider({ children }) {
     setConsentStatus(null)
     clearStoredToken()
     sessionStorage.removeItem('connsura_force_dashboard')
+    sessionStorage.removeItem('connsura_pending_email_verification')
   }
 
   return (
