@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import Home from '../pages/Home'
 import ClientDashboard from '../pages/ClientDashboard'
 import CreateProfile from '../pages/CreateProfile'
@@ -40,6 +41,11 @@ function Layout() {
   const footerHiddenOnMobile =
     location.pathname === '/client/dashboard' ||
     location.pathname === '/dashboard'
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [location.pathname, location.search])
 
   return (
     <div className="flex min-h-screen flex-col">
