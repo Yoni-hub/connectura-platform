@@ -150,6 +150,7 @@ COPY connsura-backend/package*.json ./
 RUN npm install
 
 COPY connsura-backend/ ./
+COPY legal/ ./legal
 RUN npx prisma generate
 
 COPY deploy/entrypoint.backend.sh /entrypoint.sh
