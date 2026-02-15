@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../services/api'
@@ -12,9 +13,15 @@ const docMeta = {
 
 export default function LegalConsentModal() {
   const { user, consentStatus, setConsentStatus } = useAuth()
+  const location = useLocation()
   const missing = consentStatus?.missing || []
   const [checks, setChecks] = useState({})
   const [saving, setSaving] = useState(false)
+  const path = location.pathname
+  const isProtectedRoute =
+    path === '/dashboard' ||
+    path === '/client/dashboard' ||
+    path.startsWith('/passport/forms/edit')
 
   useEffect(() => {
     if (!missing.length) return
@@ -52,7 +59,7 @@ export default function LegalConsentModal() {
     }
   }
 
-  if (!user || !missing.length) return null
+  if (!user || user.role !== 'CUSTOMER' || !missing.length || !isProtectedRoute) return null
 
   return (
     <Modal open title="Updated legal terms" showClose={false} panelClassName="max-w-xl">
@@ -96,3 +103,4 @@ export default function LegalConsentModal() {
     </Modal>
   )
 }
+
