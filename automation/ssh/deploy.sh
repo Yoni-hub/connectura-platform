@@ -216,7 +216,6 @@ CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
 EOF
 
 cat > "${DEPLOY_DIR}/docker-compose.yml" <<EOF
-version: "3.8"
 services:
   postgres:
     image: postgres:16
