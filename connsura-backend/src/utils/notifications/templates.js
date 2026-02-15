@@ -21,10 +21,15 @@ const formatDateTime = (value) => {
   })
 }
 
-const buildFooterText = ({ includeSettings = true, includeContact = true, extraLine } = {}) => {
+const buildFooterText = ({
+  includeSettings = true,
+  includeContact = true,
+  contactEmail = 'contact@connsura.com',
+  extraLine,
+} = {}) => {
   const lines = []
   if (includeContact) {
-    lines.push('Contact: contact@connsura.com')
+    lines.push(`Contact: ${contactEmail}`)
   }
   if (includeSettings) {
     lines.push(`Settings: ${getSettingsUrl()}`)
@@ -35,10 +40,17 @@ const buildFooterText = ({ includeSettings = true, includeContact = true, extraL
   return lines.length ? `\n\n${lines.join('\n')}` : ''
 }
 
-const buildFooterHtml = ({ includeSettings = true, includeContact = true, extraLine } = {}) => {
+const buildFooterHtml = ({
+  includeSettings = true,
+  includeContact = true,
+  contactEmail = 'contact@connsura.com',
+  extraLine,
+} = {}) => {
   const lines = []
   if (includeContact) {
-    lines.push('<div>Contact: <a href="mailto:contact@connsura.com">contact@connsura.com</a></div>')
+    lines.push(
+      `<div>Contact: <a href="mailto:${contactEmail}">${contactEmail}</a></div>`
+    )
   }
   if (includeSettings) {
     lines.push(`<div>Settings: <a href="${getSettingsUrl()}">${getSettingsUrl()}</a></div>`)
@@ -87,10 +99,18 @@ const buildLoginAlertTemplate = ({ time, ip, location, device, resetUrl }) => {
     <p style="margin: 0;"><a href="${resetUrl}">Reset your password</a> if this wasn't you.</p>
   `
 
-  const footerHtml = buildFooterHtml({ includeSettings: false, includeContact: true })
+  const footerHtml = buildFooterHtml({
+    includeSettings: false,
+    includeContact: true,
+    contactEmail: 'security@connsura.com',
+  })
   return {
     subject,
-    text: `${lines.join('\n')}${buildFooterText({ includeSettings: false, includeContact: true })}`,
+    text: `${lines.join('\n')}${buildFooterText({
+      includeSettings: false,
+      includeContact: true,
+      contactEmail: 'security@connsura.com',
+    })}`,
     html: wrapHtml('New sign-in detected', bodyHtml, footerHtml),
   }
 }
