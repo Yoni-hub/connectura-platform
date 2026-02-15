@@ -199,7 +199,7 @@ function QuestionAutocomplete({
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
         const res = await fetch(
           `${API_URL}/questions/search?query=${encodeURIComponent(query)}&limit=8${productParam}`,
-          { signal: controller.signal, headers, credentials: 'include' }
+          { signal: controller.signal, headers, credentials: 'include', cache: 'no-store' }
         )
         if (!res.ok) return
         const data = await res.json()
@@ -584,6 +584,7 @@ export default function CreateProfile({
       const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, {
         headers,
         credentials: 'include',
+        cache: 'no-store',
       })
       if (!res.ok) {
         if (sectionKey === 'household') {
@@ -690,10 +691,11 @@ export default function CreateProfile({
     const controller = new AbortController()
     const loadSchema = async () => {
       try {
-        const res = await fetch(`${API_URL}/form-schema/create-profile`, {
-          signal: controller.signal,
-          credentials: 'include',
-        })
+      const res = await fetch(`${API_URL}/form-schema/create-profile`, {
+        signal: controller.signal,
+        credentials: 'include',
+        cache: 'no-store',
+      })
         if (!res.ok) return
         const data = await res.json()
         if (data?.schema?.schema) {
@@ -713,7 +715,11 @@ export default function CreateProfile({
     const controller = new AbortController()
     const loadProducts = async () => {
       try {
-        const res = await fetch(`${API_URL}/products`, { signal: controller.signal, credentials: 'include' })
+      const res = await fetch(`${API_URL}/products`, {
+        signal: controller.signal,
+        credentials: 'include',
+        cache: 'no-store',
+      })
         if (!res.ok) return
         const data = await res.json()
         const items = Array.isArray(data.products) ? data.products : []
@@ -1484,6 +1490,7 @@ export default function CreateProfile({
       const res = await fetch(`${API_URL}/questions/product?productId=${encodeURIComponent(productId)}`, {
         headers,
         credentials: 'include',
+        cache: 'no-store',
       })
       if (!res.ok) return
       const data = await res.json()
