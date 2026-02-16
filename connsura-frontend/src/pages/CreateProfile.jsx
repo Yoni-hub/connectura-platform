@@ -8,7 +8,7 @@ import Modal from '../components/ui/Modal'
 
 const labelClass = 'text-sm text-slate-900'
 const inputClass =
-  'h-9 w-full justify-self-start border border-slate-700/60 bg-white px-2 text-sm text-slate-900 focus:border-[#006aff] focus:outline-none focus:ring-1 focus:ring-[#006aff]/20 sm:h-7 sm:w-40'
+  'h-9 w-full justify-self-start border border-slate-700/60 bg-white px-2 text-sm text-slate-900 focus:border-[#006aff] focus:outline-none focus:ring-1 focus:ring-[#006aff]/20 sm:h-7'
 const additionalQuestionInputClass =
   'w-full justify-self-start border-0 bg-transparent px-0 text-sm text-[#006aff] placeholder:text-[#7fb2ff] focus:outline-none focus:ring-0'
 const gridClass = 'grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-[150px_1fr] sm:items-center'
@@ -498,6 +498,7 @@ export default function CreateProfile({
   const sectionProductIdsRef = useRef({ household: '', address: '' })
   const suppressModeResetRef = useRef(false)
   const initialDataRef = useRef(false)
+  const lastInitialSerializedRef = useRef(null)
   const hasHouseholdData =
     hasNamedInsuredData(namedInsured) || additionalHouseholds.some((person) => hasNonEmptyValue(person))
   const hasAddressData = hasNonEmptyValue({
@@ -551,6 +552,7 @@ export default function CreateProfile({
   }
 
   const loadSectionQuestions = async (sectionKey, productId) => {
+    const emptyBankMessage = 'there are no questions in the question bank'
     if (!productId) {
       if (sectionKey === 'household') {
         const message = 'something went wrong please try again later'
@@ -586,9 +588,7 @@ export default function CreateProfile({
         credentials: 'include',
         cache: 'no-store',
       })
-      if (res.status === 304) {
-        return
-      }
+      if (res.status === 304) return
       if (!res.ok) {
         if (sectionKey === 'household') {
           const message = 'something went wrong please try again later'
@@ -618,8 +618,7 @@ export default function CreateProfile({
       }
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
-      const systemOnly = bankQuestions.filter((question) => question?.source === 'SYSTEM' || !question?.source)
-      const normalized = systemOnly
+      const normalized = bankQuestions
         .map((question) => ({
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
@@ -627,34 +626,35 @@ export default function CreateProfile({
           selectOptions: normalizeSelectOptionsList(question?.selectOptions),
         }))
         .filter((entry) => entry.key)
-      if (sectionKey === 'household' && normalized.length === 0) {
-        const message = 'something went wrong please try again later'
-        setHouseholdQuestionsError(message)
-        if (!householdQuestionsErrorReportedRef.current) {
-          householdQuestionsErrorReportedRef.current = true
-          reportError({
-            source: 'create-profile',
-            message: 'Household questions missing or empty',
-            metadata: { sectionKey, productId },
-          })
+      if (normalized.length === 0) {
+        if (sectionKey === 'household') {
+          const message = emptyBankMessage
+          setHouseholdQuestionsError(message)
+          if (!householdQuestionsErrorReportedRef.current) {
+            householdQuestionsErrorReportedRef.current = true
+            reportError({
+              source: 'create-profile',
+              message: 'Household question bank empty',
+              metadata: { sectionKey, productId, questionCount: bankQuestions.length },
+            })
+          }
         }
-      } else if (sectionKey === 'household') {
-        setHouseholdQuestionsError('')
-      }
-      if (sectionKey === 'address' && normalized.length === 0) {
-        const message = 'something went wrong please try again later'
-        setAddressQuestionsError(message)
-        if (!addressQuestionsErrorReportedRef.current) {
-          addressQuestionsErrorReportedRef.current = true
-          reportError({
-            source: 'create-profile',
-            message: 'Address questions missing or empty',
-            metadata: { sectionKey, productId },
-          })
+        if (sectionKey === 'address') {
+          const message = emptyBankMessage
+          setAddressQuestionsError(message)
+          if (!addressQuestionsErrorReportedRef.current) {
+            addressQuestionsErrorReportedRef.current = true
+            reportError({
+              source: 'create-profile',
+              message: 'Address question bank empty',
+              metadata: { sectionKey, productId, questionCount: bankQuestions.length },
+            })
+          }
         }
-      } else if (sectionKey === 'address') {
-        setAddressQuestionsError('')
+        return
       }
+      if (sectionKey === 'household') setHouseholdQuestionsError('')
+      if (sectionKey === 'address') setAddressQuestionsError('')
       setSectionBankQuestions((prev) => ({
         ...prev,
         [sectionKey]: normalized,
@@ -784,7 +784,18 @@ export default function CreateProfile({
   }, [additionalFormMode, additionalFormProductId, products])
 
   useEffect(() => {
-    if (!initialData || initialDataRef.current) return
+    if (!initialData) {
+      setHydrated(true)
+      return
+    }
+    const serialized = JSON.stringify(initialData ?? {})
+    if (lastInitialSerializedRef.current === serialized && initialDataRef.current) return
+    const lastSaved = lastSavedSerializedRef.current
+    const currentSerialized =
+      formsPayloadRef.current ? JSON.stringify(formsPayloadRef.current) : null
+    const hasUnsavedLocalChanges =
+      lastSaved !== null && currentSerialized !== null && currentSerialized !== lastSaved
+    if (initialDataRef.current && hasUnsavedLocalChanges) return
     const household = initialData.household || {}
     const address = initialData.address || {}
     const additional = initialData.additional || {}
@@ -805,12 +816,19 @@ export default function CreateProfile({
       address: customFields.address || {},
       additional: customFields.additional || {},
     })
+    setHouseholdErrors({})
+    setAddressErrors({})
+    setAdditionalErrors({})
+    setShowAddHouseholdModal(false)
+    setShowAddAddressModal(false)
+    setNewHousehold(createHouseholdMember())
+    setNewAddress(createAddressEntry())
+    formsPayloadRef.current = initialData
+    lastSavedSerializedRef.current = serialized
+    lastSavedFormsRef.current = JSON.parse(JSON.stringify(initialData))
+    lastInitialSerializedRef.current = serialized
     initialDataRef.current = true
     setHydrated(true)
-  }, [initialData])
-
-  useEffect(() => {
-    if (!initialData) setHydrated(true)
   }, [initialData])
 
   useEffect(() => {
@@ -870,11 +888,36 @@ export default function CreateProfile({
     'Homemaker (full-time)': ['Homemaker (full-time)'],
     'Unemployed': ['Unemployed'],
   }
+  const fallbackHouseholdFields = [
+    { id: 'first-name', label: 'First Name', type: 'text' },
+    { id: 'middle-initial', label: 'Middle Initial', type: 'text' },
+    { id: 'last-name', label: 'Last Name', type: 'text' },
+    { id: 'suffix', label: 'Suffix', type: 'text' },
+    { id: 'dob', label: 'Date of Birth', type: 'date' },
+    { id: 'gender', label: 'Gender', type: 'select' },
+    { id: 'marital-status', label: 'Marital Status', type: 'select' },
+    { id: 'education-level', label: 'Education Level', type: 'select' },
+    { id: 'employment', label: 'Employment', type: 'select' },
+    { id: 'occupation', label: 'Occupation', type: 'text' },
+    { id: 'driver-status', label: 'Driver Status', type: 'select' },
+    { id: 'license-type', label: "Driver's License Type", type: 'select' },
+    { id: 'license-status', label: 'License Status', type: 'select' },
+    { id: 'years-licensed', label: 'Years Licensed', type: 'select' },
+    { id: 'license-state', label: 'License State', type: 'select' },
+    { id: 'license-number', label: 'License Number', type: 'text' },
+    { id: 'accident-prevention', label: 'Accident Prevention Course', type: 'select' },
+    { id: 'sr22', label: 'SR-22 Required?', type: 'select' },
+    { id: 'fr44', label: 'FR-44 Required?', type: 'select' },
+  ]
   const schema = formSchema || { sections: {} }
   const householdSchemaFields = schema.sections?.household?.fields || []
+  const householdFieldSource =
+    Array.isArray(householdSchemaFields) && householdSchemaFields.length
+      ? householdSchemaFields
+      : fallbackHouseholdFields
   const householdFieldByLabel = useMemo(() => {
     const map = new Map()
-    householdSchemaFields
+    householdFieldSource
       .filter((field) => !field?.removed && field?.visible !== false)
       .forEach((field) => {
         const normalized = normalizeQuestionText(field?.label || '')
@@ -887,7 +930,7 @@ export default function CreateProfile({
         })
       })
     return map
-  }, [householdSchemaFields])
+  }, [householdFieldSource])
   const rawAddressTypeOptions = Array.isArray(schema.sections?.address?.addressTypes)
     ? schema.sections.address.addressTypes
     : []
@@ -951,9 +994,12 @@ export default function CreateProfile({
       return false
     }
     let saveResult = { success: true }
+    let savedPayload = resolvedOverride || null
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || buildFormsPayload()
+        formsPayloadRef.current = formsPayload
+        savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: householdSectionName,
           nextSection: addressSectionName,
@@ -967,7 +1013,7 @@ export default function CreateProfile({
       setHouseholdSaving(false)
       return false
     }
-    const payloadForNotification = resolvedOverride || formsPayloadRef.current
+    const payloadForNotification = savedPayload || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -999,9 +1045,12 @@ export default function CreateProfile({
       return false
     }
     let saveResult = { success: true }
+    let savedPayload = resolvedOverride || null
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || buildFormsPayload()
+        formsPayloadRef.current = formsPayload
+        savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: addressSectionName,
           nextSection: additionalSectionName,
@@ -1015,7 +1064,7 @@ export default function CreateProfile({
       setAddressSaving(false)
       return false
     }
-    const payloadForNotification = resolvedOverride || formsPayloadRef.current
+    const payloadForNotification = savedPayload || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -1045,9 +1094,12 @@ export default function CreateProfile({
       return false
     }
     let saveResult = { success: true }
+    let savedPayload = resolvedOverride || null
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = resolvedOverride || formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = resolvedOverride || buildFormsPayload()
+        formsPayloadRef.current = formsPayload
+        savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: additionalSectionName,
           nextSection: additionalSectionName,
@@ -1061,7 +1113,7 @@ export default function CreateProfile({
       setAdditionalSaving(false)
       return false
     }
-    const payloadForNotification = resolvedOverride || formsPayloadRef.current
+    const payloadForNotification = savedPayload || formsPayloadRef.current
     if (payloadForNotification) {
       notifySaveIfChanged(payloadForNotification)
     }
@@ -1084,7 +1136,8 @@ export default function CreateProfile({
     let saveResult = { success: true }
     try {
       if (typeof onSectionSave === 'function') {
-        const formsPayload = formsPayloadRef.current || buildFormsPayload()
+        const formsPayload = buildFormsPayload()
+        formsPayloadRef.current = formsPayload
         saveResult = await onSectionSave({
           section: additionalSectionName,
           nextSection: 'Summary',
@@ -2568,7 +2621,8 @@ export default function CreateProfile({
       if (typeof onSectionSave !== 'function') return true
       const resolvedSection = resolveSectionName(sectionKey)
       if (!resolvedSection) return true
-      const formsPayload = formsOverride || formsPayloadRef.current || buildFormsPayload()
+      const formsPayload = formsOverride || buildFormsPayload()
+      formsPayloadRef.current = formsPayload
       const saveResult = await onSectionSave({
         section: resolvedSection,
         nextSection: resolvedSection,
