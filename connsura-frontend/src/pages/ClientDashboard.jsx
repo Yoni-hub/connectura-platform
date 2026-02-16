@@ -207,7 +207,6 @@ export default function ClientDashboard() {
   const [formsStarting, setFormsStarting] = useState(false)
   const [formsStartSection, setFormsStartSection] = useState(null)
   const [formsStartKey, setFormsStartKey] = useState(0)
-  const [, setFormsSaving] = useState(false)
   const [pendingShares, setPendingShares] = useState([])
   const [activeShares, setActiveShares] = useState([])
   const [revokingShare, setRevokingShare] = useState('')
@@ -498,33 +497,10 @@ export default function ClientDashboard() {
   }, [activeTab, user?.customerId, sessionId])
 
   useEffect(() => {
-    if (!user?.customerId || !formsDraft) return
-    const hasDraftData = hasNonEmptyValue(formsDraft)
-    const hasStoredData = hasNonEmptyValue(client?.profileData?.forms)
-    if (!hasDraftData && hasStoredData) return
-    if (formsSaveRef.current) {
-      clearTimeout(formsSaveRef.current)
-    }
-    const payload = formsDraft
-    formsSaveRef.current = setTimeout(async () => {
-      setFormsSaving(true)
-      try {
-        const res = await api.patch(`/customers/${user.customerId}/profile-data`, {
-          profileData: { forms: payload },
-        })
-        setClient((prev) =>
-          prev ? { ...prev, profileData: res.data.profile?.profileData || prev.profileData } : prev
-        )
-      } catch (err) {
-        toast.error(err.response?.data?.error || 'Unable to save profile changes')
-      } finally {
-        setFormsSaving(false)
-      }
-    }, 800)
     return () => {
       if (formsSaveRef.current) clearTimeout(formsSaveRef.current)
     }
-  }, [formsDraft, user?.customerId, client?.profileData?.forms])
+  }, [])
 
   const isEmailVerified = user?.emailVerified === true
   const hasPendingEmail = Boolean(user?.emailPending)
