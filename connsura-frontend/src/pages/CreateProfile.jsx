@@ -899,13 +899,6 @@ export default function CreateProfile({
     }
     const serialized = JSON.stringify(initialData ?? {})
     if (lastInitialSerializedRef.current === serialized && initialDataRef.current) return
-    const lastSaved = lastSavedSerializedRef.current
-    const currentSerialized =
-      formsPayloadRef.current ? JSON.stringify(formsPayloadRef.current) : null
-    const hasUnsavedLocalChanges =
-      lastSaved !== null && currentSerialized !== null && currentSerialized !== lastSaved
-    const localHasData = hasNonEmptyValue(formsPayloadRef.current)
-    if (initialDataRef.current && hasUnsavedLocalChanges && localHasData) return
     const household = initialData.household || {}
     const address = initialData.address || {}
     const additional = initialData.additional || {}
