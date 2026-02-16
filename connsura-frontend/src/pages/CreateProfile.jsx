@@ -353,6 +353,17 @@ const resolveQuestionConfigWithFallback = (question, fallback) => {
 const buildQuestionCustomKey = (prefix, normalized) =>
   prefix ? `qb-${prefix}-${normalized}` : `qb-${normalized}`
 
+const readResponseSnippet = async (res) => {
+  if (!res) return null
+  try {
+    const text = await res.text()
+    if (!text) return null
+    return text.slice(0, 800)
+  } catch {
+    return null
+  }
+}
+
 const householdRelationLabelSet = new Set([
   normalizeQuestionText('Relation To Applicant'),
   normalizeQuestionText('Relation to applicant'),
@@ -562,7 +573,12 @@ export default function CreateProfile({
           reportError({
             source: 'create-profile',
             message: 'Household questions product not found',
-            metadata: { sectionKey, productId: null },
+            metadata: {
+              sectionKey,
+              productId: null,
+              productsCount: products.length,
+              productSlugs: products.map((product) => product.slug).slice(0, 12),
+            },
           })
         }
       }
@@ -574,7 +590,12 @@ export default function CreateProfile({
           reportError({
             source: 'create-profile',
             message: 'Address questions product not found',
-            metadata: { sectionKey, productId: null },
+            metadata: {
+              sectionKey,
+              productId: null,
+              productsCount: products.length,
+              productSlugs: products.map((product) => product.slug).slice(0, 12),
+            },
           })
         }
       }
@@ -590,6 +611,7 @@ export default function CreateProfile({
       })
       if (res.status === 304) return
       if (!res.ok) {
+        const responseBody = await readResponseSnippet(res)
         if (sectionKey === 'household') {
           const message = 'something went wrong please try again later'
           setHouseholdQuestionsError(message)
@@ -598,7 +620,14 @@ export default function CreateProfile({
             reportError({
               source: 'create-profile',
               message: 'Household questions request failed',
-              metadata: { sectionKey, productId, status: res.status },
+              metadata: {
+                sectionKey,
+                productId,
+                status: res.status,
+                statusText: res.statusText,
+                url: res.url,
+                responseBody,
+              },
             })
           }
         }
@@ -610,7 +639,14 @@ export default function CreateProfile({
             reportError({
               source: 'create-profile',
               message: 'Address questions request failed',
-              metadata: { sectionKey, productId, status: res.status },
+              metadata: {
+                sectionKey,
+                productId,
+                status: res.status,
+                statusText: res.statusText,
+                url: res.url,
+                responseBody,
+              },
             })
           }
         }
@@ -618,14 +654,25 @@ export default function CreateProfile({
       }
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
-      const normalized = bankQuestions
+      const systemQuestions = bankQuestions.filter(
+        (question) => question?.source === 'SYSTEM' || !question?.source
+      )
+      const customerQuestions = bankQuestions.filter((question) => question?.source === 'CUSTOMER')
+      const mergedQuestions = [...systemQuestions, ...customerQuestions]
+      const seen = new Set()
+      const normalized = mergedQuestions
         .map((question) => ({
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
           inputType: question?.inputType || 'general',
           selectOptions: normalizeSelectOptionsList(question?.selectOptions),
+          source: question?.source || 'SYSTEM',
         }))
-        .filter((entry) => entry.key)
+        .filter((entry) => {
+          if (!entry.key || seen.has(entry.key)) return false
+          seen.add(entry.key)
+          return true
+        })
       if (normalized.length === 0) {
         if (sectionKey === 'household') {
           const message = emptyBankMessage
@@ -635,7 +682,14 @@ export default function CreateProfile({
             reportError({
               source: 'create-profile',
               message: 'Household question bank empty',
-              metadata: { sectionKey, productId, questionCount: bankQuestions.length },
+              metadata: {
+                sectionKey,
+                productId,
+                questionCount: bankQuestions.length,
+                systemCount: systemQuestions.length,
+                customerCount: customerQuestions.length,
+                url: res.url,
+              },
             })
           }
         }
@@ -647,7 +701,14 @@ export default function CreateProfile({
             reportError({
               source: 'create-profile',
               message: 'Address question bank empty',
-              metadata: { sectionKey, productId, questionCount: bankQuestions.length },
+              metadata: {
+                sectionKey,
+                productId,
+                questionCount: bankQuestions.length,
+                systemCount: systemQuestions.length,
+                customerCount: customerQuestions.length,
+                url: res.url,
+              },
             })
           }
         }
@@ -670,7 +731,12 @@ export default function CreateProfile({
             source: 'create-profile',
             message: 'Household questions load exception',
             stack: error?.stack,
-            metadata: { sectionKey, productId },
+            metadata: {
+              sectionKey,
+              productId,
+              error: error?.message,
+              endpoint: 'questions/product',
+            },
           })
         }
       }
@@ -683,7 +749,12 @@ export default function CreateProfile({
             source: 'create-profile',
             message: 'Address questions load exception',
             stack: error?.stack,
-            metadata: { sectionKey, productId },
+            metadata: {
+              sectionKey,
+              productId,
+              error: error?.message,
+              endpoint: 'questions/product',
+            },
           })
         }
       }
@@ -699,7 +770,20 @@ export default function CreateProfile({
         credentials: 'include',
         cache: 'no-store',
       })
-        if (!res.ok) return
+        if (!res.ok) {
+          const responseBody = await readResponseSnippet(res)
+          reportError({
+            source: 'create-profile',
+            message: 'Create profile schema request failed',
+            metadata: {
+              status: res.status,
+              statusText: res.statusText,
+              url: res.url,
+              responseBody,
+            },
+          })
+          return
+        }
         const data = await res.json()
         if (data?.schema?.schema) {
           setFormSchema(data.schema.schema)
@@ -707,6 +791,12 @@ export default function CreateProfile({
       } catch (error) {
         if (error.name !== 'AbortError') {
           setFormSchema(null)
+          reportError({
+            source: 'create-profile',
+            message: 'Create profile schema load exception',
+            stack: error?.stack,
+            metadata: { error: error?.message, endpoint: 'form-schema/create-profile' },
+          })
         }
       }
     }
@@ -723,13 +813,32 @@ export default function CreateProfile({
         credentials: 'include',
         cache: 'no-store',
       })
-        if (!res.ok) return
+        if (!res.ok) {
+          const responseBody = await readResponseSnippet(res)
+          reportError({
+            source: 'create-profile',
+            message: 'Products request failed',
+            metadata: {
+              status: res.status,
+              statusText: res.statusText,
+              url: res.url,
+              responseBody,
+            },
+          })
+          return
+        }
         const data = await res.json()
         const items = Array.isArray(data.products) ? data.products : []
         setProducts(items)
       } catch (error) {
         if (error.name !== 'AbortError') {
           setProducts([])
+          reportError({
+            source: 'create-profile',
+            message: 'Products load exception',
+            stack: error?.stack,
+            metadata: { error: error?.message, endpoint: 'products' },
+          })
         }
       }
     }
@@ -1548,7 +1657,21 @@ export default function CreateProfile({
         credentials: 'include',
         cache: 'no-store',
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        const responseBody = await readResponseSnippet(res)
+        reportError({
+          source: 'create-profile',
+          message: 'Additional form questions request failed',
+          metadata: {
+            productId,
+            status: res.status,
+            statusText: res.statusText,
+            url: res.url,
+            responseBody,
+          },
+        })
+        return
+      }
       const data = await res.json()
       const bankQuestions = Array.isArray(data.questions) ? data.questions : []
       const systemQuestions = bankQuestions.filter(
@@ -1615,6 +1738,12 @@ export default function CreateProfile({
       setBaseAdditionalQuestionKeys(systemKeys)
     } catch (error) {
       console.warn('Failed to load product questions', error)
+      reportError({
+        source: 'create-profile',
+        message: 'Additional form questions load exception',
+        stack: error?.stack,
+        metadata: { productId, error: error?.message, endpoint: 'questions/product' },
+      })
     }
   }
 
