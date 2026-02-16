@@ -20,6 +20,7 @@ import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
 import LegalConsentModal from '../components/modals/LegalConsentModal'
 import ErrorBoundary from '../components/ui/ErrorBoundary'
+import { reportError } from '../utils/errorReporting'
 
 function Protected({ children }) {
   const { user, authReady } = useAuth()
@@ -59,7 +60,16 @@ function Layout() {
             path="/dashboard"
             element={
               <Protected>
-                <ErrorBoundary>
+                <ErrorBoundary
+                  onError={(error, info) =>
+                    reportError({
+                      source: 'react',
+                      message: error?.message || 'React render error',
+                      stack: error?.stack,
+                      componentStack: info?.componentStack || null,
+                    })
+                  }
+                >
                   <ClientDashboard />
                 </ErrorBoundary>
               </Protected>
@@ -69,7 +79,16 @@ function Layout() {
             path="/client/dashboard"
             element={
               <CustomerOnly>
-                <ErrorBoundary>
+                <ErrorBoundary
+                  onError={(error, info) =>
+                    reportError({
+                      source: 'react',
+                      message: error?.message || 'React render error',
+                      stack: error?.stack,
+                      componentStack: info?.componentStack || null,
+                    })
+                  }
+                >
                   <ClientDashboard />
                 </ErrorBoundary>
               </CustomerOnly>
@@ -79,7 +98,16 @@ function Layout() {
             path="/passport/forms/edit/:section"
             element={
               <CustomerOnly>
-                <ErrorBoundary>
+                <ErrorBoundary
+                  onError={(error, info) =>
+                    reportError({
+                      source: 'react',
+                      message: error?.message || 'React render error',
+                      stack: error?.stack,
+                      componentStack: info?.componentStack || null,
+                    })
+                  }
+                >
                   <ClientDashboard />
                 </ErrorBoundary>
               </CustomerOnly>
