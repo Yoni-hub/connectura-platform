@@ -946,27 +946,6 @@ export default function ClientDashboard() {
     }
   }
 
-  if (isFormsEditRoute) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-3 py-4">
-        {loading ? (
-          <Skeleton className="h-24" />
-        ) : (
-          <CreateProfile
-            onShareSnapshotChange={setShareSnapshot}
-            onFormDataChange={setFormsDraft}
-            initialData={client?.profileData?.forms || null}
-            onSectionSave={handleSectionSave}
-            editSection={formsEditSection}
-            editContext={formsEditContext}
-            onEditBack={handleEditBack}
-            onMobileEditNavigate={handleMobileEditNavigate}
-          />
-        )}
-      </div>
-    )
-  }
-
   const handlePasswordSubmit = async (e) => {
     e?.preventDefault()
     setPasswordMessage(null)
@@ -1402,6 +1381,29 @@ export default function ClientDashboard() {
     sharedActivityPageSafe * activityPageSize,
   )
   const currentNotificationPrefs = notificationPrefs || DEFAULT_NOTIFICATION_PREFS
+
+  const formsEditContent = (
+    <div className="min-h-screen bg-slate-50 px-3 py-4">
+      {loading ? (
+        <Skeleton className="h-24" />
+      ) : (
+        <CreateProfile
+          onShareSnapshotChange={setShareSnapshot}
+          onFormDataChange={setFormsDraft}
+          initialData={client?.profileData?.forms || null}
+          onSectionSave={handleSectionSave}
+          editSection={formsEditSection}
+          editContext={formsEditContext}
+          onEditBack={handleEditBack}
+          onMobileEditNavigate={handleMobileEditNavigate}
+        />
+      )}
+    </div>
+  )
+
+  if (isFormsEditRoute) {
+    return formsEditContent
+  }
 
   return (
     <main
