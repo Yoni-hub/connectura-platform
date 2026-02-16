@@ -904,7 +904,8 @@ export default function CreateProfile({
       formsPayloadRef.current ? JSON.stringify(formsPayloadRef.current) : null
     const hasUnsavedLocalChanges =
       lastSaved !== null && currentSerialized !== null && currentSerialized !== lastSaved
-    if (initialDataRef.current && hasUnsavedLocalChanges) return
+    const localHasData = hasNonEmptyValue(formsPayloadRef.current)
+    if (initialDataRef.current && hasUnsavedLocalChanges && localHasData) return
     const household = initialData.household || {}
     const address = initialData.address || {}
     const additional = initialData.additional || {}
