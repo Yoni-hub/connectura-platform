@@ -82,6 +82,144 @@ const safeStringify = (value) => {
   return JSON.stringify(sanitized ?? {})
 }
 
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+const normalizeSectionKey = (value) => String(value || '').trim().toLowerCase()
+
+const splitCustomValues = (values = {}) => {
+  const custom = {}
+  const regular = {}
+  Object.entries(values || {}).forEach(([key, val]) => {
+    if (typeof key === 'string' && key.startsWith('custom.')) {
+      custom[key.slice('custom.'.length)] = val
+    } else {
+      regular[key] = val
+    }
+  })
+  return { custom, regular }
+}
+
+const mergeAddressSection = (existingSection = {}, values = {}) => {
+  const section = {
+    ...existingSection,
+    contacts: Array.isArray(existingSection.contacts) ? [...existingSection.contacts] : [],
+    residential: isPlainObject(existingSection.residential) ? { ...existingSection.residential } : {},
+    mailing: isPlainObject(existingSection.mailing) ? { ...existingSection.mailing } : {},
+  }
+
+  Object.entries(values || {}).forEach(([key, val]) => {
+    if (key.startsWith('residential.')) {
+      const field = key.slice('residential.'.length)
+      section.residential[field] = val
+      return
+    }
+    if (key.startsWith('mailing.')) {
+      const field = key.slice('mailing.'.length)
+      section.mailing[field] = val
+      return
+    }
+    if (key.startsWith('contact.')) {
+      const field = key.slice('contact.'.length)
+      const primary = section.contacts[0] || {}
+      section.contacts[0] = { ...primary, [field]: val }
+      return
+    }
+    section[key] = val
+  })
+
+  return section
+}
+
+const mergeHouseholdSection = (existingSection = {}, values = {}) => {
+  const section = {
+    ...existingSection,
+    namedInsured: isPlainObject(existingSection.namedInsured) ? { ...existingSection.namedInsured } : {},
+  }
+  Object.entries(values || {}).forEach(([key, val]) => {
+    section.namedInsured[key] = val
+  })
+  return section
+}
+
+const mergeSectionValuesIntoForms = (forms = {}, sectionKey, values = {}) => {
+  if (!sectionKey) return forms
+  const nextForms = { ...(forms || {}) }
+  const nextCustomFields = isPlainObject(forms.customFields) ? { ...forms.customFields } : {}
+  const { custom, regular } = splitCustomValues(values)
+
+  if (Object.keys(custom).length) {
+    nextCustomFields[sectionKey] = {
+      ...(isPlainObject(nextCustomFields[sectionKey]) ? nextCustomFields[sectionKey] : {}),
+      ...custom,
+    }
+  }
+
+  const existingSection = isPlainObject(nextForms[sectionKey]) ? nextForms[sectionKey] : {}
+  if (sectionKey === 'address') {
+    nextForms[sectionKey] = mergeAddressSection(existingSection, regular)
+  } else if (sectionKey === 'household') {
+    nextForms[sectionKey] = mergeHouseholdSection(existingSection, regular)
+  } else {
+    nextForms[sectionKey] = { ...existingSection, ...regular }
+  }
+
+  if (Object.keys(nextCustomFields).length) {
+    nextForms.customFields = nextCustomFields
+  }
+
+  return nextForms
+}
+
+const extractSectionValues = (forms = {}, sectionKey) => {
+  if (!sectionKey) return {}
+  const section = isPlainObject(forms[sectionKey]) ? forms[sectionKey] : {}
+  const customFields = isPlainObject(forms.customFields?.[sectionKey]) ? forms.customFields[sectionKey] : {}
+
+  if (sectionKey === 'address') {
+    const result = {}
+    const addPrefixed = (prefix, obj) => {
+      if (!isPlainObject(obj)) return
+      Object.entries(obj).forEach(([k, v]) => {
+        result[`${prefix}.${k}`] = v
+      })
+    }
+    if (Array.isArray(section.contacts) && section.contacts[0]) {
+      addPrefixed('contact', section.contacts[0])
+    }
+    addPrefixed('residential', section.residential || {})
+    addPrefixed('mailing', section.mailing || {})
+    Object.entries(customFields).forEach(([k, v]) => {
+      result[`custom.${k}`] = v
+    })
+    return result
+  }
+
+  if (sectionKey === 'household') {
+    const base = isPlainObject(section.namedInsured) ? section.namedInsured : section
+    const values = isPlainObject(base) ? { ...base } : {}
+    Object.entries(customFields).forEach(([k, v]) => {
+      values[`custom.${k}`] = v
+    })
+    return values
+  }
+
+  if (sectionKey === 'additional') {
+    const values = {}
+    if (Array.isArray(section.additionalForms)) {
+      values.additionalForms = section.additionalForms
+    }
+    Object.entries(customFields).forEach(([k, v]) => {
+      values[`custom.${k}`] = v
+    })
+    return Object.keys(values).length ? values : { ...section }
+  }
+
+  const values = isPlainObject(section) ? { ...section } : {}
+  Object.entries(customFields).forEach(([k, v]) => {
+    values[`custom.${k}`] = v
+  })
+  return values
+}
+
 const handleOtpSendError = (err, res) => {
   if (err instanceof RateLimitError || err?.code === 'RATE_LIMIT') {
     if (err.retryAfterSeconds) {
@@ -536,6 +674,33 @@ router.post('/:id/forms/start', authGuard, async (req, res) => {
   res.json({ profile: formatCustomerProfile(updated) })
 })
 
+router.post('/:id/forms/section-load', authGuard, async (req, res) => {
+  const customerId = Number(req.params.id)
+  if (!customerId) return res.status(400).json({ error: 'Customer id required' })
+  if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+  })
+  if (!customer) return res.status(404).json({ error: 'Customer not found' })
+  if (customer.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot access this customer' })
+  }
+
+  const formSlug = String(req.body?.formSlug || '').trim() || 'create-profile'
+  const sectionKey = normalizeSectionKey(req.body?.sectionKey || '')
+  if (!sectionKey) return res.status(400).json({ error: 'Section key is required' })
+
+  const profileData = parseJson(customer.profileData, {})
+  const forms = isPlainObject(profileData.forms) ? profileData.forms : {}
+  const values = extractSectionValues(forms, sectionKey)
+
+  return res.json({
+    formSlug,
+    sectionKey,
+    values,
+  })
+})
+
 router.post('/:id/forms/section-save', authGuard, async (req, res) => {
   const customerId = Number(req.params.id)
   if (!customerId) return res.status(400).json({ error: 'Customer id required' })
@@ -550,6 +715,7 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
   }
 
   const section = req.body?.section || ''
+  const sectionKey = normalizeSectionKey(req.body?.sectionKey || section)
   const nextSection = req.body?.nextSection || ''
 
   const logClick = req.body?.logClick !== false
@@ -563,9 +729,22 @@ router.post('/:id/forms/section-save', authGuard, async (req, res) => {
   const incomingProfileData = req.body?.profileData || {}
   const requestedStatus = req.body?.profileStatus || incomingProfileData.profile_status
   const nextProfileStatus = requestedStatus || currentProfileData.profile_status || 'draft'
+  const valuesPayload = req.body?.values
+  const hasValues = valuesPayload && typeof valuesPayload === 'object' && !Array.isArray(valuesPayload)
+  const existingForms = isPlainObject(incomingProfileData.forms)
+    ? incomingProfileData.forms
+    : isPlainObject(currentProfileData.forms)
+      ? currentProfileData.forms
+      : {}
+
+  const mergedForms = hasValues && sectionKey
+    ? mergeSectionValuesIntoForms(existingForms, sectionKey, valuesPayload)
+    : existingForms
+
   const updatedProfileData = {
     ...currentProfileData,
     ...incomingProfileData,
+    forms: mergedForms,
     profile_status: nextProfileStatus,
     current_section: nextSection || currentProfileData.current_section,
     forms_started: true,

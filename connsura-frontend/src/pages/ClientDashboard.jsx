@@ -842,7 +842,43 @@ export default function ClientDashboard() {
     }
   }
 
-  const handleSectionSave = async ({ section, nextSection, forms, profileStatus, logClick }) => {
+  
+  const buildSectionValues = (sectionKey, forms) => {
+    if (!sectionKey || !forms) return {}
+    if (sectionKey === 'household') {
+      return {
+        ...(forms.household?.namedInsured || {}),
+        ...(forms.customFields?.household || {}),
+      }
+    }
+    if (sectionKey === 'address') {
+      const result = {}
+      const addPrefixed = (prefix, obj) => {
+        if (!obj || typeof obj !== 'object') return
+        Object.entries(obj).forEach(([key, value]) => {
+          result[`${prefix}.${key}`] = value
+        })
+      }
+      const contacts = Array.isArray(forms.address?.contacts) ? forms.address.contacts : []
+      if (contacts[0]) addPrefixed('contact', contacts[0])
+      addPrefixed('residential', forms.address?.residential || {})
+      addPrefixed('mailing', forms.address?.mailing || {})
+      Object.entries(forms.customFields?.address || {}).forEach(([key, value]) => {
+        result[`custom.${key}`] = value
+      })
+      return result
+    }
+    if (sectionKey === 'additional') {
+      const result = { ...(forms.customFields?.additional || {}) }
+      if (forms.additional?.additionalForms) {
+        result.additionalForms = forms.additional.additionalForms
+      }
+      return result
+    }
+    return forms[sectionKey] || {}
+  }
+
+  const handleSectionSave = async ({ section, sectionKey, nextSection, forms, profileStatus, logClick }) => {
     if (!user?.customerId) {
       toast.error('Customer profile not found')
       return { success: false }
@@ -853,11 +889,17 @@ export default function ClientDashboard() {
         toast.error('Unable to save forms section')
         return { success: false }
       }
+      const formsForValues = sanitizedForms ?? forms ?? {}
+      const normalizedSectionKey = sectionKey || ''
+      const sectionValues = buildSectionValues(normalizedSectionKey, formsForValues)
       const res = await api.post(`/customers/${user.customerId}/forms/section-save`, {
         section,
+        sectionKey: normalizedSectionKey,
+        formSlug: 'create-profile',
         nextSection,
         profileStatus,
         logClick,
+        values: sectionValues,
         profileData: {
           profile_status: profileStatus || 'draft',
           current_section: nextSection,

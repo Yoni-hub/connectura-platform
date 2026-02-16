@@ -54,9 +54,10 @@ const sectionQuestionProductNames = {
 const sectionQuestionProductSlugSet = new Set(Object.values(sectionQuestionProductSlugs))
 
 function FieldRow({ id, label, type = 'text', value, onChange, placeholder, options, disabled }) {
-  const inputProps = value === undefined ? {} : { value, onChange }
+  const resolvedValue = value ?? ''
+  const inputProps = { value: resolvedValue, onChange }
   if (options?.length) {
-    const selectProps = value === undefined ? { defaultValue: '' } : { value, onChange }
+    const selectProps = { value: resolvedValue, onChange }
     const selectPlaceholder = placeholder ?? defaultSelectPlaceholder
     return (
       <>
@@ -410,6 +411,16 @@ const parseSignupName = (fullName = '') => {
   return { firstName, middleInitial, lastName }
 }
 
+const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
+const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
+const createAddressEntry = () => ({
+  addressType: '',
+  contact: createContact(),
+  residential: { addressType: '', address1: '', address2: '', city: '', state: '', zip: '', residents: [] },
+  mailing: { address1: '', address2: '', city: '', state: '', zip: '' },
+})
+const createAdditionalQuestion = () => ({ question: '', input: '' })
+
 export default function CreateProfile({
   onShareSnapshotChange,
   onFormDataChange,
@@ -432,15 +443,6 @@ export default function CreateProfile({
   const householdQuestionsErrorReportedRef = useRef(false)
   const [addressQuestionsError, setAddressQuestionsError] = useState('')
   const addressQuestionsErrorReportedRef = useRef(false)
-  const createContact = () => ({ phone1: '', phone2: '', email1: '', email2: '' })
-  const createHouseholdMember = () => ({ relation: '', employment: '', occupation: '' })
-  const createAddressEntry = () => ({
-    addressType: '',
-    contact: createContact(),
-    residential: { addressType: '', address1: '', address2: '', city: '', state: '', zip: '', residents: [] },
-    mailing: { address1: '', address2: '', city: '', state: '', zip: '' },
-  })
-  const createAdditionalQuestion = () => ({ question: '', input: '' })
   const [activeSection, setActiveSection] = useState(null)
   const [householdComplete, setHouseholdComplete] = useState(false)
   const [householdErrors, setHouseholdErrors] = useState({})
@@ -503,6 +505,7 @@ export default function CreateProfile({
   const lastSavedSerializedRef = useRef(null)
   const lastSavedFormsRef = useRef(null)
   const notificationTimerRef = useRef(null)
+  const rehydratedRef = useRef(false)
   const [notification, setNotification] = useState(null)
   const [unsavedPrompt, setUnsavedPrompt] = useState({ open: false, saving: false, onYes: null, onNo: null })
   const baseAdditionalQuestionKeysRef = useRef([])
@@ -892,17 +895,26 @@ export default function CreateProfile({
     })
   }, [additionalFormMode, additionalFormProductId, products])
 
+  const resolvedInitialData = useMemo(() => {
+    if (!initialData) return null
+    if (initialData?.forms && typeof initialData.forms === 'object') {
+      return initialData.forms
+    }
+    return initialData
+  }, [initialData])
+
   useEffect(() => {
-    if (!initialData) {
+    if (!resolvedInitialData) {
       setHydrated(true)
       return
     }
-    const serialized = JSON.stringify(initialData ?? {})
+    rehydratedRef.current = false
+    const serialized = JSON.stringify(resolvedInitialData ?? {})
     if (lastInitialSerializedRef.current === serialized && initialDataRef.current) return
-    const household = initialData.household || {}
-    const address = initialData.address || {}
-    const additional = initialData.additional || {}
-    const customFields = initialData.customFields || {}
+    const household = resolvedInitialData.household || {}
+    const address = resolvedInitialData.address || {}
+    const additional = resolvedInitialData.additional || {}
+    const customFields = resolvedInitialData.customFields || {}
     setNamedInsured((prev) => ({
       ...prev,
       ...(household.namedInsured || {}),
@@ -926,13 +938,13 @@ export default function CreateProfile({
     setShowAddAddressModal(false)
     setNewHousehold(createHouseholdMember())
     setNewAddress(createAddressEntry())
-    formsPayloadRef.current = initialData
+    formsPayloadRef.current = resolvedInitialData
     lastSavedSerializedRef.current = serialized
-    lastSavedFormsRef.current = JSON.parse(JSON.stringify(initialData))
+    lastSavedFormsRef.current = JSON.parse(JSON.stringify(resolvedInitialData))
     lastInitialSerializedRef.current = serialized
     initialDataRef.current = true
     setHydrated(true)
-  }, [initialData])
+  }, [resolvedInitialData, createAddressEntry, createContact, createHouseholdMember])
 
   useEffect(() => {
     if (initialDataRef.current) return
@@ -1105,6 +1117,7 @@ export default function CreateProfile({
         savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: householdSectionName,
+          sectionKey: 'household',
           nextSection: addressSectionName,
           forms: formsPayload,
         })
@@ -1156,6 +1169,7 @@ export default function CreateProfile({
         savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: addressSectionName,
+          sectionKey: 'address',
           nextSection: additionalSectionName,
           forms: formsPayload,
         })
@@ -1205,6 +1219,7 @@ export default function CreateProfile({
         savedPayload = formsPayload
         saveResult = await onSectionSave({
           section: additionalSectionName,
+          sectionKey: 'additional',
           nextSection: additionalSectionName,
           forms: formsPayload,
         })
@@ -1243,6 +1258,7 @@ export default function CreateProfile({
         formsPayloadRef.current = formsPayload
         saveResult = await onSectionSave({
           section: additionalSectionName,
+          sectionKey: 'additional',
           nextSection: 'Summary',
           forms: formsPayload,
           profileStatus: 'completed',
@@ -2653,6 +2669,134 @@ export default function CreateProfile({
     [createAddressEntry, createContact, createHouseholdMember]
   )
 
+  const applySectionValues = useCallback(
+    (sectionKey, values) => {
+      if (!sectionKey || !values || typeof values !== 'object') return
+      if (sectionKey === 'household') {
+        const nextCustom = {}
+        const nextNamed = {}
+        Object.entries(values).forEach(([key, val]) => {
+          if (typeof key === 'string' && key.startsWith('custom.')) {
+            nextCustom[key.slice('custom.'.length)] = val ?? ''
+          } else {
+            nextNamed[key] = val
+          }
+        })
+        if (Object.keys(nextNamed).length) {
+          setNamedInsured((prev) => ({ ...prev, ...nextNamed }))
+        }
+        if (Object.keys(nextCustom).length) {
+          setCustomFieldValues((prev) => ({
+            ...prev,
+            household: { ...(prev.household || {}), ...nextCustom },
+          }))
+        }
+        return
+      }
+      if (sectionKey === 'address') {
+        const nextResidential = { ...residential }
+        const nextMailing = { ...mailing }
+        const nextContacts = contacts.length ? [...contacts] : [createContact()]
+        const nextCustom = {}
+        Object.entries(values).forEach(([key, val]) => {
+          if (key.startsWith('residential.')) {
+            nextResidential[key.slice('residential.'.length)] = val ?? ''
+            return
+          }
+          if (key.startsWith('mailing.')) {
+            nextMailing[key.slice('mailing.'.length)] = val ?? ''
+            return
+          }
+          if (key.startsWith('contact.')) {
+            const field = key.slice('contact.'.length)
+            const primary = nextContacts[0] || createContact()
+            nextContacts[0] = { ...primary, [field]: val ?? '' }
+            return
+          }
+          if (key.startsWith('custom.')) {
+            nextCustom[key.slice('custom.'.length)] = val ?? ''
+          }
+        })
+        setResidential(nextResidential)
+        setMailing(nextMailing)
+        setContacts(nextContacts)
+        if (Object.keys(nextCustom).length) {
+          setCustomFieldValues((prev) => ({
+            ...prev,
+            address: { ...(prev.address || {}), ...nextCustom },
+          }))
+        }
+        return
+      }
+      if (sectionKey === 'additional') {
+        const nextCustom = {}
+        Object.entries(values).forEach(([key, val]) => {
+          if (key.startsWith('custom.')) {
+            nextCustom[key.slice('custom.'.length)] = val ?? ''
+          }
+        })
+        if (Object.keys(nextCustom).length) {
+          setCustomFieldValues((prev) => ({
+            ...prev,
+            additional: { ...(prev.additional || {}), ...nextCustom },
+          }))
+        }
+      }
+    },
+    [contacts, residential, mailing, createContact]
+  )
+
+  const sectionValuesRef = useRef({})
+
+  useEffect(() => {
+    if (!user?.customerId) return
+    if (!activeSection) return
+    if (!['household', 'address', 'additional'].includes(activeSection)) return
+    const controller = new AbortController()
+    const token = getStoredToken()
+    const sectionKey = activeSection
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_URL}/customers/${user.customerId}/forms/section-load`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+          signal: controller.signal,
+          body: JSON.stringify({ formSlug: 'create-profile', sectionKey }),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        const values = data?.values || {}
+        const previous = sectionValuesRef.current[sectionKey]
+        const isSame =
+          previous && typeof previous === 'object' && JSON.stringify(previous) === JSON.stringify(values)
+        if (!isSame) {
+          sectionValuesRef.current = { ...sectionValuesRef.current, [sectionKey]: values }
+          applySectionValues(sectionKey, values)
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError') return
+        console.warn('Failed to load saved section data', error)
+      }
+    })()
+    return () => controller.abort()
+  }, [user?.customerId, activeSection, applySectionValues])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (rehydratedRef.current) return
+    const snapshot = formsPayloadRef.current
+    if (!snapshot || !hasNonEmptyValue(snapshot)) return
+    const nextPayload = buildFormsPayload()
+    if (hasNonEmptyValue(nextPayload)) return
+    rehydratedRef.current = true
+    const cloned = cloneFormsPayload(snapshot)
+    applyFormsSnapshot(cloned)
+  }, [hydrated, buildFormsPayload, applyFormsSnapshot, cloneFormsPayload])
+
   const discardUnsavedChanges = useCallback(() => {
     const snapshot = lastSavedFormsRef.current
     if (!snapshot) return
@@ -2748,6 +2892,7 @@ export default function CreateProfile({
       formsPayloadRef.current = formsPayload
       const saveResult = await onSectionSave({
         section: resolvedSection,
+        sectionKey: sectionKey,
         nextSection: resolvedSection,
         forms: formsPayload,
         logClick: false,
