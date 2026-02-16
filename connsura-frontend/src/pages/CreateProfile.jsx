@@ -2769,7 +2769,14 @@ export default function CreateProfile({
 
   useEffect(() => {
     if (!hydrated) return
-    const formsPayload = buildFormsPayload()
+    const nextPayload = buildFormsPayload()
+    const formsPayload =
+      initialDataRef.current &&
+      formsPayloadRef.current &&
+      hasNonEmptyValue(formsPayloadRef.current) &&
+      !hasNonEmptyValue(nextPayload)
+        ? formsPayloadRef.current
+        : nextPayload
     formsPayloadRef.current = formsPayload
     if (lastSavedSerializedRef.current === null) {
       lastSavedSerializedRef.current = serializeForms(formsPayload)

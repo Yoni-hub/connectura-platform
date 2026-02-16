@@ -499,6 +499,9 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (!user?.customerId || !formsDraft) return
+    const hasDraftData = hasNonEmptyValue(formsDraft)
+    const hasStoredData = hasNonEmptyValue(client?.profileData?.forms)
+    if (!hasDraftData && hasStoredData) return
     if (formsSaveRef.current) {
       clearTimeout(formsSaveRef.current)
     }
@@ -521,7 +524,7 @@ export default function ClientDashboard() {
     return () => {
       if (formsSaveRef.current) clearTimeout(formsSaveRef.current)
     }
-  }, [formsDraft, user?.customerId])
+  }, [formsDraft, user?.customerId, client?.profileData?.forms])
 
   const isEmailVerified = user?.emailVerified === true
   const hasPendingEmail = Boolean(user?.emailPending)
