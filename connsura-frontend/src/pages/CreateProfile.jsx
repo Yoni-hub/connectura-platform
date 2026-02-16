@@ -2778,11 +2778,13 @@ export default function CreateProfile({
         ? formsPayloadRef.current
         : nextPayload
     formsPayloadRef.current = formsPayload
+    const serialized = serializeForms(formsPayload)
     if (lastSavedSerializedRef.current === null) {
-      lastSavedSerializedRef.current = serializeForms(formsPayload)
+      lastSavedSerializedRef.current = serialized
       lastSavedFormsRef.current = cloneFormsPayload(formsPayload)
     }
-    if (typeof onFormDataChange === 'function') {
+    const isDirty = lastSavedSerializedRef.current !== serialized
+    if (isDirty && typeof onFormDataChange === 'function') {
       onFormDataChange(formsPayload)
     }
     if (typeof onShareSnapshotChange !== 'function') return
