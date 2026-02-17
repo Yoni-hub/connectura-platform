@@ -8,9 +8,9 @@ Any previous or conflicting rules are void and superseded.
 2. Deployment Model (PRIMARY)
 2.1 Server Architecture
 
-Ubuntu 22.04.5 LTS laptop is the staging server
+AWS EC2 (Ubuntu 22.04.5 LTS, us-east-1) is the staging server
 
-Server is reachable over local network or public IP
+Server is reachable over public IP via Elastic IP
 
 Inbound connections are explicitly allowed
 
