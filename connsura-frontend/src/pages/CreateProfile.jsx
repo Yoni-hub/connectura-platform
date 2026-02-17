@@ -351,8 +351,27 @@ const resolveQuestionConfigWithFallback = (question, fallback) => {
   return config
 }
 
-const buildQuestionCustomKey = (prefix, normalized) =>
+const buildLegacyQuestionCustomKey = (prefix, normalized) =>
   prefix ? `qb-${prefix}-${normalized}` : `qb-${normalized}`
+
+const buildQuestionCustomKey = (prefix, normalized, questionId = null) => {
+  const numericId = Number(questionId)
+  if (Number.isInteger(numericId) && numericId > 0) {
+    return prefix ? `qb-${prefix}-id-${numericId}` : `qb-id-${numericId}`
+  }
+  return buildLegacyQuestionCustomKey(prefix, normalized)
+}
+
+const readQuestionCustomValue = (customValues, prefix, question, normalized) => {
+  const values = customValues && typeof customValues === 'object' ? customValues : {}
+  const nextKey = buildQuestionCustomKey(prefix, normalized, question?.id)
+  if (Object.prototype.hasOwnProperty.call(values, nextKey)) return values[nextKey]
+  const legacyKey = buildLegacyQuestionCustomKey(prefix, normalized)
+  if (legacyKey !== nextKey && Object.prototype.hasOwnProperty.call(values, legacyKey)) {
+    return values[legacyKey]
+  }
+  return values[nextKey] ?? values[legacyKey] ?? ''
+}
 
 const readResponseSnippet = async (res) => {
   if (!res) return null
@@ -665,6 +684,7 @@ export default function CreateProfile({
       const seen = new Set()
       const normalized = mergedQuestions
         .map((question) => ({
+          id: Number.isInteger(Number(question?.id)) ? Number(question.id) : null,
           text: question?.text || '',
           key: normalizeQuestionText(question?.text || ''),
           inputType: question?.inputType || 'general',
@@ -1429,14 +1449,14 @@ export default function CreateProfile({
           }
         }
 
-        const customKey = buildQuestionCustomKey(valueKeyPrefix, normalized)
+        const customKey = buildQuestionCustomKey(valueKeyPrefix, normalized, question?.id)
         const config = resolveQuestionInputConfig(question?.inputType, question?.selectOptions)
         return {
           id: `${idPrefix}-custom-${index}`,
           label,
           type: config.type,
           options: config.options,
-          value: customFieldValues?.household?.[customKey] ?? '',
+          value: readQuestionCustomValue(customFieldValues?.household, valueKeyPrefix, question, normalized),
           errorKey: customKey,
           customKey,
           onChange: (event) => setCustomFieldValue('household', customKey, event.target.value),
@@ -2161,7 +2181,7 @@ export default function CreateProfile({
         return
       }
 
-      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
+      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized, question?.id)
       const config = resolveQuestionInputConfig(question?.inputType, question?.selectOptions)
       rows.push({
         type: 'custom',
@@ -2354,8 +2374,7 @@ export default function CreateProfile({
         return
       }
 
-      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-      const value = customFieldValues?.household?.[customKey]
+      const value = readQuestionCustomValue(customFieldValues?.household, customKeyPrefix, question, normalized)
       if (hasNonEmptyValue(value)) {
         details.push({ label, value })
       }
@@ -2388,8 +2407,7 @@ export default function CreateProfile({
         return
       }
 
-      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-      const value = customFieldValues?.household?.[customKey]
+      const value = readQuestionCustomValue(customFieldValues?.household, customKeyPrefix, question, normalized)
       if (hasNonEmptyValue(value)) {
         summary.push({ label, value })
       }
@@ -2440,8 +2458,7 @@ export default function CreateProfile({
         return
       }
 
-      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-      const value = customFieldValues?.address?.[customKey]
+      const value = readQuestionCustomValue(customFieldValues?.address, customKeyPrefix, question, normalized)
       if (hasNonEmptyValue(value)) {
         details.push({ label, value })
       }
@@ -2484,8 +2501,7 @@ export default function CreateProfile({
         return
       }
 
-      const customKey = buildQuestionCustomKey(customKeyPrefix, normalized)
-      const value = customFieldValues?.address?.[customKey]
+      const value = readQuestionCustomValue(customFieldValues?.address, customKeyPrefix, question, normalized)
       if (hasNonEmptyValue(value)) {
         summary.push({ label, value })
       }
