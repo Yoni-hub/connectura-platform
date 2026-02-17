@@ -17,10 +17,10 @@ export default function Home() {
 
   const handleCreateProfile = () => {
     if (user?.role === 'CUSTOMER') {
-      nav('/client/dashboard?tab=forms')
+      nav('/client/dashboard')
       return
     }
-    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
+    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard')
     window.dispatchEvent(new Event('open-customer-auth-signup'))
   }
 

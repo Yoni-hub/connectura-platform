@@ -112,7 +112,7 @@ export default function PassportHome() {
               You can create your own forms or choose from existing products.
             </p>
           </div>
-          <Link className="pill-btn-ghost px-3 py-1.5 text-sm" to="/client/dashboard?tab=forms">
+          <Link className="pill-btn-ghost px-3 py-1.5 text-sm" to="/client/dashboard">
             Back to Dashboard
           </Link>
         </div>

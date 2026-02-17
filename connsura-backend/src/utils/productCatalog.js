@@ -1,25 +1,7 @@
 const productCatalog = [
-  { slug: 'household-information', name: 'Household Information' },
-  { slug: 'address-information', name: 'Address Information' },
   { slug: 'personal-auto', name: 'Personal Auto' },
-  { slug: 'homeowners', name: 'Homeowners' },
-  { slug: 'renters', name: 'Renters' },
-  { slug: 'motorcycle-offroad', name: 'Motorcycle / Off-Road' },
   { slug: 'commercial-auto', name: 'Commercial Auto' },
-  { slug: 'general-liability', name: 'General Liability Insurance' },
-  { slug: 'commercial-property', name: 'Commercial Property Insurance' },
-  { slug: 'workers-comp', name: "Workers' Compensation" },
-  { slug: 'professional-liability', name: 'Professional Liability (Errors & Omissions)' },
-  { slug: 'umbrella', name: 'Umbrella Insurance' },
-  { slug: 'travel', name: 'Travel Insurance' },
-  { slug: 'pet', name: 'Pet Insurance' },
-  { slug: 'flood-earthquake', name: 'Flood or Earthquake Insurance' },
-  { slug: 'health', name: 'Health Insurance' },
-  { slug: 'life', name: 'Life Insurance' },
-  { slug: 'disability', name: 'Disability Insurance' },
-  { slug: 'dental-vision', name: 'Dental & Vision Insurance' },
-  { slug: 'long-term-care', name: 'Long-Term Care Insurance' },
-  { slug: 'cyber-liability', name: 'Cyber Liability Insurance' },
+  { slug: 'homeowners', name: 'Homeowners' },
 ]
 
 const slugify = (value = '') =>

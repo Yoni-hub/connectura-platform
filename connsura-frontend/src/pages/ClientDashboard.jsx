@@ -9,9 +9,10 @@ import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
+import MyPassportFlow from '../components/passport/MyPassportFlow'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Forms', 'My Passport', 'Settings']
+const navItems = ['Overview', 'My Passport', 'Settings']
 const SETTINGS_ITEMS = [
   { id: 'account', label: 'Account' },
   { id: 'security', label: 'Security' },
@@ -204,14 +205,10 @@ export default function ClientDashboard() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareSnapshot, setShareSnapshot] = useState(null)
   const [formsDraft, setFormsDraft] = useState(null)
-  const [formsStarting, setFormsStarting] = useState(false)
-  const [formsStartSection, setFormsStartSection] = useState(null)
-  const [formsStartKey, setFormsStartKey] = useState(0)
   const [pendingShares, setPendingShares] = useState([])
   const [activeShares, setActiveShares] = useState([])
   const [revokingShare, setRevokingShare] = useState('')
   const [reviewShare, setReviewShare] = useState(null)
-  const formsSaveRef = useRef(null)
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
   const [settingsView, setSettingsView] = useState(null)
@@ -258,6 +255,9 @@ export default function ClientDashboard() {
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [notificationSaving, setNotificationSaving] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState('')
+  const [passportProducts, setPassportProducts] = useState([])
+  const [passportProductsLoading, setPassportProductsLoading] = useState(false)
+  const [selectedPassportProductId, setSelectedPassportProductId] = useState('')
   const notificationSaveRef = useRef(0)
   const [legalDocs, setLegalDocs] = useState([])
   const [verificationSent, setVerificationSent] = useState(false)
@@ -339,17 +339,6 @@ export default function ClientDashboard() {
   }, [activeTab, settingsView, user?.customerId])
 
   useEffect(() => {
-    if (isFormsEditRoute) return
-    const nextTab = resolveTabFromSearch(location.search)
-    if (nextTab !== 'Forms') return
-    const params = new URLSearchParams(location.search)
-    const sectionParam = resolveFormsSectionKey(params.get('section') || '')
-    if (!sectionParam) return
-    setFormsStartSection(sectionParam)
-    setFormsStartKey((prev) => prev + 1)
-  }, [location.search, isFormsEditRoute])
-
-  useEffect(() => {
     if (user?.email) {
       setEmailDraft(user.email)
     }
@@ -379,10 +368,6 @@ export default function ClientDashboard() {
 
 
   const updateTab = (nextTab) => {
-    if (nextTab === 'My Passport') {
-      nav('/passport')
-      return
-    }
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())
@@ -501,10 +486,37 @@ export default function ClientDashboard() {
   }, [activeTab, user?.customerId, sessionId])
 
   useEffect(() => {
+    if (activeTab !== 'My Passport') return
+    let active = true
+    setPassportProductsLoading(true)
+    api
+      .get('/passport/schema/products')
+      .then((res) => {
+        if (!active) return
+        const list = Array.isArray(res.data?.products) ? res.data.products : []
+        setPassportProducts(list)
+        if (!list.length) {
+          setSelectedPassportProductId('')
+          return
+        }
+        const hasCurrent = list.some((product) => String(product.id) === String(selectedPassportProductId))
+        if (!hasCurrent) {
+          setSelectedPassportProductId(String(list[0].id))
+        }
+      })
+      .catch((err) => {
+        if (!active) return
+        setPassportProducts([])
+        setSelectedPassportProductId('')
+        toast.error(err.response?.data?.error || 'Could not load passport products')
+      })
+      .finally(() => {
+        if (active) setPassportProductsLoading(false)
+      })
     return () => {
-      if (formsSaveRef.current) clearTimeout(formsSaveRef.current)
+      active = false
     }
-  }, [])
+  }, [activeTab])
 
   const isEmailVerified = user?.emailVerified === true
   const hasPendingEmail = Boolean(user?.emailPending)
@@ -515,34 +527,18 @@ export default function ClientDashboard() {
   const verificationTitle = verificationPurpose === 'name' ? 'Verify name change' : 'Verify email'
   const verificationConfirmLabel =
     verificationPurpose === 'name' ? 'Verify name change' : 'Verify email'
-  const formsStarted = Boolean(client?.profileData?.forms_started)
-  const formsCompleted = client?.profileData?.profile_status === 'completed'
-  const formsCurrentSection = useMemo(
-    () => (activeTab === 'Forms' ? client?.profileData?.current_section || '' : ''),
-    [activeTab, client?.profileData?.current_section]
-  )
-  const formsSectionKey = useMemo(
-    () => resolveFormsSectionKey(client?.profileData?.current_section),
-    [client?.profileData?.current_section]
-  )
   useEffect(() => {
     if (!user?.customerId || !activeTab) return
     if (tabLogRef.current === activeTab) return
     tabLogRef.current = activeTab
-    const profileStatus = formsCompleted ? 'completed' : formsStarted ? 'draft' : 'none'
     api.post(`/customers/${user.customerId}/tab-view`, {
       tabName: activeTab,
       sessionId,
-      profileStatus,
-      currentSection: activeTab === 'Forms' ? formsCurrentSection || null : null,
     }).catch(() => {})
   }, [
     activeTab,
     user?.customerId,
-    formsCompleted,
-    formsStarted,
     sessionId,
-    formsCurrentSection,
   ])
   const displayName = client?.name || user?.name || user?.email || 'client'
   const clientForms = client?.profileData?.forms || null
@@ -781,55 +777,6 @@ export default function ClientDashboard() {
     if (formsEditSection) return
     nav(buildFormsListUrl('', false), { replace: true })
   }, [location.pathname, formsEditSection])
-
-  const openFormsFlow = () => {
-    setFormsStartSection('household')
-    setFormsStartKey((prev) => prev + 1)
-    nav('/client/dashboard?tab=forms', { replace: false })
-  }
-
-  const openFormsSection = (sectionId) => {
-    if (!sectionId) return
-    setFormsStartSection(sectionId)
-    setFormsStartKey((prev) => prev + 1)
-  }
-
-  const handleStartForms = async () => {
-    if (!user?.customerId) {
-      toast.error('Customer profile not found')
-      return
-    }
-    if (formsStarting) return
-    setFormsStarting(true)
-    try {
-      const res = await api.post(`/customers/${user.customerId}/forms/start`)
-      if (res.data?.profile) {
-        setClient(res.data.profile)
-      }
-      setFormsStartSection('household')
-      setFormsStartKey((prev) => prev + 1)
-      setTimeout(() => {
-        nav('/client/dashboard?tab=forms', { replace: false })
-        setFormsStarting(false)
-      }, 200)
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Unable to start forms')
-      setFormsStarting(false)
-    }
-  }
-
-  const handleContinueForms = () => {
-    const nextSection = formsSectionKey || 'household'
-    setFormsStartSection(nextSection)
-    setFormsStartKey((prev) => prev + 1)
-    nav('/client/dashboard?tab=forms', { replace: false })
-  }
-
-  const handleCancelForms = () => {
-    const confirmed = window.confirm('Return to Overview? Your progress is saved.')
-    if (!confirmed) return
-    updateTab('Overview')
-  }
 
   const sanitizeForJson = (value) => {
     try {
@@ -1441,11 +1388,7 @@ export default function ClientDashboard() {
   }
 
   return (
-    <main
-      className={`page-shell py-8 pb-28 lg:pb-8 transition-opacity duration-200 ${
-        formsStarting ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}
-    >
+    <main className="page-shell py-8 pb-28 lg:pb-8 transition-opacity duration-200">
       <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
         <aside className="surface fixed bottom-0 left-0 right-0 z-30 rounded-none border-t border-slate-200 border-x-0 border-b-0 bg-white/95 backdrop-blur px-3 py-2 lg:static lg:rounded-2xl lg:border lg:border-transparent lg:bg-white/80 lg:backdrop-blur-0 lg:p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 hidden lg:block">Connsura</div>
@@ -1486,9 +1429,6 @@ export default function ClientDashboard() {
                     </span>
                   )}
                 </p>
-              )}
-              {activeTab === 'Forms' && (
-                <p className="text-slate-600">Complete your insurance profile.</p>
               )}
               {activeShares.length > 0 && (
                 <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
@@ -1576,34 +1516,14 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {!loading && activeTab === 'Forms' && (
-            <div className="space-y-4">
-              <div className="surface p-4 flex flex-wrap items-center justify-end gap-3">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={`pill-btn-primary px-4 ${
-                      isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
-                    }`}
-                    onClick={handleShareClick}
-                    disabled={!isEmailVerified}
-                  >
-                    Share
-                  </button>
-                </div>
-              </div>
-              <CreateProfile
-                onShareSnapshotChange={setShareSnapshot}
-                onFormDataChange={setFormsDraft}
-                initialData={client?.profileData?.forms || null}
-                startSection={formsStartSection}
-                startKey={formsStartKey}
-                onSectionSave={handleSectionSave}
-                onMobileEditNavigate={handleMobileEditNavigate}
-              />
-            </div>
+          {!loading && activeTab === 'My Passport' && (
+            <MyPassportFlow
+              products={passportProducts}
+              productsLoading={passportProductsLoading}
+              selectedProductId={selectedPassportProductId}
+              onSelectProduct={setSelectedPassportProductId}
+            />
           )}
-
 
           {!loading && activeTab === 'Settings' && (
             <div className="space-y-6">

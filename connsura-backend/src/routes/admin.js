@@ -905,6 +905,16 @@ router.post('/products', adminGuard, async (req, res) => {
   res.status(201).json({ product })
 })
 
+router.delete('/products/:id', adminGuard, async (req, res) => {
+  const id = Number(req.params.id)
+  if (!id) return res.status(400).json({ error: 'Product id required' })
+  const existing = await prisma.product.findUnique({ where: { id } })
+  if (!existing) return res.status(404).json({ error: 'Product not found' })
+  await prisma.product.delete({ where: { id } })
+  await logAudit(req.admin.id, 'Product', id, 'delete')
+  res.json({ ok: true })
+})
+
 const parseProductFormSchema = (value) => {
   const parsed = parseJson(value, {})
   const sections = Array.isArray(parsed?.sections) ? parsed.sections : []

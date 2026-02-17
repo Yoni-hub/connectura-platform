@@ -13,7 +13,7 @@ export default function Navbar() {
   const customerLabel = user?.name || user?.email || 'Client'
 
   const handleCreateProfileClick = () => {
-    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard?tab=forms')
+    sessionStorage.setItem('connsura_post_auth_redirect', '/client/dashboard')
     setAuthStartMode('create')
     setAuthOpen(true)
   }
