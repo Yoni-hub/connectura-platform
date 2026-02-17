@@ -11,7 +11,7 @@ import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import CreateProfile from './CreateProfile'
 
-const navItems = ['Overview', 'Forms', 'Settings']
+const navItems = ['Overview', 'Forms', 'My Passport', 'Settings']
 const SETTINGS_ITEMS = [
   { id: 'account', label: 'Account' },
   { id: 'security', label: 'Security' },
@@ -379,6 +379,10 @@ export default function ClientDashboard() {
 
 
   const updateTab = (nextTab) => {
+    if (nextTab === 'My Passport') {
+      nav('/passport')
+      return
+    }
     setActiveTab(nextTab)
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab.toLowerCase())

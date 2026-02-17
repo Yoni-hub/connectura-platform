@@ -12,6 +12,8 @@ import Privacy from '../pages/Privacy'
 import DataSharing from '../pages/DataSharing'
 import Admin from '../pages/Admin'
 import ShareProfile from '../pages/ShareProfile'
+import PassportHome from '../pages/PassportHome'
+import PassportProductEditor from '../pages/PassportProductEditor'
 import AccountRecovery from '../pages/AccountRecovery'
 import AccountDeleted from '../pages/AccountDeleted'
 import NotFound from '../pages/NotFound'
@@ -121,6 +123,22 @@ function Layout() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/share/:token" element={<ShareProfile />} />
+          <Route
+            path="/passport"
+            element={
+              <CustomerOnly>
+                <PassportHome />
+              </CustomerOnly>
+            }
+          />
+          <Route
+            path="/passport/products/:productInstanceId"
+            element={
+              <CustomerOnly>
+                <PassportProductEditor />
+              </CustomerOnly>
+            }
+          />
           <Route path="/recover" element={<AccountRecovery />} />
           <Route path="/account-deleted" element={<AccountDeleted />} />
           <Route path="/admin" element={<Admin />} />
