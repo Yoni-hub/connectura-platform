@@ -10,6 +10,7 @@ const {
   notifyProfileShared,
   notifyProfileUpdatedByRecipient,
 } = require('../utils/notifications/dispatcher')
+const { getShareBundle } = require('../my-insurance-passport/passportService')
 
 const router = express.Router()
 
@@ -184,6 +185,15 @@ router.post('/', authGuard, async (req, res) => {
     return res.status(400).json({ error: 'Recipient name is required' })
   }
 
+  const passportProducts = await getShareBundle(req.user.id).catch(() => [])
+  const snapshotWithPassport = {
+    ...(snapshot || {}),
+    passportV2: {
+      version: 2,
+      products: passportProducts,
+    },
+  }
+
   const token = generateToken()
   const code = generateCode()
 
@@ -192,7 +202,7 @@ router.post('/', authGuard, async (req, res) => {
       token,
       codeHash: hashCode(code),
       sections: JSON.stringify(sections || {}),
-      snapshot: JSON.stringify(snapshot || {}),
+      snapshot: JSON.stringify(snapshotWithPassport),
       customerId: customer.id,
       editable,
       recipientName,
