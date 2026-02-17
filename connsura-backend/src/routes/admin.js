@@ -905,6 +905,139 @@ router.post('/products', adminGuard, async (req, res) => {
   res.status(201).json({ product })
 })
 
+const parseProductFormSchema = (value) => {
+  const parsed = parseJson(value, {})
+  const sections = Array.isArray(parsed?.sections) ? parsed.sections : []
+  return { sections }
+}
+
+const normalizeProductSectionKey = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+const normalizeProductFormSchema = (value) => {
+  const parsed = value && typeof value === 'object' ? value : {}
+  const sections = Array.isArray(parsed.sections) ? parsed.sections : []
+  return {
+    sections: sections
+      .map((section, index) => {
+        const key = normalizeProductSectionKey(section?.key || section?.label || `section-${index + 1}`)
+        const label = String(section?.label || key || `Section ${index + 1}`).trim()
+        const questionIds = Array.isArray(section?.questionIds)
+          ? Array.from(
+              new Set(
+                section.questionIds
+                  .map((id) => Number(id))
+                  .filter((id) => Number.isInteger(id) && id > 0)
+              )
+            )
+          : []
+        if (!key) return null
+        return { key, label, questionIds }
+      })
+      .filter(Boolean),
+  }
+}
+
+const formatProductWithSchema = (product) => ({
+  id: product.id,
+  name: product.name,
+  slug: product.slug,
+  formSchema: parseProductFormSchema(product.formSchema),
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+})
+
+router.get('/forms/products', adminGuard, async (req, res) => {
+  await ensureProductCatalog(prisma)
+  const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
+  res.json({ products: products.map(formatProductWithSchema) })
+})
+
+router.put('/forms/products/:id', adminGuard, async (req, res) => {
+  const id = Number(req.params.id)
+  if (!id) return res.status(400).json({ error: 'Product id required' })
+  const existing = await prisma.product.findUnique({ where: { id } })
+  if (!existing) return res.status(404).json({ error: 'Product not found' })
+
+  const name = req.body?.name === undefined ? undefined : String(req.body?.name || '').trim()
+  if (name !== undefined && !name) {
+    return res.status(400).json({ error: 'Name cannot be empty' })
+  }
+
+  const incomingSchema = req.body?.formSchema
+  const normalizedSchema =
+    incomingSchema === undefined
+      ? parseProductFormSchema(existing.formSchema)
+      : normalizeProductFormSchema(incomingSchema)
+
+  const allQuestionIds = Array.from(
+    new Set(
+      normalizedSchema.sections
+        .flatMap((section) => section.questionIds || [])
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  if (allQuestionIds.length) {
+    const found = await prisma.questionBank.findMany({
+      where: { id: { in: allQuestionIds }, source: 'SYSTEM' },
+      select: { id: true },
+    })
+    const foundIds = new Set(found.map((row) => row.id))
+    const missing = allQuestionIds.filter((id) => !foundIds.has(id))
+    if (missing.length) {
+      return res.status(400).json({ error: `Unknown questionIds: ${missing.join(', ')}` })
+    }
+  }
+
+  const updated = await prisma.product.update({
+    where: { id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      formSchema: JSON.stringify(normalizedSchema),
+    },
+  })
+  await logAudit(req.admin.id, 'Product', id, 'update', {
+    ...(name !== undefined ? { name } : {}),
+    formSchema: normalizedSchema,
+  })
+  res.json({ product: formatProductWithSchema(updated) })
+})
+
+router.get('/forms/questions', adminGuard, async (req, res) => {
+  const query = String(req.query?.query || '').trim()
+  const where = {
+    source: 'SYSTEM',
+    ...(query
+      ? {
+          OR: [
+            { text: { contains: query, mode: 'insensitive' } },
+            { normalized: { contains: query.toLowerCase(), mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  }
+  const questions = await prisma.questionBank.findMany({
+    where,
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  })
+  res.json({
+    questions: questions.map((row) => ({
+      id: row.id,
+      label: row.text,
+      text: row.text,
+      type: row.inputType || 'general',
+      inputType: row.inputType || 'general',
+      options: parseJson(row.selectOptions, []),
+      selectOptions: parseJson(row.selectOptions, []),
+      productId: row.productId,
+    })),
+  })
+})
+
 const parseCustomerProfile = (profileData) => parseJson(profileData, {})
 
 const resolveFormProductId = (value) => {

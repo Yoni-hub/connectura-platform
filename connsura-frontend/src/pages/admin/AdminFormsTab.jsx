@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../services/adminApi'
 
@@ -6,6 +6,13 @@ export default function AdminFormsTab({ onSessionExpired }) {
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(false)
   const [activeProductId, setActiveProductId] = useState('')
+  const [activeProductName, setActiveProductName] = useState('')
+  const [schemaDraft, setSchemaDraft] = useState({ sections: [] })
+  const [schemaSaving, setSchemaSaving] = useState(false)
+  const [schemaQuestions, setSchemaQuestions] = useState([])
+  const [schemaQuestionsLoading, setSchemaQuestionsLoading] = useState(false)
+  const [schemaQuestionSearch, setSchemaQuestionSearch] = useState('')
+  const [draggingQuestion, setDraggingQuestion] = useState(null)
   const [questions, setQuestions] = useState([])
   const [questionsLoading, setQuestionsLoading] = useState(false)
   const [newQuestion, setNewQuestion] = useState('')
@@ -52,7 +59,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
   const loadProducts = async () => {
     setProductsLoading(true)
     try {
-      const res = await adminApi.get('/admin/products')
+      const res = await adminApi.get('/admin/forms/products')
       const items = Array.isArray(res.data?.products) ? res.data.products : []
       setProducts(items)
       if (!activeProductId && items.length) {
@@ -121,6 +128,183 @@ export default function AdminFormsTab({ onSessionExpired }) {
       setQuestionsLoading(false)
     }
   }
+
+  const updateSchemaDraft = (updater) => {
+    setSchemaDraft((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      return normalizeFormSchema(next)
+    })
+  }
+
+  const addSection = () => {
+    updateSchemaDraft((prev) => ({
+      sections: [
+        ...(Array.isArray(prev?.sections) ? prev.sections : []),
+        { key: '', label: '', questionIds: [] },
+      ],
+    }))
+  }
+
+  const removeSection = (index) => {
+    updateSchemaDraft((prev) => ({
+      sections: (prev.sections || []).filter((_, idx) => idx !== index),
+    }))
+  }
+
+  const moveSection = (index, direction) => {
+    updateSchemaDraft((prev) => {
+      const sections = [...(prev.sections || [])]
+      const nextIndex = index + direction
+      if (nextIndex < 0 || nextIndex >= sections.length) return prev
+      const temp = sections[index]
+      sections[index] = sections[nextIndex]
+      sections[nextIndex] = temp
+      return { sections }
+    })
+  }
+
+  const setSectionField = (index, field, value) => {
+    updateSchemaDraft((prev) => ({
+      sections: (prev.sections || []).map((section, idx) =>
+        idx === index ? { ...section, [field]: value } : section
+      ),
+    }))
+  }
+
+  const toggleSectionQuestion = (sectionIndex, questionId) => {
+    updateSchemaDraft((prev) => ({
+      sections: (prev.sections || []).map((section, idx) => {
+        if (idx !== sectionIndex) return section
+        const set = new Set(Array.isArray(section.questionIds) ? section.questionIds : [])
+        if (set.has(questionId)) {
+          set.delete(questionId)
+        } else {
+          set.add(questionId)
+        }
+        return { ...section, questionIds: Array.from(set) }
+      }),
+    }))
+  }
+
+  const moveQuestionWithinSection = (sectionIndex, questionIndex, direction) => {
+    updateSchemaDraft((prev) => ({
+      sections: (prev.sections || []).map((section, idx) => {
+        if (idx !== sectionIndex) return section
+        const list = [...(section.questionIds || [])]
+        const nextIndex = questionIndex + direction
+        if (nextIndex < 0 || nextIndex >= list.length) return section
+        const temp = list[questionIndex]
+        list[questionIndex] = list[nextIndex]
+        list[nextIndex] = temp
+        return { ...section, questionIds: list }
+      }),
+    }))
+  }
+
+  const handleQuestionDrop = (targetSectionIndex, targetQuestionIndex = null) => {
+    if (!draggingQuestion) return
+    updateSchemaDraft((prev) => {
+      const sections = (prev.sections || []).map((section) => ({
+        ...section,
+        questionIds: [...(section.questionIds || [])],
+      }))
+      const sourceSection = sections[draggingQuestion.sectionIndex]
+      if (!sourceSection) return prev
+      const [moved] = sourceSection.questionIds.splice(draggingQuestion.questionIndex, 1)
+      if (!Number.isInteger(moved)) return prev
+      const destination = sections[targetSectionIndex]
+      if (!destination) return prev
+      const insertAt =
+        targetQuestionIndex === null || targetQuestionIndex === undefined
+          ? destination.questionIds.length
+          : Math.max(0, Math.min(targetQuestionIndex, destination.questionIds.length))
+      destination.questionIds.splice(insertAt, 0, moved)
+      return { sections }
+    })
+    setDraggingQuestion(null)
+  }
+
+  const saveProductSchema = async () => {
+    if (!activeProductId) {
+      toast.error('Select a product first')
+      return
+    }
+    const normalized = normalizeFormSchema(schemaDraft)
+    const invalid = normalized.sections.find((section) => !section.key || !section.label)
+    if (invalid) {
+      toast.error('Each section needs a key and label')
+      return
+    }
+    setSchemaSaving(true)
+    try {
+      const res = await adminApi.put(`/admin/forms/products/${activeProductId}`, {
+        name: activeProductName.trim(),
+        formSchema: normalized,
+      })
+      const updated = res.data?.product
+      if (updated) {
+        setProducts((prev) =>
+          prev.map((item) => (String(item.id) === String(updated.id) ? updated : item))
+        )
+        setSchemaDraft(normalizeFormSchema(updated.formSchema))
+        setActiveProductName(updated.name || activeProductName)
+      }
+      toast.success('Product mapping saved')
+    } catch (err) {
+      handleSessionError(err, 'Failed to save product mapping')
+    } finally {
+      setSchemaSaving(false)
+    }
+  }
+
+  const normalizeSectionKey = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+  const normalizeFormSchema = (value) => {
+    const sections = Array.isArray(value?.sections) ? value.sections : []
+    return {
+      sections: sections
+        .map((section, index) => {
+          const key = normalizeSectionKey(section?.key || section?.label || `section-${index + 1}`)
+          const label = String(section?.label || key || `Section ${index + 1}`).trim()
+          const questionIds = Array.isArray(section?.questionIds)
+            ? Array.from(new Set(section.questionIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)))
+            : []
+          if (!key) return null
+          return { key, label, questionIds }
+        })
+        .filter(Boolean),
+    }
+  }
+
+  const loadSchemaQuestions = async (query = '') => {
+    setSchemaQuestionsLoading(true)
+    try {
+      const params = query.trim() ? { query: query.trim() } : {}
+      const res = await adminApi.get('/admin/forms/questions', { params })
+      const items = Array.isArray(res.data?.questions) ? res.data.questions : []
+      setSchemaQuestions(items)
+    } catch (err) {
+      handleSessionError(err, 'Failed to load mapping questions')
+    } finally {
+      setSchemaQuestionsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const active = products.find((product) => String(product.id) === String(activeProductId))
+    if (!active) {
+      setActiveProductName('')
+      setSchemaDraft({ sections: [] })
+      return
+    }
+    setActiveProductName(active.name || '')
+    setSchemaDraft(normalizeFormSchema(active.formSchema))
+  }, [products, activeProductId])
 
   const addQuestion = async () => {
     const text = newQuestion.trim()
@@ -339,7 +523,18 @@ export default function AdminFormsTab({ onSessionExpired }) {
     loadQuestions(activeProductId, questionSourceFilter)
   }, [activeProductId, questionSourceFilter])
 
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      loadSchemaQuestions(schemaQuestionSearch)
+    }, 200)
+    return () => clearTimeout(handle)
+  }, [schemaQuestionSearch])
+
   const input = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
+  const schemaQuestionMap = useMemo(
+    () => new Map(schemaQuestions.map((question) => [Number(question.id), question])),
+    [schemaQuestions]
+  )
   const questionInputTypes = [
     { value: 'general', label: 'General' },
     { value: 'select', label: 'Select' },
@@ -421,6 +616,195 @@ export default function AdminFormsTab({ onSessionExpired }) {
               Add question(s)
             </button>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Product Section Mapping</div>
+              <div className="text-xs text-slate-500">
+                Define sections and ordered question IDs for the selected product.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="pill-btn-primary px-4"
+              onClick={saveProductSchema}
+              disabled={!activeProductId || schemaSaving}
+            >
+              {schemaSaving ? 'Saving...' : 'Save mapping'}
+            </button>
+          </div>
+          {!activeProductId ? (
+            <div className="text-sm text-slate-500">Select a product to edit its section mapping.</div>
+          ) : (
+            <>
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Product name
+                  <input
+                    className={input}
+                    value={activeProductName}
+                    onChange={(event) => setActiveProductName(event.target.value)}
+                    placeholder="Product name"
+                  />
+                </label>
+                <button type="button" className="pill-btn-ghost px-3 py-1" onClick={addSection}>
+                  Add section
+                </button>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr]">
+                <div className="space-y-3">
+                  {!schemaDraft.sections.length && (
+                    <div className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">
+                      No sections yet. Add your first section.
+                    </div>
+                  )}
+                  {schemaDraft.sections.map((section, sectionIndex) => (
+                    <div key={`schema-section-${sectionIndex}`} className="rounded-lg border border-slate-200 p-3 space-y-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Section key
+                          <input
+                            className={input}
+                            value={section.key}
+                            onChange={(event) => setSectionField(sectionIndex, 'key', normalizeSectionKey(event.target.value))}
+                            placeholder="e.g. vehicle"
+                          />
+                        </label>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Section label
+                          <input
+                            className={input}
+                            value={section.label}
+                            onChange={(event) => setSectionField(sectionIndex, 'label', event.target.value)}
+                            placeholder="e.g. Vehicle Information"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" className="pill-btn-ghost px-2 py-1 text-xs" onClick={() => moveSection(sectionIndex, -1)} disabled={sectionIndex === 0}>
+                          Move up
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
+                          onClick={() => moveSection(sectionIndex, 1)}
+                          disabled={sectionIndex === schemaDraft.sections.length - 1}
+                        >
+                          Move down
+                        </button>
+                        <button type="button" className="pill-btn-ghost px-2 py-1 text-xs text-red-600" onClick={() => removeSection(sectionIndex)}>
+                          Remove section
+                        </button>
+                      </div>
+                      <div
+                        className="space-y-1 rounded-md border border-slate-100 bg-slate-50 p-2"
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handleQuestionDrop(sectionIndex)}
+                      >
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ordered question IDs</div>
+                        {!section.questionIds?.length && (
+                          <div className="text-xs text-slate-400">No questions mapped.</div>
+                        )}
+                        {(section.questionIds || []).map((questionId, questionIndex) => {
+                          const question = schemaQuestionMap.get(Number(questionId))
+                          return (
+                            <div
+                              key={`section-${sectionIndex}-q-${questionId}-${questionIndex}`}
+                              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                              draggable
+                              onDragStart={() => setDraggingQuestion({ sectionIndex, questionIndex })}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => handleQuestionDrop(sectionIndex, questionIndex)}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-[180px] flex-1">
+                                  <span className="font-semibold">#{questionId}</span>{' '}
+                                  <span>{question?.label || 'Unknown question'}</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    className="pill-btn-ghost px-2 py-0.5 text-[11px]"
+                                    onClick={() => moveQuestionWithinSection(sectionIndex, questionIndex, -1)}
+                                    disabled={questionIndex === 0}
+                                  >
+                                    Up
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="pill-btn-ghost px-2 py-0.5 text-[11px]"
+                                    onClick={() => moveQuestionWithinSection(sectionIndex, questionIndex, 1)}
+                                    disabled={questionIndex === (section.questionIds || []).length - 1}
+                                  >
+                                    Down
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="pill-btn-ghost px-2 py-0.5 text-[11px] text-red-600"
+                                    onClick={() => toggleSectionQuestion(sectionIndex, Number(questionId))}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Question Bank</div>
+                  <input
+                    className={input}
+                    value={schemaQuestionSearch}
+                    onChange={(event) => setSchemaQuestionSearch(event.target.value)}
+                    placeholder="Search questions"
+                  />
+                  {schemaQuestionsLoading && <div className="text-xs text-slate-500">Loading questions...</div>}
+                  {!schemaQuestionsLoading && (
+                    <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
+                      {schemaQuestions.map((question) => (
+                        <div key={`schema-bank-${question.id}`} className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-xs">
+                          <div className="font-semibold text-slate-700">
+                            #{question.id} {question.label}
+                          </div>
+                          <div className="mt-1 text-slate-500">Type: {question.inputType || question.type || 'general'}</div>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {schemaDraft.sections.map((section, sectionIndex) => {
+                              const selected = (section.questionIds || []).includes(Number(question.id))
+                              return (
+                                <button
+                                  key={`attach-${question.id}-${sectionIndex}`}
+                                  type="button"
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                                    selected
+                                      ? 'border-[#0b3b8c] bg-[#e8f0ff] text-[#0b3b8c]'
+                                      : 'border-slate-300 bg-white text-slate-600'
+                                  }`}
+                                  onClick={() => toggleSectionQuestion(sectionIndex, Number(question.id))}
+                                >
+                                  {selected ? `Remove: ${section.label || section.key}` : `Add: ${section.label || section.key}`}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      {!schemaQuestions.length && (
+                        <div className="text-xs text-slate-400">No questions found.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3">

@@ -267,6 +267,7 @@ model Product {
   id        Int          @id @default(autoincrement())
   name      String       @unique
   slug      String       @unique
+  formSchema String      @default("{\"sections\":[]}")
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   questions QuestionBank[]
