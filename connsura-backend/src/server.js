@@ -14,6 +14,7 @@ const shareRoutes = require('./routes/shares')
 const siteContentRoutes = require('./routes/siteContent')
 const formSchemaRoutes = require('./routes/formSchema')
 const productRoutes = require('./routes/products')
+const passportRoutes = require('./routes/passport')
 const legalRoutes = require('./routes/legal')
 const notificationRoutes = require('./routes/notifications')
 const errorRoutes = require('./routes/errors')
@@ -50,6 +51,7 @@ const createApp = () => {
   app.use('/site-content', siteContentRoutes)
   app.use('/form-schema', formSchemaRoutes)
   app.use('/products', productRoutes)
+  app.use('/passport', passportRoutes)
   app.use('/errors', errorRoutes)
 
   app.use((req, res) => {

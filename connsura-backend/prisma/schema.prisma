@@ -35,6 +35,11 @@ enum NotificationActorType {
   ADMIN
 }
 
+enum PassportProductSource {
+  ADMIN_PRODUCT
+  CUSTOM_PRODUCT
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   email     String    @unique
@@ -133,6 +138,7 @@ model Customer {
   shares           ProfileShare[]
   questions        QuestionBank[]
   customerQuestions CustomerQuestion[]
+  passportProducts PassportProductInstance[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -272,6 +278,55 @@ model Product {
   updatedAt DateTime     @updatedAt
   questions QuestionBank[]
   customerQuestions CustomerQuestion[]
+  passportInstances PassportProductInstance[]
+}
+
+model PassportProductInstance {
+  id            String                @id @default(uuid())
+  customerId    Int
+  productSource PassportProductSource
+  adminProductId Int?
+  productName   String
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  deletedAt     DateTime?
+
+  customer      Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  adminProduct  Product?              @relation(fields: [adminProductId], references: [id], onDelete: SetNull)
+  customQuestions PassportCustomQuestion[]
+  sectionResponses PassportSectionResponse[]
+
+  @@index([customerId, updatedAt])
+  @@index([adminProductId])
+}
+
+model PassportCustomQuestion {
+  id               String                 @id @default(uuid())
+  productInstanceId String
+  questionText     String
+  inputType        String                 @default("general")
+  options          Json?
+  orderIndex       Int                    @default(0)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  productInstance  PassportProductInstance @relation(fields: [productInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([productInstanceId, orderIndex])
+}
+
+model PassportSectionResponse {
+  id               String                 @id @default(uuid())
+  productInstanceId String
+  sectionKey       String
+  values           Json
+  updatedAt        DateTime               @updatedAt
+  createdAt        DateTime               @default(now())
+
+  productInstance  PassportProductInstance @relation(fields: [productInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([productInstanceId, sectionKey])
+  @@index([productInstanceId])
 }
 
 model FormSchema {
