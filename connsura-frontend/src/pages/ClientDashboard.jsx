@@ -853,11 +853,16 @@ export default function ClientDashboard() {
   
   const buildSectionValues = (sectionKey, forms) => {
     if (!sectionKey || !forms) return {}
+    const addCustomPrefixed = (target, customValues) => {
+      Object.entries(customValues || {}).forEach(([key, value]) => {
+        target[`custom.${key}`] = value
+      })
+      return target
+    }
     if (sectionKey === 'household') {
-      return {
+      return addCustomPrefixed({
         ...(forms.household?.namedInsured || {}),
-        ...(forms.customFields?.household || {}),
-      }
+      }, forms.customFields?.household || {})
     }
     if (sectionKey === 'address') {
       const result = {}
@@ -871,19 +876,16 @@ export default function ClientDashboard() {
       if (contacts[0]) addPrefixed('contact', contacts[0])
       addPrefixed('residential', forms.address?.residential || {})
       addPrefixed('mailing', forms.address?.mailing || {})
-      Object.entries(forms.customFields?.address || {}).forEach(([key, value]) => {
-        result[`custom.${key}`] = value
-      })
-      return result
+      return addCustomPrefixed(result, forms.customFields?.address || {})
     }
     if (sectionKey === 'additional') {
-      const result = { ...(forms.customFields?.additional || {}) }
+      const result = {}
       if (forms.additional?.additionalForms) {
         result.additionalForms = forms.additional.additionalForms
       }
-      return result
+      return addCustomPrefixed(result, forms.customFields?.additional || {})
     }
-    return forms[sectionKey] || {}
+    return addCustomPrefixed({ ...(forms[sectionKey] || {}) }, forms.customFields?.[sectionKey] || {})
   }
 
   const handleSectionSave = async ({ section, sectionKey, nextSection, forms, profileStatus, logClick }) => {

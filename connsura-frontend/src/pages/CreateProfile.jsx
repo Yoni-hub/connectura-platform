@@ -2769,7 +2769,7 @@ export default function CreateProfile({
   useEffect(() => {
     if (!user?.customerId) return
     if (!activeSection) return
-    if (!['household', 'address', 'additional'].includes(activeSection)) return
+    if (activeSection === 'summary') return
     const controller = new AbortController()
     const token = getStoredToken()
     const sectionKey = activeSection
