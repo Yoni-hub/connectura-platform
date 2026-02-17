@@ -915,6 +915,7 @@ export default function CreateProfile({
     const address = resolvedInitialData.address || {}
     const additional = resolvedInitialData.additional || {}
     const customFields = resolvedInitialData.customFields || {}
+    const nextAdditionalForms = Array.isArray(additional.additionalForms) ? additional.additionalForms : []
     setNamedInsured((prev) => ({
       ...prev,
       ...(household.namedInsured || {}),
@@ -925,7 +926,10 @@ export default function CreateProfile({
     setResidential(address.residential || { address1: '', city: '', state: '', zip: '' })
     setMailing(address.mailing || { address1: '', city: '', state: '', zip: '' })
     setAdditionalAddresses(Array.isArray(address.additionalAddresses) ? address.additionalAddresses : [])
-    setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
+    setAdditionalForms(nextAdditionalForms)
+    if (!isEditScreen) {
+      setAdditionalEditing(nextAdditionalForms.length === 0)
+    }
     setCustomFieldValues({
       household: customFields.household || {},
       address: customFields.address || {},
@@ -944,7 +948,7 @@ export default function CreateProfile({
     lastInitialSerializedRef.current = serialized
     initialDataRef.current = true
     setHydrated(true)
-  }, [resolvedInitialData, createAddressEntry, createContact, createHouseholdMember])
+  }, [resolvedInitialData, createAddressEntry, createContact, createHouseholdMember, isEditScreen])
 
   useEffect(() => {
     if (initialDataRef.current) return
@@ -1618,6 +1622,10 @@ export default function CreateProfile({
       setAdditionalForms((prev) => buildNextForms(prev))
       setActiveAdditionalFormIndex(null)
       const nextFormsPayload = buildFormsPayload({ additionalForms: nextAdditionalForms })
+      formsPayloadRef.current = nextFormsPayload
+      if (typeof onFormDataChange === 'function') {
+        onFormDataChange(nextFormsPayload)
+      }
       await handleAdditionalSaveContinue(nextFormsPayload, {
         skipSaving: true,
         skipNavigate: options.skipNavigate,
@@ -2640,6 +2648,7 @@ export default function CreateProfile({
       const address = snapshot.address || {}
       const additional = snapshot.additional || {}
       const customFields = snapshot.customFields || {}
+      const nextAdditionalForms = Array.isArray(additional.additionalForms) ? additional.additionalForms : []
       setNamedInsured((prev) => ({
         ...prev,
         ...(household.namedInsured || {}),
@@ -2652,7 +2661,10 @@ export default function CreateProfile({
       setResidential(address.residential || { address1: '', city: '', state: '', zip: '' })
       setMailing(address.mailing || { address1: '', city: '', state: '', zip: '' })
       setAdditionalAddresses(Array.isArray(address.additionalAddresses) ? address.additionalAddresses : [])
-      setAdditionalForms(Array.isArray(additional.additionalForms) ? additional.additionalForms : [])
+      setAdditionalForms(nextAdditionalForms)
+      if (!isEditScreen) {
+        setAdditionalEditing(nextAdditionalForms.length === 0)
+      }
       setCustomFieldValues({
         household: customFields.household || {},
         address: customFields.address || {},
@@ -2666,7 +2678,7 @@ export default function CreateProfile({
       setNewHousehold(createHouseholdMember())
       setNewAddress(createAddressEntry())
     },
-    [createAddressEntry, createContact, createHouseholdMember]
+    [createAddressEntry, createContact, createHouseholdMember, isEditScreen]
   )
 
   const applySectionValues = useCallback(
@@ -2730,6 +2742,12 @@ export default function CreateProfile({
       }
       if (sectionKey === 'additional') {
         const nextCustom = {}
+        if (Array.isArray(values.additionalForms)) {
+          setAdditionalForms(values.additionalForms)
+          if (!isEditScreen) {
+            setAdditionalEditing(values.additionalForms.length === 0)
+          }
+        }
         Object.entries(values).forEach(([key, val]) => {
           if (key.startsWith('custom.')) {
             nextCustom[key.slice('custom.'.length)] = val ?? ''
@@ -2743,7 +2761,7 @@ export default function CreateProfile({
         }
       }
     },
-    [contacts, residential, mailing, createContact]
+    [contacts, residential, mailing, createContact, isEditScreen]
   )
 
   const sectionValuesRef = useRef({})
@@ -2922,8 +2940,7 @@ export default function CreateProfile({
       lastSavedSerializedRef.current = serialized
       lastSavedFormsRef.current = cloneFormsPayload(formsPayload)
     }
-    const isDirty = lastSavedSerializedRef.current !== serialized
-    if (isDirty && typeof onFormDataChange === 'function') {
+    if (typeof onFormDataChange === 'function') {
       onFormDataChange(formsPayload)
     }
     if (typeof onShareSnapshotChange !== 'function') return

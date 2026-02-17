@@ -21,6 +21,7 @@ export default function ShareProfile() {
   const [approvalModalOpen, setApprovalModalOpen] = useState(false)
   const [approvalStatus, setApprovalStatus] = useState('')
   const pendingStatusRef = useRef('')
+  const editDataRef = useRef(null)
   const lastActivityRef = useRef(Date.now())
   const isAwaitingApproval = approvalModalOpen && approvalStatus === 'pending'
 
@@ -104,7 +105,8 @@ export default function ShareProfile() {
       toast.error('Enter the 4-digit code')
       return
     }
-    if (!editData) {
+    const editsPayload = editDataRef.current || editData
+    if (!editsPayload) {
       toast.error('Profile form not ready')
       return
     }
@@ -113,7 +115,7 @@ export default function ShareProfile() {
       const res = await api.post(`/shares/${token}/edits`, {
         code: accessCode,
         name: recipientName,
-        edits: { forms: editData },
+        edits: { forms: editsPayload },
       })
       const nextShare = res.data?.share || null
       pendingStatusRef.current = 'pending'
@@ -290,6 +292,7 @@ export default function ShareProfile() {
                   <CreateProfile
                     initialData={share.snapshot?.forms || {}}
                     onFormDataChange={(data) => {
+                      editDataRef.current = data
                       setEditData(data)
                       markActivity()
                     }}

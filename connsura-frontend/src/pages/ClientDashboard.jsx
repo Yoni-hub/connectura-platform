@@ -541,7 +541,14 @@ export default function ClientDashboard() {
     formsCurrentSection,
   ])
   const displayName = client?.name || user?.name || user?.email || 'client'
-  const passportForms = formsDraft || client?.profileData?.forms || {}
+  const clientForms = client?.profileData?.forms || null
+  const draftHasData = hasNonEmptyValue(formsDraft)
+  const clientHasData = hasNonEmptyValue(clientForms)
+  const passportForms = clientHasData
+    ? clientForms
+    : draftHasData
+      ? formsDraft
+      : clientForms || formsDraft || {}
   const householdForms = passportForms.household || {}
   const namedInsured = householdForms.namedInsured || {}
   const additionalHouseholds = safeArray(householdForms.additionalHouseholds)
@@ -719,6 +726,7 @@ export default function ClientDashboard() {
       toast.error('Verify your email to share your profile')
       return
     }
+    setShareSnapshot((prev) => prev || passportSnapshotFallback)
     setShareOpen(true)
   }
 
@@ -1566,28 +1574,16 @@ export default function ClientDashboard() {
             <div className="space-y-4">
               <div className="surface p-4 flex flex-wrap items-center justify-end gap-3">
                 <div className="flex flex-wrap gap-2">
-                  {!formsStarted && (
-                    <button
-                      type="button"
-                      className="pill-btn-primary px-4"
-                      onClick={handleStartForms}
-                      disabled={formsStarting}
-                    >
-                      {formsStarting ? 'Starting...' : 'Start Forms'}
-                    </button>
-                  )}
-                  {formsStarted && !formsCompleted && (
-                    <button
-                      type="button"
-                      className={`pill-btn-primary px-4 ${
-                        isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
-                      }`}
-                      onClick={handleShareClick}
-                      disabled={!isEmailVerified}
-                    >
-                      Share
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={`pill-btn-primary px-4 ${
+                      isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
+                    }`}
+                    onClick={handleShareClick}
+                    disabled={!isEmailVerified}
+                  >
+                    Share
+                  </button>
                 </div>
               </div>
               <CreateProfile

@@ -1,7 +1,13 @@
 import { useMemo } from 'react'
 import Modal from '../ui/Modal'
 
-const fieldLabelMap = {
+const SECTION_LABELS = {
+  household: 'Household',
+  address: 'Address',
+  additional: 'Additional',
+}
+
+const FIELD_LABELS = {
   relation: 'Relation to Applicant',
   'first-name': 'First Name',
   'middle-initial': 'Middle Initial',
@@ -30,136 +36,84 @@ const fieldLabelMap = {
   city: 'City',
   state: 'State',
   zip: 'Zip Code',
-  name: 'Name',
-  type: 'Type',
-  industry: 'Industry',
-  years: 'Years',
-  employees: 'Employees',
-  phone: 'Phone',
-  email: 'Email',
-  question: 'Question',
-  input: 'Answer',
-  year: 'Year',
-  make: 'Make',
-  model: 'Model',
-  vin: 'VIN',
-  primaryUse: 'Primary Use',
-}
-
-const containerLabelMap = {
-  household: 'Household',
-  namedInsured: 'Named Insured',
-  additionalHouseholds: 'Additional Household Member',
-  address: 'Address',
-  contacts: 'Contact',
-  residential: 'Residential Address',
-  mailing: 'Mailing Address',
-  additionalAddresses: 'Additional Address',
-  additional: 'Additional Information',
-  additionalForms: 'Additional Form',
-  questions: 'Question',
-  vehicle: 'Vehicle',
-  business: 'Business',
 }
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
-const hasText = (value) => typeof value === 'string' && value.trim().length > 0
 
 const normalizeValue = (value) => {
   if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value.trim()
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeValue(item))
+      .filter(Boolean)
+      .join(', ')
+  }
   return ''
 }
 
-const flattenToMap = (value, path = '', map = {}) => {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => {
-      const nextPath = path ? `${path}[${index + 1}]` : `[${index + 1}]`
-      flattenToMap(item, nextPath, map)
-    })
-    return map
-  }
-  if (isObject(value)) {
-    Object.keys(value).forEach((key) => {
-      const nextPath = path ? `${path}.${key}` : key
-      flattenToMap(value[key], nextPath, map)
-    })
-    return map
-  }
-  if (!path) return map
-  map[path] = normalizeValue(value)
-  return map
+const prettifyPath = (path = '') => {
+  if (!path) return 'Field'
+  const cleaned = path.replace(/\[(\d+)\]/g, ' $1')
+  const parts = cleaned
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => FIELD_LABELS[part] || part.replace(/[-_]/g, ' '))
+    .map((part) => part.replace(/\b\w/g, (char) => char.toUpperCase()))
+  return parts[parts.length - 1] || 'Field'
 }
 
-const collectArrays = (value, path = '', map = {}) => {
-  if (Array.isArray(value)) {
-    map[path] = value
-    value.forEach((item, index) => {
-      const nextPath = path ? `${path}[${index + 1}]` : `[${index + 1}]`
-      collectArrays(item, nextPath, map)
+const flattenChangedFields = (beforeValue, afterValue, path = '') => {
+  if (Array.isArray(afterValue)) {
+    return afterValue.flatMap((item, index) =>
+      flattenChangedFields(
+        Array.isArray(beforeValue) ? beforeValue[index] : undefined,
+        item,
+        path ? `${path}[${index + 1}]` : `[${index + 1}]`
+      )
+    )
+  }
+  if (isObject(afterValue)) {
+    return Object.keys(afterValue).flatMap((key) =>
+      flattenChangedFields(
+        isObject(beforeValue) ? beforeValue[key] : undefined,
+        afterValue[key],
+        path ? `${path}.${key}` : key
+      )
+    )
+  }
+  const beforeText = normalizeValue(beforeValue)
+  const afterText = normalizeValue(afterValue)
+  if (!path || beforeText === afterText) return []
+  return [{ path, answer: afterText || '-' }]
+}
+
+const extractAdditionalChanges = (beforeAdditional, afterAdditional) => {
+  const beforeForms = Array.isArray(beforeAdditional?.additionalForms) ? beforeAdditional.additionalForms : []
+  const afterForms = Array.isArray(afterAdditional?.additionalForms) ? afterAdditional.additionalForms : []
+  const rows = []
+  afterForms.forEach((form, formIndex) => {
+    const productName = String(form?.productName || form?.name || '').trim()
+    const beforeQuestions = Array.isArray(beforeForms[formIndex]?.questions) ? beforeForms[formIndex].questions : []
+    const afterQuestions = Array.isArray(form?.questions) ? form.questions : []
+    afterQuestions.forEach((question, questionIndex) => {
+      const questionText = String(question?.question || '').trim()
+      const answerText = normalizeValue(question?.input)
+      const beforeQuestion = beforeQuestions[questionIndex] || {}
+      const beforeQuestionText = String(beforeQuestion?.question || '').trim()
+      const beforeAnswerText = normalizeValue(beforeQuestion?.input)
+      if (questionText === beforeQuestionText && answerText === beforeAnswerText) return
+      rows.push({
+        section: SECTION_LABELS.additional,
+        productName: productName || `Additional Form ${formIndex + 1}`,
+        question: questionText || `Question ${questionIndex + 1}`,
+        answer: answerText || '-',
+      })
     })
-    return map
-  }
-  if (isObject(value)) {
-    Object.keys(value).forEach((key) => {
-      const nextPath = path ? `${path}.${key}` : key
-      collectArrays(value[key], nextPath, map)
-    })
-  }
-  return map
-}
-
-const signatureForValue = (value) => {
-  if (Array.isArray(value)) {
-    return `[${value.map(signatureForValue).join(',')}]`
-  }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort()
-    return `{${keys.map((key) => `${key}:${signatureForValue(value[key])}`).join('|')}}`
-  }
-  return normalizeValue(value)
-}
-
-const summarizeRemoval = (value) => {
-  if (Array.isArray(value)) {
-    return value.length ? `${value.length} items` : 'Removed'
-  }
-  if (isObject(value)) {
-    const nameParts = [
-      value['first-name'],
-      value['middle-initial'],
-      value['last-name'],
-      value.fullName,
-      value.name,
-    ]
-      .filter(hasText)
-      .join(' ')
-    if (hasText(nameParts)) return nameParts
-    if (hasText(value.relation)) return value.relation
-    const fallbackKey = Object.keys(value).find((key) => hasText(normalizeValue(value[key])))
-    if (fallbackKey) {
-      return `${fieldLabelMap[fallbackKey] || fallbackKey}: ${normalizeValue(value[fallbackKey])}`
-    }
-  }
-  return 'Removed'
-}
-
-const formatPath = (path) => {
-  const segments = path.split('.')
-  const labels = segments.map((segment) => {
-    const match = segment.match(/^(.*)\[(\d+)\]$/)
-    if (match) {
-      const base = match[1]
-      const index = match[2]
-      const baseLabel = containerLabelMap[base] || fieldLabelMap[base] || base
-      return `${baseLabel} ${index}`
-    }
-    return containerLabelMap[segment] || fieldLabelMap[segment] || segment.replace(/[-_]/g, ' ')
   })
-  return labels
-    .map((label) => label.replace(/\b\w/g, (char) => char.toUpperCase()))
-    .join(' > ')
+  return rows
 }
 
 export default function ReviewShareEditsModal({ open, onClose, share, currentForms, onApprove, onDecline }) {
@@ -167,57 +121,23 @@ export default function ReviewShareEditsModal({ open, onClose, share, currentFor
   const baselineForms = currentForms || share?.snapshot?.forms || {}
 
   const changes = useMemo(() => {
-    const beforeMap = flattenToMap(baselineForms)
-    const afterMap = flattenToMap(pendingForms || {})
-    const sections = Object.keys(pendingForms || {}).filter(Boolean)
-    const isScopedKey = (key) =>
-      sections.some((section) => key === section || key.startsWith(`${section}.`) || key.startsWith(`${section}[`))
-
-    const fieldChanges = Object.keys(afterMap)
-      .filter(isScopedKey)
-      .map((key) => {
-        const beforeValue = beforeMap[key] ?? ''
-        const afterValue = afterMap[key] ?? ''
-        if (beforeValue === afterValue) return null
-        return {
-          path: formatPath(key),
-          before: beforeValue || '-',
-          after: afterValue || '-',
-        }
-      })
-      .filter(Boolean)
-
-    const beforeArrays = collectArrays(baselineForms)
-    const afterArrays = collectArrays(pendingForms || {})
-    const removalChanges = []
-
-    Object.keys(beforeArrays)
-      .filter(isScopedKey)
-      .forEach((path) => {
-        const beforeArray = Array.isArray(beforeArrays[path]) ? beforeArrays[path] : []
-        const afterArray = Array.isArray(afterArrays[path]) ? afterArrays[path] : []
-        if (!beforeArray.length || beforeArray.length <= afterArray.length) return
-        const afterCounts = new Map()
-        afterArray.forEach((item) => {
-          const sig = signatureForValue(item)
-          afterCounts.set(sig, (afterCounts.get(sig) || 0) + 1)
-        })
-        beforeArray.forEach((item, index) => {
-          const sig = signatureForValue(item)
-          const count = afterCounts.get(sig) || 0
-          if (count > 0) {
-            afterCounts.set(sig, count - 1)
-            return
-          }
-          removalChanges.push({
-            path: formatPath(`${path}[${index + 1}]`),
-            before: summarizeRemoval(item),
-            after: 'Removed',
-          })
+    const rows = []
+    const sectionKeys = Object.keys(pendingForms || {}).filter(Boolean)
+    sectionKeys.forEach((sectionKey) => {
+      if (sectionKey === 'additional') {
+        rows.push(...extractAdditionalChanges(baselineForms.additional, pendingForms.additional))
+        return
+      }
+      const sectionRows = flattenChangedFields(baselineForms?.[sectionKey], pendingForms?.[sectionKey])
+      sectionRows.forEach((row) => {
+        rows.push({
+          section: SECTION_LABELS[sectionKey] || sectionKey,
+          question: prettifyPath(row.path),
+          answer: row.answer,
         })
       })
-
-    return [...fieldChanges, ...removalChanges]
+    })
+    return rows
   }, [baselineForms, pendingForms])
 
   return (
@@ -229,12 +149,11 @@ export default function ReviewShareEditsModal({ open, onClose, share, currentFor
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
           {changes.length ? (
             changes.map((change, index) => (
-              <div key={`${change.path}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{change.path}</div>
-                <div className="mt-2 text-sm text-slate-600">
-                  <span className="line-through text-slate-400">{change.before}</span>
-                  <span className="mx-2 text-slate-400">-&gt;</span>
-                  <span className="font-semibold text-slate-900">{change.after}</span>
+              <div key={`${change.section}-${change.question}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{change.section}</div>
+                {change.productName && <div className="mt-1 text-sm text-slate-600">{change.productName}</div>}
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {change.question}: {change.answer}
                 </div>
               </div>
             ))
