@@ -100,18 +100,7 @@ function Layout() {
             path="/passport/forms/edit/:section"
             element={
               <CustomerOnly>
-                <ErrorBoundary
-                  onError={(error, info) =>
-                    reportError({
-                      source: 'react',
-                      message: error?.message || 'React render error',
-                      stack: error?.stack,
-                      componentStack: info?.componentStack || null,
-                    })
-                  }
-                >
-                  <ClientDashboard />
-                </ErrorBoundary>
+                <Navigate to="/client/dashboard?tab=my%20passport" replace />
               </CustomerOnly>
             }
           />

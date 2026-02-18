@@ -8,7 +8,6 @@ import Badge from '../components/ui/Badge'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import MyPassportFlow from '../components/passport/MyPassportFlow'
-import CreateProfile from './CreateProfile'
 
 const navItems = ['Overview', 'My Passport', 'Settings']
 const SETTINGS_ITEMS = [
@@ -231,12 +230,14 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (isFormsEditRoute) {
-      setActiveTab('Forms')
+      const params = new URLSearchParams(location.search)
+      params.set('tab', 'my passport')
+      nav(`/client/dashboard?${params.toString()}`, { replace: true })
       return
     }
     const nextTab = resolveTabFromSearch(location.search)
     setActiveTab(nextTab)
-  }, [location.search, isFormsEditRoute])
+  }, [location.search, isFormsEditRoute, nav])
 
   useEffect(() => {
     if (activeTab !== 'Settings') {
@@ -1236,28 +1237,6 @@ export default function ClientDashboard() {
     sharedActivityPageSafe * activityPageSize,
   )
   const currentNotificationPrefs = notificationPrefs || DEFAULT_NOTIFICATION_PREFS
-
-  const formsEditContent = (
-    <div className="min-h-screen bg-slate-50 px-3 py-4">
-      {loading ? (
-        <Skeleton className="h-24" />
-      ) : (
-        <CreateProfile
-          onFormDataChange={setFormsDraft}
-          initialData={client?.profileData?.forms || null}
-          onSectionSave={handleSectionSave}
-          editSection={formsEditSection}
-          editContext={formsEditContext}
-          onEditBack={handleEditBack}
-          onMobileEditNavigate={handleMobileEditNavigate}
-        />
-      )}
-    </div>
-  )
-
-  if (isFormsEditRoute) {
-    return formsEditContent
-  }
 
   return (
     <main className="page-shell py-8 pb-28 lg:pb-8 transition-opacity duration-200">

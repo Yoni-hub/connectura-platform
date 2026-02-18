@@ -11,7 +11,7 @@ const {
 } = require('../utils/notifications/dispatcher')
 const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = require('../utils/siteContent')
 const { DEFAULT_CREATE_PROFILE_SCHEMA } = require('../utils/formSchema')
-const { slugify, ensureProductCatalog } = require('../utils/productCatalog')
+const { slugify } = require('../utils/productCatalog')
 const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
 
 const router = express.Router()
@@ -890,7 +890,6 @@ router.put('/form-schema/:slug', adminGuard, async (req, res) => {
 
 // Product catalog
 router.get('/products', adminGuard, async (req, res) => {
-  await ensureProductCatalog(prisma)
   const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
   res.json({ products })
 })
@@ -967,7 +966,6 @@ const formatProductWithSchema = (product) => ({
 })
 
 router.get('/forms/products', adminGuard, async (req, res) => {
-  await ensureProductCatalog(prisma)
   const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
   res.json({ products: products.map(formatProductWithSchema) })
 })
