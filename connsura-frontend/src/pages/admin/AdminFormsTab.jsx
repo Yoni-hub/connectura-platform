@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../services/adminApi'
 
-const DEFAULT_PRODUCTS = ['Personal Auto', 'Commercial Auto', 'Homeowners']
 const INPUT_TYPES = ['general', 'select', 'yes/no', 'number', 'date', 'text']
 
 const normalizeSectionKey = (value = '') =>
@@ -95,25 +94,6 @@ export default function AdminFormsTab({ onSessionExpired }) {
     }
   }
 
-  const ensureDefaultProducts = async () => {
-    try {
-      const res = await adminApi.get('/admin/forms/products')
-      const existing = Array.isArray(res.data?.products) ? res.data.products : []
-      const existingNames = new Set(existing.map((item) => String(item.name || '').trim().toLowerCase()))
-      for (const name of DEFAULT_PRODUCTS) {
-        if (existingNames.has(name.toLowerCase())) continue
-        try {
-          await adminApi.post('/admin/products', { name })
-        } catch {
-          // Continue so one failure does not block setup.
-        }
-      }
-      await loadProducts()
-    } catch (err) {
-      handleSessionError(err, 'Failed to initialize default products')
-    }
-  }
-
   const loadQuestions = async () => {
     setQuestionsLoading(true)
     try {
@@ -143,7 +123,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
   }
 
   useEffect(() => {
-    ensureDefaultProducts()
+    loadProducts()
     loadQuestions()
   }, [])
 

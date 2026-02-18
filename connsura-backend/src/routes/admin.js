@@ -967,7 +967,12 @@ const formatProductWithSchema = (product) => ({
 
 router.get('/forms/products', adminGuard, async (req, res) => {
   const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
-  res.json({ products: products.map(formatProductWithSchema) })
+  const configuredProducts = products.filter((product) => {
+    const schema = parseProductFormSchema(product.formSchema)
+    const sections = Array.isArray(schema?.sections) ? schema.sections : []
+    return sections.length > 0
+  })
+  res.json({ products: configuredProducts.map(formatProductWithSchema) })
 })
 
 router.put('/forms/products/:id', adminGuard, async (req, res) => {
