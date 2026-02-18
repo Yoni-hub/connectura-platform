@@ -408,7 +408,25 @@ router.get('/:type', async (req, res) => {
     where: { type },
     orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
   })
-  if (!doc) return res.status(404).json({ error: 'Legal document not found' })
+  if (!doc) {
+    const resolved = resolveLegalSourcePath(type)
+    if (!resolved?.path || !fs.existsSync(resolved.path)) {
+      return res.status(404).json({ error: 'Legal document not found' })
+    }
+    const stat = fs.statSync(resolved.path)
+    const publishedAt = stat.mtime ? new Date(stat.mtime) : new Date()
+    const content = applyPublishDate(readLegalSource(type), publishedAt)
+    return res.json({
+      document: {
+        id: null,
+        type,
+        version: 'source',
+        contentHash: hashContent(content),
+        content,
+        publishedAt,
+      },
+    })
+  }
   res.json({ document: formatDoc(doc) })
 })
 

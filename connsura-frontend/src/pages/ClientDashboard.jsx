@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
-import ShareProfileModal from '../components/modals/ShareProfileModal'
 import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
@@ -19,11 +18,6 @@ const SETTINGS_ITEMS = [
   { id: 'privacy', label: 'Privacy' },
   { id: 'notifications', label: 'Notifications' },
 ]
-
-const resolveSettingsLabel = (id = '') => {
-  const match = SETTINGS_ITEMS.find((item) => item.id === id)
-  return match?.label || 'Settings'
-}
 
 const resolveTabFromSearch = (search = '') => {
   const params = new URLSearchParams(search)
@@ -44,6 +38,9 @@ const parseFullName = (fullName = '') => {
 const formatTimestamp = (value) => (value ? new Date(value).toLocaleString() : '')
 const reminderLinkClass =
   'inline-flex text-sm font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:hover:no-underline'
+const PASSPORT_SELECTED_PRODUCT_STORAGE_KEY = 'connsura_passport_selected_product_v1'
+const SHARE_FLOW_STORAGE_KEY = 'connsura_passport_share_flow_v1'
+const SHARE_FLOW_RESET_EVENT = 'connsura:passport-share-reset'
 
 
 const resolveBrowserName = (userAgent = '') => {
@@ -75,74 +72,6 @@ const hasNonEmptyValue = (value) => {
   if (Array.isArray(value)) return value.some(hasNonEmptyValue)
   if (typeof value === 'object') return Object.values(value).some(hasNonEmptyValue)
   return false
-}
-
-const safeArray = (value) => (Array.isArray(value) ? value : [])
-
-const householdDetailFields = [
-  { key: 'dob', label: 'Date of Birth' },
-  { key: 'gender', label: 'Gender' },
-  { key: 'marital-status', label: 'Marital Status' },
-  { key: 'education-level', label: 'Education Level' },
-  { key: 'employment', label: 'Employment' },
-  { key: 'occupation', label: 'Occupation' },
-  { key: 'driver-status', label: 'Driver Status' },
-  { key: 'license-type', label: "Driver's License Type" },
-  { key: 'license-status', label: 'License Status' },
-  { key: 'years-licensed', label: 'Years Licensed' },
-  { key: 'license-state', label: 'License State' },
-  { key: 'license-number', label: 'License Number' },
-  { key: 'accident-prevention', label: 'Accident Prevention Course' },
-  { key: 'sr22', label: 'SR-22 Required?' },
-  { key: 'fr44', label: 'FR-44 Required?' },
-]
-
-const addressDetailFields = [
-  { key: 'address1', label: 'Street Address' },
-  { key: 'city', label: 'City' },
-  { key: 'state', label: 'State' },
-  { key: 'zip', label: 'Zip Code' },
-]
-
-const buildHouseholdDetails = (person = {}) => {
-  const details = []
-  if (hasNonEmptyValue(person?.relation)) {
-    details.push({ label: 'Relation to Applicant', value: person.relation })
-  }
-  householdDetailFields.forEach((field) => {
-    const value = person?.[field.key]
-    if (hasNonEmptyValue(value)) {
-      details.push({ label: field.label, value })
-    }
-  })
-  return details
-}
-
-const buildAddressDetails = (residentialEntry = {}) => {
-  const details = []
-  addressDetailFields.forEach((field) => {
-    const value = residentialEntry?.[field.key]
-    if (hasNonEmptyValue(value)) {
-      details.push({ label: field.label, value })
-    }
-  })
-  return details
-}
-
-const getAdditionalAddressLabel = (entry = {}, index = 0) => {
-  const rawType = entry?.addressType || entry?.residential?.addressType || ''
-  const type = rawType ? rawType.trim() : ''
-  return type || `Additional Address ${index + 1}`
-}
-
-const buildPersonName = (person = {}) => {
-  const nameParts = [person['first-name'] || person.firstName, person['middle-initial'] || person.middleInitial, person['last-name'] || person.lastName]
-    .filter(Boolean)
-  const baseName = nameParts.join(' ')
-  if (!person?.suffix) {
-    return baseName
-  }
-  return baseName ? `${baseName}, ${person.suffix}` : person.suffix
 }
 
 const resolveFormsSectionKey = (value = '') => {
@@ -191,6 +120,11 @@ const getSessionId = () => {
   return value
 }
 
+const getStoredPassportProductId = () => {
+  if (typeof window === 'undefined') return ''
+  return sessionStorage.getItem(PASSPORT_SELECTED_PRODUCT_STORAGE_KEY) || ''
+}
+
 export default function ClientDashboard() {
   const { user, lastPassword, setLastPassword, logout, setUser, completeAuth, consentStatus, setConsentStatus } = useAuth()
   const nav = useNavigate()
@@ -202,8 +136,6 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState(() => resolveTabFromSearch(window.location.search))
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState(null)
-  const [shareOpen, setShareOpen] = useState(false)
-  const [shareSnapshot, setShareSnapshot] = useState(null)
   const [formsDraft, setFormsDraft] = useState(null)
   const [pendingShares, setPendingShares] = useState([])
   const [activeShares, setActiveShares] = useState([])
@@ -211,7 +143,7 @@ export default function ClientDashboard() {
   const [reviewShare, setReviewShare] = useState(null)
   const autoReviewRef = useRef('')
   const tabLogRef = useRef('')
-  const [settingsView, setSettingsView] = useState(null)
+  const [settingsView, setSettingsView] = useState('account')
   const [notificationTab, setNotificationTab] = useState('email')
   const [showPassword, setShowPassword] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -257,7 +189,7 @@ export default function ClientDashboard() {
   const [notificationMessage, setNotificationMessage] = useState('')
   const [passportProducts, setPassportProducts] = useState([])
   const [passportProductsLoading, setPassportProductsLoading] = useState(false)
-  const [selectedPassportProductId, setSelectedPassportProductId] = useState('')
+  const [selectedPassportProductId, setSelectedPassportProductId] = useState(() => getStoredPassportProductId())
   const notificationSaveRef = useRef(0)
   const [legalDocs, setLegalDocs] = useState([])
   const [verificationSent, setVerificationSent] = useState(false)
@@ -309,7 +241,7 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (activeTab !== 'Settings') {
-      setSettingsView(null)
+      setSettingsView('account')
     }
   }, [activeTab])
 
@@ -518,6 +450,15 @@ export default function ClientDashboard() {
     }
   }, [activeTab])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!selectedPassportProductId) {
+      sessionStorage.removeItem(PASSPORT_SELECTED_PRODUCT_STORAGE_KEY)
+      return
+    }
+    sessionStorage.setItem(PASSPORT_SELECTED_PRODUCT_STORAGE_KEY, String(selectedPassportProductId))
+  }, [selectedPassportProductId])
+
   const isEmailVerified = user?.emailVerified === true
   const hasPendingEmail = Boolean(user?.emailPending)
   const needsAuthenticator = Boolean(user) && !user.totpEnabled
@@ -541,74 +482,6 @@ export default function ClientDashboard() {
     sessionId,
   ])
   const displayName = client?.name || user?.name || user?.email || 'client'
-  const clientForms = client?.profileData?.forms || null
-  const draftHasData = hasNonEmptyValue(formsDraft)
-  const clientHasData = hasNonEmptyValue(clientForms)
-  const passportForms = clientHasData
-    ? clientForms
-    : draftHasData
-      ? formsDraft
-      : clientForms || formsDraft || {}
-  const householdForms = passportForms.household || {}
-  const namedInsured = householdForms.namedInsured || {}
-  const additionalHouseholds = safeArray(householdForms.additionalHouseholds)
-  const addressForms = passportForms.address || {}
-  const residential = addressForms.residential || {}
-  const additionalAddresses = safeArray(addressForms.additionalAddresses)
-  const additionalForms = safeArray(passportForms.additional?.additionalForms)
-  const passportSnapshotFallback = useMemo(() => {
-    const primaryLabel = namedInsured?.relation ? namedInsured.relation : 'Primary Applicant'
-    const primary = {
-      label: primaryLabel,
-      fullName: buildPersonName(namedInsured),
-      details: buildHouseholdDetails(namedInsured),
-    }
-    const additional = additionalHouseholds
-      .filter(hasNonEmptyValue)
-      .map((person) => ({
-        label: person?.relation || 'Additional Household Member',
-        fullName: buildPersonName(person),
-        details: buildHouseholdDetails(person),
-      }))
-    const primaryAddress = {
-      label: 'Primary Address',
-      street1: residential?.address1 || '',
-      details: buildAddressDetails(residential),
-    }
-    const additionalAddressSnapshots = additionalAddresses
-      .filter(hasNonEmptyValue)
-      .map((entry, index) => ({
-        label: getAdditionalAddressLabel(entry, index),
-        street1: entry?.residential?.address1 || '',
-        details: buildAddressDetails(entry?.residential || {}),
-      }))
-    const additionalFormSnapshots = additionalForms
-      .map((form) => ({
-        name: form?.name || form?.productName || '',
-        questions: (form?.questions || [])
-          .filter((question) => hasNonEmptyValue(question?.input))
-          .map((question) => ({
-            question: question?.question || '',
-            input: question?.input || '',
-          })),
-      }))
-      .filter((form) => form.questions.length > 0)
-    return {
-      household: { primary, additional },
-      address: { primary: primaryAddress, additional: additionalAddressSnapshots },
-      additionalForms: additionalFormSnapshots,
-      forms: passportForms,
-    }
-  }, [
-    additionalAddresses,
-    additionalForms,
-    additionalHouseholds,
-    namedInsured,
-    passportForms,
-    residential,
-  ])
-  const resolvedShareSnapshot = shareSnapshot ?? passportSnapshotFallback
-
   const requestEmailVerification = async () => {
     if (!user?.email) {
       toast.error('Email not available for verification')
@@ -719,15 +592,6 @@ export default function ClientDashboard() {
     } finally {
       setVerificationConfirming(false)
     }
-  }
-
-  const handleShareClick = () => {
-    if (!isEmailVerified) {
-      toast.error('Verify your email to share your profile')
-      return
-    }
-    setShareSnapshot((prev) => prev || passportSnapshotFallback)
-    setShareOpen(true)
   }
 
   const formsBasePath =
@@ -918,6 +782,10 @@ export default function ClientDashboard() {
     setRevokingShare(token)
     try {
       await api.post(`/shares/${token}/revoke`)
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(SHARE_FLOW_STORAGE_KEY)
+        window.dispatchEvent(new Event(SHARE_FLOW_RESET_EVENT))
+      }
       toast.success('Sharing stopped')
       await loadActiveShares()
       await loadPendingShares()
@@ -1370,7 +1238,6 @@ export default function ClientDashboard() {
         <Skeleton className="h-24" />
       ) : (
         <CreateProfile
-          onShareSnapshotChange={setShareSnapshot}
           onFormDataChange={setFormsDraft}
           initialData={client?.profileData?.forms || null}
           onSectionSave={handleSectionSave}
@@ -1459,20 +1326,6 @@ export default function ClientDashboard() {
                 </div>
               )}
             </div>
-            {activeTab === 'Overview' && (
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className={`pill-btn-primary px-4 ${
-                    isEmailVerified ? '' : 'opacity-60 cursor-not-allowed'
-                  }`}
-                  onClick={handleShareClick}
-                  disabled={!isEmailVerified}
-                >
-                  Share
-                </button>
-              </div>
-            )}
           </div>
 
           {loading && <Skeleton className="h-24" />}
@@ -1527,44 +1380,24 @@ export default function ClientDashboard() {
 
           {!loading && activeTab === 'Settings' && (
             <div className="space-y-6">
-              <div className="relative overflow-hidden">
-                <div
-                  className={`flex w-[200%] transition-transform duration-300 ease-out ${
-                    settingsView ? '-translate-x-1/2' : 'translate-x-0'
-                  }`}
-                >
-                  <div className="w-1/2 pr-4">
-                    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                      <div className="space-y-3">
-                        {SETTINGS_ITEMS.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-                            onClick={() => setSettingsView(item.id)}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+              <div className="surface p-3">
+                <div className="flex flex-wrap gap-2">
+                  {SETTINGS_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                        settingsView === item.id ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
+                      }`}
+                      onClick={() => setSettingsView(item.id)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="w-1/2 pl-4">
-                    {settingsView && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <button
-                            type="button"
-                            className="pill-btn-ghost px-4"
-                            onClick={() => setSettingsView(null)}
-                          >
-                            Back
-                          </button>
-                          <div className="text-sm font-semibold text-slate-700">
-                            {resolveSettingsLabel(settingsView)}
-                          </div>
-                        </div>
+              <div className="space-y-4">
 
                         {settingsView === 'account' && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
@@ -1634,7 +1467,7 @@ export default function ClientDashboard() {
                     )}
                   </div>
                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</div>
                         <div className="font-semibold text-slate-900">{emailValue || 'Not set'}</div>
@@ -2354,7 +2187,7 @@ export default function ClientDashboard() {
                                     Security & Account Protection
                                   </div>
                                   <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">
                                           Login alerts
@@ -2367,7 +2200,7 @@ export default function ClientDashboard() {
                                         Always allowed
                                       </span>
                                     </div>
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">
                                           Password or email changes
@@ -2380,7 +2213,7 @@ export default function ClientDashboard() {
                                         Always allowed
                                       </span>
                                     </div>
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">
                                           Legal & policy updates
@@ -2399,7 +2232,7 @@ export default function ClientDashboard() {
                                 <div className="space-y-3">
                                   <div className="text-sm font-semibold text-slate-900">Account & Profile Activity</div>
                                   <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">
                                           Profile sharing activity
@@ -2415,7 +2248,7 @@ export default function ClientDashboard() {
                                         Always allowed
                                       </span>
                                     </div>
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <label htmlFor="notif-profile-updates" className="text-sm font-semibold text-slate-900">
                                           Insurance profile updates
@@ -2446,7 +2279,7 @@ export default function ClientDashboard() {
                                 <div className="space-y-3">
                                   <div className="text-sm font-semibold text-slate-900">Product Updates</div>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <label htmlFor="notif-feature-updates" className="text-sm font-semibold text-slate-900">
                                           Feature updates & improvements
@@ -2477,7 +2310,7 @@ export default function ClientDashboard() {
                                 <div className="space-y-3">
                                   <div className="text-sm font-semibold text-slate-900">Marketing & Announcements</div>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <label htmlFor="notif-marketing" className="text-sm font-semibold text-slate-900">
                                           Tips, announcements & offers
@@ -2512,7 +2345,7 @@ export default function ClientDashboard() {
                                 <div className="space-y-3">
                                   <div className="text-sm font-semibold text-slate-900">System Notifications</div>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">
                                           Dashboard reminders & activity badges
@@ -2533,19 +2366,10 @@ export default function ClientDashboard() {
                         )}
 
                       </div>
-                    )}
                   </div>
-                </div>
-              </div>
-            </div>
           )}
         </section>
       </div>
-      <ShareProfileModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        snapshot={resolvedShareSnapshot}
-      />
       <ReviewShareEditsModal
         open={Boolean(reviewShare)}
         share={reviewShare}

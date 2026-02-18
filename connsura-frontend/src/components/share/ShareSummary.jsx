@@ -65,7 +65,101 @@ const resolveAdditionalSelection = (forms, sections) => {
   return sections.additionalIndexes.map((index) => forms[index]).filter(Boolean)
 }
 
+const normalizePassportSelection = (sections) => {
+  const selected = Array.isArray(sections?.passportV2?.products) ? sections.passportV2.products : []
+  const byProduct = new Map()
+  selected.forEach((product) => {
+    const productInstanceId = String(product?.productInstanceId || '').trim()
+    if (!productInstanceId) return
+    const keys = Array.isArray(product?.sectionKeys)
+      ? product.sectionKeys.map((key) => String(key || '').trim().toLowerCase()).filter(Boolean)
+      : []
+    byProduct.set(productInstanceId, new Set(keys))
+  })
+  return byProduct
+}
+
+const hasPassportShare = (snapshot) => Array.isArray(snapshot?.passportV2?.products) && snapshot.passportV2.products.length > 0
+
+const formatPassportEntryValue = (value) => {
+  if (Array.isArray(value)) return value.join(', ')
+  if (value === null || value === undefined || value === '') return '-'
+  return String(value)
+}
+
 export default function ShareSummary({ snapshot, sections }) {
+  if (hasPassportShare(snapshot)) {
+    const products = Array.isArray(snapshot?.passportV2?.products) ? snapshot.passportV2.products : []
+    const selectedByProduct = normalizePassportSelection(sections)
+    const showSelectedOnly = selectedByProduct.size > 0
+    const visibleProducts = products
+      .map((product) => {
+        const productInstanceId = String(product?.productInstance?.id || '').trim()
+        if (!productInstanceId) return null
+        const selectedKeys = selectedByProduct.get(productInstanceId) || null
+        if (showSelectedOnly && !selectedKeys) return null
+        const responses = Array.isArray(product?.responses) ? product.responses : []
+        const responseByKey = new Map(
+          responses.map((response) => [String(response?.sectionKey || '').trim().toLowerCase(), response])
+        )
+        const productSections = Array.isArray(product?.sections) ? product.sections : []
+        const sectionsToRender = productSections
+          .map((section) => {
+            const sectionKey = String(section?.key || '').trim().toLowerCase()
+            if (!sectionKey) return null
+            if (selectedKeys && !selectedKeys.has(sectionKey)) return null
+            const response = responseByKey.get(sectionKey)
+            const entries = Array.isArray(response?.values?.entries) ? response.values.entries : []
+            if (!entries.length) return null
+            return {
+              key: sectionKey,
+              label: section?.label || sectionKey,
+              fields: Array.isArray(section?.fields) ? section.fields : [],
+              entries,
+            }
+          })
+          .filter(Boolean)
+        if (!sectionsToRender.length) return null
+        return {
+          productName: product?.productInstance?.productName || 'Product',
+          productInstanceId,
+          sections: sectionsToRender,
+        }
+      })
+      .filter(Boolean)
+
+    return (
+      <div className="space-y-4">
+        {visibleProducts.map((product) => (
+          <div key={product.productInstanceId} className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
+            <div className="text-base font-semibold text-slate-900">{product.productName}</div>
+            <div className="mt-3 space-y-3">
+              {product.sections.map((section) => (
+                <div key={`${product.productInstanceId}-${section.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-sm font-semibold text-slate-900">{section.label}</div>
+                  <div className="mt-2 space-y-2">
+                    {section.entries.map((entry, entryIndex) => (
+                      <div key={`${product.productInstanceId}-${section.key}-${entryIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                          {section.fields.map((field) => (
+                            <div key={`${section.key}-${field?.key || field?.label}-${entryIndex}`}>
+                              <span className="font-semibold text-slate-900">{field?.label || field?.key || 'Field'}:</span>{' '}
+                              {formatPassportEntryValue(entry?.[field?.key])}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const household = snapshot?.household || {}
   const address = snapshot?.address || {}
   const additionalForms = Array.isArray(snapshot?.additionalForms) ? snapshot.additionalForms : []

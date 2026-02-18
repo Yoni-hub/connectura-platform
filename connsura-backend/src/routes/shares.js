@@ -25,6 +25,7 @@ const ACCESS_TIMEOUT_MS = 10 * 60 * 1000
 const collapseSpaces = (value = '') => value.replace(/\s+/g, ' ').trim()
 
 const normalizeRecipientName = (value = '') => collapseSpaces(value).toLowerCase()
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
 const getLastAccessedAt = (share) => share.lastAccessedAt || share.createdAt
 
@@ -49,9 +50,13 @@ const formatShare = (share) => ({
 
 const buildShareScope = (sections = {}) => {
   if (!sections || typeof sections !== 'object') return []
-  return Object.keys(sections)
+  const baseScope = Object.keys(sections)
     .filter((key) => key !== 'additionalIndexes')
     .filter((key) => Boolean(sections[key]))
+  if (Array.isArray(sections?.passportV2?.products) && sections.passportV2.products.length) {
+    baseScope.push('passportV2')
+  }
+  return Array.from(new Set(baseScope))
 }
 
 const normalizeBaseUrl = (value) => {
@@ -94,7 +99,7 @@ const sendShareEmail = async ({ to, recipientName, customerName, shareUrl, code,
   await sendEmail({ to, subject, text, replyTo: 'privacy@connsura.com' })
 }
 
-const filterEditsBySections = (edits, sections) => {
+const filterFormEditsBySections = (edits, sections) => {
   const forms = edits?.forms || {}
   const filtered = {}
   if (sections.household && forms.household) {
@@ -120,6 +125,67 @@ const filterEditsBySections = (edits, sections) => {
     }
   }
   return { forms: filtered }
+}
+
+const buildPassportSectionMap = (sections = {}) => {
+  const productSelections = Array.isArray(sections?.passportV2?.products) ? sections.passportV2.products : []
+  const map = new Map()
+  productSelections.forEach((product) => {
+    const productInstanceId = String(product?.productInstanceId || '').trim()
+    if (!productInstanceId) return
+    const keys = Array.isArray(product?.sectionKeys)
+      ? product.sectionKeys.map((key) => String(key || '').trim().toLowerCase()).filter(Boolean)
+      : []
+    if (!keys.length) return
+    map.set(productInstanceId, new Set(keys))
+  })
+  return map
+}
+
+const filterPassportEditsBySections = (edits, sections) => {
+  const inputProducts = Array.isArray(edits?.passportV2?.products) ? edits.passportV2.products : []
+  const allowedByProduct = buildPassportSectionMap(sections)
+  if (!allowedByProduct.size) return null
+  const products = inputProducts
+    .map((product) => {
+      const productInstanceId = String(product?.productInstanceId || '').trim()
+      const allowedKeys = allowedByProduct.get(productInstanceId)
+      if (!productInstanceId || !allowedKeys) return null
+      const responses = Array.isArray(product?.responses) ? product.responses : []
+      const filteredResponses = responses
+        .map((response) => {
+          const sectionKey = String(response?.sectionKey || '').trim().toLowerCase()
+          if (!sectionKey || !allowedKeys.has(sectionKey)) return null
+          const values = isPlainObject(response?.values) ? response.values : {}
+          return {
+            sectionKey,
+            values,
+          }
+        })
+        .filter(Boolean)
+      if (!filteredResponses.length) return null
+      return {
+        productInstanceId,
+        responses: filteredResponses,
+      }
+    })
+    .filter(Boolean)
+
+  if (!products.length) return null
+  return { products }
+}
+
+const filterEditsBySections = (edits, sections) => {
+  const filtered = {}
+  const formEdits = filterFormEditsBySections(edits, sections)
+  if (formEdits?.forms && Object.keys(formEdits.forms).length > 0) {
+    filtered.forms = formEdits.forms
+  }
+  const passportEdits = filterPassportEditsBySections(edits, sections)
+  if (passportEdits?.products?.length) {
+    filtered.passportV2 = passportEdits
+  }
+  return filtered
 }
 
 const mergeFormsBySections = (currentForms, edits, sections) => {
@@ -150,6 +216,93 @@ const mergeFormsBySections = (currentForms, edits, sections) => {
     next.additional = { ...(next.additional || {}), additionalForms: nextAdditional }
   }
   return next
+}
+
+const mergePassportSnapshot = (currentPassport = {}, pendingPassport = {}) => {
+  const currentProducts = Array.isArray(currentPassport?.products) ? currentPassport.products : []
+  const pendingProducts = Array.isArray(pendingPassport?.products) ? pendingPassport.products : []
+  if (!pendingProducts.length) return currentPassport
+
+  const pendingByProduct = new Map(
+    pendingProducts.map((product) => [String(product?.productInstanceId || '').trim(), product])
+  )
+
+  const nextProducts = currentProducts.map((product) => {
+    const productInstanceId = String(product?.productInstance?.id || '').trim()
+    const pending = pendingByProduct.get(productInstanceId)
+    if (!pending) return product
+    const currentResponses = Array.isArray(product?.responses) ? product.responses : []
+    const pendingBySection = new Map(
+      (Array.isArray(pending.responses) ? pending.responses : []).map((response) => [
+        String(response?.sectionKey || '').trim().toLowerCase(),
+        response,
+      ])
+    )
+    const mergedResponses = currentResponses.map((response) => {
+      const sectionKey = String(response?.sectionKey || '').trim().toLowerCase()
+      const incoming = pendingBySection.get(sectionKey)
+      if (!incoming) return response
+      return {
+        ...response,
+        values: isPlainObject(incoming.values) ? incoming.values : {},
+        updatedAt: new Date().toISOString(),
+      }
+    })
+    return {
+      ...product,
+      responses: mergedResponses,
+    }
+  })
+
+  return {
+    ...(currentPassport || {}),
+    products: nextProducts,
+  }
+}
+
+const applyPassportEdits = async (customerId, pendingPassport = {}) => {
+  const pendingProducts = Array.isArray(pendingPassport?.products) ? pendingPassport.products : []
+  if (!pendingProducts.length) return
+  const productIds = pendingProducts
+    .map((product) => String(product?.productInstanceId || '').trim())
+    .filter(Boolean)
+  if (!productIds.length) return
+  const ownedProducts = await prisma.passportProductInstance.findMany({
+    where: {
+      customerId,
+      deletedAt: null,
+      id: { in: productIds },
+    },
+    select: { id: true },
+  })
+  const ownedSet = new Set(ownedProducts.map((product) => product.id))
+
+  for (const product of pendingProducts) {
+    const productInstanceId = String(product?.productInstanceId || '').trim()
+    if (!ownedSet.has(productInstanceId)) continue
+    const responses = Array.isArray(product?.responses) ? product.responses : []
+    for (const response of responses) {
+      const sectionKey = String(response?.sectionKey || '').trim().toLowerCase()
+      if (!sectionKey) continue
+      const values = isPlainObject(response?.values) ? response.values : {}
+      await prisma.passportSectionResponse.upsert({
+        where: {
+          productInstanceId_sectionKey: {
+            productInstanceId,
+            sectionKey,
+          },
+        },
+        create: {
+          productInstanceId,
+          sectionKey,
+          values,
+        },
+        update: {
+          values,
+        },
+      })
+    }
+  }
 }
 
 router.post('/', authGuard, async (req, res) => {
@@ -325,6 +478,9 @@ router.post('/:token/edits', async (req, res) => {
   const sections = parseJson(share.sections, {})
   const edits = req.body?.edits || {}
   const filteredEdits = filterEditsBySections(edits, sections)
+  if (!Object.keys(filteredEdits || {}).length) {
+    return res.status(400).json({ error: 'No editable sections were provided' })
+  }
   const updated = await prisma.profileShare.update({
     where: { token },
     data: {
@@ -409,14 +565,27 @@ router.post('/:token/approve', authGuard, async (req, res) => {
   const currentForms = currentProfileData.forms || {}
   const pendingEdits = parseJson(share.pendingEdits, {})
   const sections = parseJson(share.sections, {})
-  const updatedForms = mergeFormsBySections(currentForms, pendingEdits, sections)
-  const updatedProfileData = { ...currentProfileData, forms: updatedForms }
-  await prisma.customer.update({
-    where: { id: share.customerId },
-    data: { profileData: JSON.stringify(updatedProfileData) },
-  })
+  const hasFormEdits = Boolean(pendingEdits?.forms) && Object.keys(pendingEdits.forms || {}).length > 0
+  let updatedForms = currentForms
+  if (hasFormEdits) {
+    updatedForms = mergeFormsBySections(currentForms, pendingEdits, sections)
+    const updatedProfileData = { ...currentProfileData, forms: updatedForms }
+    await prisma.customer.update({
+      where: { id: share.customerId },
+      data: { profileData: JSON.stringify(updatedProfileData) },
+    })
+  }
+  if (pendingEdits?.passportV2?.products?.length) {
+    await applyPassportEdits(share.customerId, pendingEdits.passportV2)
+  }
   const snapshot = parseJson(share.snapshot, {})
-  const nextSnapshot = { ...snapshot, forms: updatedForms }
+  const nextSnapshot = { ...snapshot }
+  if (hasFormEdits) {
+    nextSnapshot.forms = updatedForms
+  }
+  if (pendingEdits?.passportV2?.products?.length) {
+    nextSnapshot.passportV2 = mergePassportSnapshot(snapshot?.passportV2, pendingEdits.passportV2)
+  }
   await prisma.profileShare.update({
     where: { token },
     data: {

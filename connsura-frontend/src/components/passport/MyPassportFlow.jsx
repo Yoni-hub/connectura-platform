@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../../services/api'
+import PassportSharePanel from './PassportSharePanel'
 
 const inputClass = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
+const PASSPORT_UI_STORAGE_KEY = 'connsura_passport_ui_state_v1'
+const SHARE_FLOW_STORAGE_KEY = 'connsura_passport_share_flow_v1'
 
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -34,18 +37,47 @@ const hasNonEmptyValue = (value) => {
 
 const hasSavedEntries = (entries) => Array.isArray(entries) && entries.some((entry) => hasNonEmptyValue(entry))
 
+const loadPassportUiState = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(PASSPORT_UI_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+const persistPassportUiState = (state) => {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(PASSPORT_UI_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function MyPassportFlow({
   products = [],
   productsLoading = false,
   selectedProductId = '',
   onSelectProduct,
 }) {
-  const [view, setView] = useState('editor')
+  const persistedUiRef = useRef(loadPassportUiState())
+  const [view, setView] = useState(() => {
+    const saved = String(persistedUiRef.current?.view || 'editor')
+    return saved === 'summary' || saved === 'share' ? saved : 'editor'
+  })
   const [loadingFlow, setLoadingFlow] = useState(false)
   const [instanceId, setInstanceId] = useState('')
   const [form, setForm] = useState(null)
-  const [sectionIndex, setSectionIndex] = useState(0)
-  const [mode, setMode] = useState('form')
+  const [sectionIndex, setSectionIndex] = useState(() => {
+    const saved = Number(persistedUiRef.current?.sectionIndex)
+    return Number.isInteger(saved) && saved >= 0 ? saved : 0
+  })
+  const [mode, setMode] = useState(() => (persistedUiRef.current?.mode === 'summary' ? 'summary' : 'form'))
   const [sectionEntries, setSectionEntries] = useState({})
   const [sectionEditingIndex, setSectionEditingIndex] = useState({})
   const [slideVisible, setSlideVisible] = useState(false)
@@ -65,6 +97,15 @@ export default function MyPassportFlow({
     const match = products.find((product) => String(product.id) === String(selectedProductId))
     return match?.name || ''
   }, [products, selectedProductId])
+
+  useEffect(() => {
+    if (selectedProductId) return
+    const savedProductId = String(persistedUiRef.current?.selectedProductId || '')
+    if (!savedProductId) return
+    const hasSaved = products.some((product) => String(product.id) === savedProductId)
+    if (!hasSaved) return
+    onSelectProduct(savedProductId)
+  }, [selectedProductId, products, onSelectProduct])
 
   const clearSaveTimer = (sectionKey) => {
     if (!sectionKey) return
@@ -130,14 +171,23 @@ export default function MyPassportFlow({
       const formRes = await api.get(`/passport/products/${nextInstanceId}/form`)
       const nextForm = formRes.data || null
       setForm(nextForm)
-      setSectionIndex(0)
-      setMode('form')
+      const savedByProduct = persistedUiRef.current?.byProduct || {}
+      const savedProductState = savedByProduct[String(adminProductId)] || {}
+      const requestedIndex = Number(savedProductState?.sectionIndex)
+      const safeIndex =
+        Number.isInteger(requestedIndex) &&
+        requestedIndex >= 0 &&
+        requestedIndex < (Array.isArray(nextForm?.sections) ? nextForm.sections.length : 0)
+          ? requestedIndex
+          : 0
+      setSectionIndex(safeIndex)
       setSectionEntries({})
       setSectionEditingIndex({})
-      const firstKey = nextForm?.sections?.[0]?.key
-      if (firstKey) {
-        const loaded = await loadSectionEntries(nextInstanceId, firstKey)
-        setMode(hasSavedEntries(loaded) ? 'summary' : 'form')
+      const initialSectionKey = nextForm?.sections?.[safeIndex]?.key
+      if (initialSectionKey) {
+        const loaded = await loadSectionEntries(nextInstanceId, initialSectionKey)
+        const savedMode = savedProductState?.mode === 'summary' ? 'summary' : 'form'
+        setMode(savedMode === 'summary' || hasSavedEntries(loaded) ? savedMode : 'form')
       }
       setSlideVisible(false)
       requestAnimationFrame(() => setSlideVisible(true))
@@ -169,7 +219,7 @@ export default function MyPassportFlow({
   }, [selectedProductId])
 
   useEffect(() => {
-    if (view !== 'summary') return
+    if (view !== 'summary' && view !== 'share') return
     let active = true
     const loadSummary = async () => {
       setSummaryLoading(true)
@@ -230,6 +280,33 @@ export default function MyPassportFlow({
     setSlideVisible(false)
     requestAnimationFrame(() => setSlideVisible(true))
   }, [sectionIndex, mode, activeSectionKey])
+
+  useEffect(() => {
+    const existing = persistedUiRef.current || {}
+    const byProduct = { ...(existing.byProduct || {}) }
+    if (selectedProductId) {
+      byProduct[String(selectedProductId)] = {
+        sectionIndex,
+        mode,
+      }
+    }
+    const next = {
+      ...existing,
+      view,
+      selectedProductId: selectedProductId || existing.selectedProductId || '',
+      sectionIndex,
+      mode,
+      byProduct,
+    }
+    persistedUiRef.current = next
+    persistPassportUiState(next)
+  }, [view, selectedProductId, sectionIndex, mode])
+
+  useEffect(() => {
+    if (view === 'share') return
+    if (typeof window === 'undefined') return
+    sessionStorage.removeItem(SHARE_FLOW_STORAGE_KEY)
+  }, [view])
 
   const updateCurrentField = (fieldKey, value) => {
     if (!activeSectionKey) return
@@ -369,6 +446,23 @@ export default function MyPassportFlow({
     </div>
   )
 
+  const passportShareSnapshot = useMemo(
+    () => ({
+      passportV2: {
+        version: 2,
+        products: summaryItems.map((item) => ({
+          productInstance: item.instance,
+          sections: item.filledSections.map((sectionItem) => sectionItem.section),
+          responses: item.filledSections.map((sectionItem) => ({
+            sectionKey: sectionItem.section.key,
+            values: { entries: sectionItem.entries },
+          })),
+        })),
+      },
+    }),
+    [summaryItems]
+  )
+
   return (
     <div className="space-y-4">
       <div className="surface p-3">
@@ -390,6 +484,15 @@ export default function MyPassportFlow({
             onClick={() => setView('summary')}
           >
             My Passport Summary
+          </button>
+          <button
+            type="button"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              view === 'share' ? 'bg-[#0b3b8c] text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+            onClick={() => setView('share')}
+          >
+            Share
           </button>
         </div>
       </div>
@@ -422,6 +525,10 @@ export default function MyPassportFlow({
               </div>
             ))}
         </div>
+      )}
+
+      {view === 'share' && (
+        <PassportSharePanel snapshot={passportShareSnapshot} />
       )}
 
       {view === 'editor' && (
