@@ -164,7 +164,13 @@ const deleteInstance = async (userId, productInstanceId) => {
 
 const getSchemaProducts = async () => {
   const rows = await prisma.product.findMany({ orderBy: { name: 'asc' } })
-  return rows.map((row) => ({ id: row.id, name: row.name }))
+  return rows
+    .filter((row) => {
+      const parsed = parseFormSchema(row?.formSchema)
+      const sections = Array.isArray(parsed?.sections) ? parsed.sections : []
+      return sections.length > 0
+    })
+    .map((row) => ({ id: row.id, name: row.name }))
 }
 
 const getSchemaQuestions = async () => {
