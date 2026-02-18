@@ -899,9 +899,31 @@ router.post('/products', adminGuard, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name is required' })
   const slug = slugify(req.body?.slug || name)
   if (!slug) return res.status(400).json({ error: 'Slug is required' })
-  const product = await prisma.product.create({ data: { name, slug } })
+  const existing = await prisma.product.findFirst({
+    where: {
+      OR: [{ slug }, { name: { equals: name, mode: 'insensitive' } }],
+    },
+  })
+  const defaultFormSchema = JSON.stringify({
+    sections: [{ key: 'intake', label: 'Intake', questionIds: [] }],
+  })
+  if (existing) {
+    const existingSchema = parseProductFormSchema(existing.formSchema)
+    const existingSections = Array.isArray(existingSchema?.sections) ? existingSchema.sections : []
+    if (existingSections.length > 0) {
+      return res.json({ product: existing, created: false, reused: true })
+    }
+    const updated = await prisma.product.update({
+      where: { id: existing.id },
+      data: { formSchema: defaultFormSchema },
+    })
+    await logAudit(req.admin.id, 'Product', updated.id, 'promote_to_forms_product')
+    return res.json({ product: updated, created: false, reused: true })
+  }
+
+  const product = await prisma.product.create({ data: { name, slug, formSchema: defaultFormSchema } })
   await logAudit(req.admin.id, 'Product', product.id, 'create')
-  res.status(201).json({ product })
+  res.status(201).json({ product, created: true })
 })
 
 router.delete('/products/:id', adminGuard, async (req, res) => {
