@@ -17,7 +17,7 @@ if command -v pg_isready >/dev/null 2>&1; then
 fi
 
 echo "Ensuring database schema..."
-npx prisma db push
+npx prisma migrate deploy
 npx prisma generate
 
 exec "$@"
