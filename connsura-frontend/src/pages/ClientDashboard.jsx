@@ -795,6 +795,12 @@ export default function ClientDashboard() {
     }
   }
 
+  const openPendingShareReview = (share) => {
+    if (!share?.token) return
+    setReviewShare(share)
+    updateTab('My Passport')
+  }
+
   const handlePasswordSubmit = async (e) => {
     e?.preventDefault()
     setPasswordMessage(null)
@@ -1296,27 +1302,53 @@ export default function ClientDashboard() {
                   )}
                 </p>
               )}
-              {activeShares.length > 0 && (
-                <div className="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                  <div className="font-semibold">Sharing in progress</div>
-                  <div className="flex flex-wrap gap-2">
-                    {activeShares.map((share) => (
-                      <div
-                        key={share.token}
-                        className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white/80 px-3 py-1.5"
-                      >
-                        <span>{resolveShareRecipient(share)}</span>
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:no-underline"
-                          onClick={() => handleStopSharing(share.token)}
-                          disabled={revokingShare === share.token}
-                        >
-                          {revokingShare === share.token ? 'Stopping...' : 'Stop sharing'}
-                        </button>
+              {(activeShares.length > 0 || pendingShares.length > 0) && (
+                <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                  {activeShares.length > 0 && (
+                    <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                      <div className="font-semibold">Sharing in progress</div>
+                      <div className="flex flex-wrap gap-2">
+                        {activeShares.map((share) => (
+                          <div
+                            key={share.token}
+                            className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white/80 px-3 py-1.5"
+                          >
+                            <span>{resolveShareRecipient(share)}</span>
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-[#0b3b8c] hover:underline disabled:text-slate-400 disabled:no-underline"
+                              onClick={() => handleStopSharing(share.token)}
+                              disabled={revokingShare === share.token}
+                            >
+                              {revokingShare === share.token ? 'Stopping...' : 'Stop sharing'}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  {pendingShares.length > 0 && (
+                    <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <div className="font-semibold">Pending profile edits</div>
+                      <div className="flex flex-wrap gap-2">
+                        {pendingShares.map((share) => (
+                          <div
+                            key={`${share.token}-${share.pendingAt || ''}`}
+                            className="flex items-center gap-2 rounded-lg border border-amber-200 bg-white/80 px-3 py-1.5"
+                          >
+                            <span>{resolveShareRecipient(share)}</span>
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-[#0b3b8c] hover:underline"
+                              onClick={() => openPendingShareReview(share)}
+                            >
+                              Review
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {needsEmailVerification && verificationSent && (

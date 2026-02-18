@@ -88,6 +88,9 @@ export default function MyPassportFlow({
   const [slideVisible, setSlideVisible] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryItems, setSummaryItems] = useState([])
+  const [collapsedEditorCards, setCollapsedEditorCards] = useState({})
+  const [collapsedSummaryCards, setCollapsedSummaryCards] = useState({})
+  const [collapsedSummaryProducts, setCollapsedSummaryProducts] = useState({})
   const saveTimersRef = useRef({})
 
   const sections = useMemo(() => (Array.isArray(form?.sections) ? form.sections : []), [form?.sections])
@@ -330,6 +333,28 @@ export default function MyPassportFlow({
     schedulePersist(instanceId, activeSectionKey, nextEntries)
   }
 
+  const buildEditorCardKey = (sectionKey, entryIndex) =>
+    `${String(instanceId || 'instance')}:${String(sectionKey || '')}:${Number(entryIndex)}`
+
+  const buildSummaryCardKey = (productInstanceId, sectionKey, entryIndex) =>
+    `${String(productInstanceId || 'product')}:${String(sectionKey || '')}:${Number(entryIndex)}`
+
+  const toggleEditorCardCollapsed = (sectionKey, entryIndex) => {
+    const key = buildEditorCardKey(sectionKey, entryIndex)
+    setCollapsedEditorCards((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const toggleSummaryCardCollapsed = (productInstanceId, sectionKey, entryIndex) => {
+    const key = buildSummaryCardKey(productInstanceId, sectionKey, entryIndex)
+    setCollapsedSummaryCards((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const toggleSummaryProductCollapsed = (productInstanceId) => {
+    const key = String(productInstanceId || '')
+    if (!key) return
+    setCollapsedSummaryProducts((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
   const addMoreCurrentSection = () => {
     if (!activeSectionKey) return
     const nextEntries = [...activeEntriesRaw, {}]
@@ -348,6 +373,22 @@ export default function MyPassportFlow({
       const current = prev[activeSectionKey] ?? 0
       const safe = Math.max(0, Math.min(current, Math.max(0, nextEntries.length - 1)))
       return { ...prev, [activeSectionKey]: safe }
+    })
+    setCollapsedEditorCards((prev) => {
+      const prefix = `${String(instanceId || 'instance')}:${String(activeSectionKey)}:`
+      const next = {}
+      Object.entries(prev).forEach(([key, value]) => {
+        if (!key.startsWith(prefix)) {
+          next[key] = value
+          return
+        }
+        const rawIndex = Number(key.slice(prefix.length))
+        if (!Number.isInteger(rawIndex)) return
+        if (rawIndex === entryIndex) return
+        const shiftedIndex = rawIndex > entryIndex ? rawIndex - 1 : rawIndex
+        next[`${prefix}${shiftedIndex}`] = value
+      })
+      return next
     })
     schedulePersist(instanceId, activeSectionKey, nextEntries)
   }
@@ -428,19 +469,18 @@ export default function MyPassportFlow({
 
   const renderSummaryCard = (entry, index) => (
     <div key={`${activeSectionKey}-entry-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {activeSection?.label} #{index + 1}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {(activeSection?.fields || []).map((field) => (
-          <div key={`${field.key}-${index}`} className="flex items-baseline gap-1">
-            <span className="font-semibold text-slate-900">{field.label}:</span>
-            <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {activeSection?.label} #{index + 1}
+        </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="pill-btn-ghost px-3 py-1 text-xs"
+            onClick={() => toggleEditorCardCollapsed(activeSectionKey, index)}
+          >
+            {collapsedEditorCards[buildEditorCardKey(activeSectionKey, index)] ? 'View' : 'Hide'}
+          </button>
           <button type="button" className="pill-btn-ghost px-3 py-1 text-xs" onClick={() => editEntry(index)}>
             Edit
           </button>
@@ -453,6 +493,16 @@ export default function MyPassportFlow({
           </button>
         </div>
       </div>
+      {!collapsedEditorCards[buildEditorCardKey(activeSectionKey, index)] && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {(activeSection?.fields || []).map((field) => (
+            <div key={`${field.key}-${index}`} className="flex items-baseline gap-1">
+              <span className="font-semibold text-slate-900">{field.label}:</span>
+              <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 
@@ -516,22 +566,53 @@ export default function MyPassportFlow({
           {!summaryLoading &&
             summaryItems.map((item) => (
               <div key={item.instance.id} className="surface p-5 space-y-3">
-                <h3 className="text-lg font-semibold text-slate-900">{item.instance.productName}</h3>
-                {item.filledSections.map((sectionItem) => (
-                  <div key={`${item.instance.id}-${sectionItem.section.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                    <div className="text-sm font-semibold text-slate-900">{sectionItem.section.label}</div>
-                    {sectionItem.entries.map((entry, entryIndex) => (
-                      <div key={`${sectionItem.section.key}-${entryIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                        {(sectionItem.section.fields || []).map((field) => (
-                          <div key={`${field.key}-${entryIndex}`} className="inline-flex items-baseline gap-1 py-0.5 pr-4 text-sm">
-                            <span className="font-semibold text-slate-900">{field.label}:</span>
-                            <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-semibold text-slate-900">{item.instance.productName}</h3>
+                  <button
+                    type="button"
+                    className="pill-btn-ghost px-3 py-1 text-xs"
+                    onClick={() => toggleSummaryProductCollapsed(item.instance.id)}
+                  >
+                    {collapsedSummaryProducts[String(item.instance.id)] ? 'View' : 'Hide'}
+                  </button>
+                </div>
+                {!collapsedSummaryProducts[String(item.instance.id)] &&
+                  item.filledSections.map((sectionItem) => (
+                    <div key={`${item.instance.id}-${sectionItem.section.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <div className="text-sm font-semibold text-slate-900">{sectionItem.section.label}</div>
+                      {sectionItem.entries.map((entry, entryIndex) => (
+                        <div key={`${sectionItem.section.key}-${entryIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              {sectionItem.section.label} #{entryIndex + 1}
+                            </div>
+                            <button
+                              type="button"
+                              className="pill-btn-ghost px-3 py-1 text-xs"
+                              onClick={() =>
+                                toggleSummaryCardCollapsed(item.instance.id, sectionItem.section.key, entryIndex)
+                              }
+                            >
+                              {collapsedSummaryCards[
+                                buildSummaryCardKey(item.instance.id, sectionItem.section.key, entryIndex)
+                              ]
+                                ? 'View'
+                                : 'Hide'}
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                          {!collapsedSummaryCards[
+                            buildSummaryCardKey(item.instance.id, sectionItem.section.key, entryIndex)
+                          ] &&
+                            (sectionItem.section.fields || []).map((field) => (
+                              <div key={`${field.key}-${entryIndex}`} className="inline-flex items-baseline gap-1 py-0.5 pr-4 text-sm">
+                                <span className="font-semibold text-slate-900">{field.label}:</span>
+                                <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
               </div>
             ))}
         </div>

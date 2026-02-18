@@ -66,20 +66,26 @@ const prettifyPath = (path = '') => {
 }
 
 const flattenChangedFields = (beforeValue, afterValue, path = '') => {
-  if (Array.isArray(afterValue)) {
-    return afterValue.flatMap((item, index) =>
+  if (Array.isArray(afterValue) || Array.isArray(beforeValue)) {
+    const beforeItems = Array.isArray(beforeValue) ? beforeValue : []
+    const afterItems = Array.isArray(afterValue) ? afterValue : []
+    const count = Math.max(beforeItems.length, afterItems.length)
+    return Array.from({ length: count }).flatMap((_, index) =>
       flattenChangedFields(
-        Array.isArray(beforeValue) ? beforeValue[index] : undefined,
-        item,
+        beforeItems[index],
+        afterItems[index],
         path ? `${path}[${index + 1}]` : `[${index + 1}]`
       )
     )
   }
-  if (isObject(afterValue)) {
-    return Object.keys(afterValue).flatMap((key) =>
+  if (isObject(afterValue) || isObject(beforeValue)) {
+    const beforeObj = isObject(beforeValue) ? beforeValue : {}
+    const afterObj = isObject(afterValue) ? afterValue : {}
+    const keys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]))
+    return keys.flatMap((key) =>
       flattenChangedFields(
-        isObject(beforeValue) ? beforeValue[key] : undefined,
-        afterValue[key],
+        beforeObj[key],
+        afterObj[key],
         path ? `${path}.${key}` : key
       )
     )

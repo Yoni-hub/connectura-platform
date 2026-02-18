@@ -205,21 +205,40 @@ const prettifyPath = (path = '') => {
   return parts[parts.length - 1] || 'Field'
 }
 
+const resolveQuestionLabel = (path = '', fieldLabels = new Map()) => {
+  const parts = String(path)
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const leaf = parts[parts.length - 1] || ''
+  const normalizedLeaf = leaf.replace(/\[(\d+)\]/g, '').trim()
+  if (normalizedLeaf && fieldLabels instanceof Map && fieldLabels.has(normalizedLeaf)) {
+    return fieldLabels.get(normalizedLeaf)
+  }
+  return prettifyPath(path)
+}
+
 const flattenChangedFields = (beforeValue, afterValue, path = '') => {
-  if (Array.isArray(afterValue)) {
-    return afterValue.flatMap((item, index) =>
+  if (Array.isArray(afterValue) || Array.isArray(beforeValue)) {
+    const beforeItems = Array.isArray(beforeValue) ? beforeValue : []
+    const afterItems = Array.isArray(afterValue) ? afterValue : []
+    const count = Math.max(beforeItems.length, afterItems.length)
+    return Array.from({ length: count }).flatMap((_, index) =>
       flattenChangedFields(
-        Array.isArray(beforeValue) ? beforeValue[index] : undefined,
-        item,
+        beforeItems[index],
+        afterItems[index],
         path ? `${path}[${index + 1}]` : `[${index + 1}]`
       )
     )
   }
-  if (isObject(afterValue)) {
-    return Object.keys(afterValue).flatMap((key) =>
+  if (isObject(afterValue) || isObject(beforeValue)) {
+    const beforeObj = isObject(beforeValue) ? beforeValue : {}
+    const afterObj = isObject(afterValue) ? afterValue : {}
+    const keys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]))
+    return keys.flatMap((key) =>
       flattenChangedFields(
-        isObject(beforeValue) ? beforeValue[key] : undefined,
-        afterValue[key],
+        beforeObj[key],
+        afterObj[key],
         path ? `${path}.${key}` : key
       )
     )
@@ -254,6 +273,51 @@ const extractAdditionalChanges = (beforeAdditional, afterAdditional) => {
     })
   })
   return rows
+}
+
+const toPassportProductMap = (passport = {}) => {
+  const products = Array.isArray(passport?.products) ? passport.products : []
+  const map = new Map()
+  products.forEach((product) => {
+    const productInstanceId = String(product?.productInstance?.id || product?.productInstanceId || '').trim()
+    if (!productInstanceId) return
+    const sectionLabels = new Map(
+      (Array.isArray(product?.sections) ? product.sections : [])
+        .map((section) => [
+          String(section?.key || '').trim().toLowerCase(),
+          String(section?.label || section?.key || '').trim(),
+        ])
+        .filter(([key]) => Boolean(key))
+    )
+    const sectionFieldLabels = new Map(
+      (Array.isArray(product?.sections) ? product.sections : [])
+        .map((section) => {
+          const sectionKey = String(section?.key || '').trim().toLowerCase()
+          const labels = new Map(
+            (Array.isArray(section?.fields) ? section.fields : [])
+              .map((field) => [String(field?.key || '').trim(), String(field?.label || field?.key || '').trim()])
+              .filter(([key]) => Boolean(key))
+          )
+          return [sectionKey, labels]
+        })
+        .filter(([key]) => Boolean(key))
+    )
+    const responses = new Map(
+      (Array.isArray(product?.responses) ? product.responses : [])
+        .map((response) => [
+          String(response?.sectionKey || '').trim().toLowerCase(),
+          isObject(response?.values) ? response.values : {},
+        ])
+        .filter(([key]) => Boolean(key))
+    )
+    map.set(productInstanceId, {
+      productName: String(product?.productInstance?.productName || product?.productName || 'Product').trim(),
+      sectionLabels,
+      sectionFieldLabels,
+      responses,
+    })
+  })
+  return map
 }
 
 export default function PassportSharePanel({
@@ -353,6 +417,35 @@ export default function PassportSharePanel({
           section: SECTION_LABELS[sectionKey] || sectionKey,
           question: prettifyPath(row.path),
           answer: row.answer,
+        })
+      })
+    })
+    const pendingPassportProducts = Array.isArray(reviewShare?.pendingEdits?.passportV2?.products)
+      ? reviewShare.pendingEdits.passportV2.products
+      : []
+    const baselinePassportByProduct = toPassportProductMap(reviewShare?.snapshot?.passportV2 || {})
+    pendingPassportProducts.forEach((product) => {
+      const productInstanceId = String(product?.productInstanceId || '').trim()
+      if (!productInstanceId) return
+      const baselineProduct = baselinePassportByProduct.get(productInstanceId)
+      const productName = baselineProduct?.productName || 'Product'
+      const pendingResponses = Array.isArray(product?.responses) ? product.responses : []
+      pendingResponses.forEach((response) => {
+        const sectionKey = String(response?.sectionKey || '').trim().toLowerCase()
+        if (!sectionKey) return
+        const baselineValues = baselineProduct?.responses?.get(sectionKey)
+        const incomingValues = isObject(response?.values) ? response.values : {}
+        const fieldLabels = baselineProduct?.sectionFieldLabels?.get(sectionKey) || new Map()
+        const sectionRows = flattenChangedFields(baselineValues, incomingValues)
+        sectionRows.forEach((row) => {
+          rows.push({
+            section:
+              baselineProduct?.sectionLabels?.get(sectionKey) ||
+              sectionKey.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+            productName,
+            question: resolveQuestionLabel(row.path, fieldLabels),
+            answer: row.answer,
+          })
         })
       })
     })
