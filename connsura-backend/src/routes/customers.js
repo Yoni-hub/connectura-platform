@@ -675,6 +675,11 @@ router.post('/:id/forms/start', authGuard, async (req, res) => {
 })
 
 router.post('/:id/forms/section-load', authGuard, async (req, res) => {
+  return res.status(410).json({
+    error: 'Legacy forms section-load endpoint is deprecated',
+    code: 'LEGACY_FORM_FLOW_DEPRECATED',
+    replacement: '/passport/products/:productInstanceId/section-load',
+  })
   const customerId = Number(req.params.id)
   if (!customerId) return res.status(400).json({ error: 'Customer id required' })
   if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })
@@ -702,6 +707,11 @@ router.post('/:id/forms/section-load', authGuard, async (req, res) => {
 })
 
 router.post('/:id/forms/section-save', authGuard, async (req, res) => {
+  return res.status(410).json({
+    error: 'Legacy forms section-save endpoint is deprecated',
+    code: 'LEGACY_FORM_FLOW_DEPRECATED',
+    replacement: '/passport/products/:productInstanceId/section-save',
+  })
   const customerId = Number(req.params.id)
   if (!customerId) return res.status(400).json({ error: 'Customer id required' })
   if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Forbidden' })

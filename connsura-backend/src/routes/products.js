@@ -1,11 +1,12 @@
 const express = require('express')
-const prisma = require('../prisma')
-
 const router = express.Router()
 
 router.get('/', async (req, res) => {
-  const products = await prisma.product.findMany({ orderBy: { name: 'asc' } })
-  res.json({ products })
+  return res.status(410).json({
+    error: 'Legacy products endpoint is deprecated',
+    code: 'LEGACY_FORM_FLOW_DEPRECATED',
+    replacement: '/passport/schema/products',
+  })
 })
 
 module.exports = router

@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useEffect } from 'react'
 import Home from '../pages/Home'
 import ClientDashboard from '../pages/ClientDashboard'
-import CreateProfile from '../pages/CreateProfile'
 import Contact from '../pages/Contact'
 import About from '../pages/About'
 import PrivacyPolicy from '../pages/PrivacyPolicy'
@@ -57,7 +56,7 @@ function Layout() {
       <div className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/profile/create" element={<CreateProfile />} />
+          <Route path="/profile/create" element={<Navigate to="/client/dashboard?tab=my%20passport" replace />} />
           <Route
             path="/dashboard"
             element={
