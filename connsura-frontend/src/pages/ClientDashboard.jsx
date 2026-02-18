@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
-import ReviewShareEditsModal from '../components/modals/ReviewShareEditsModal'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import MyPassportFlow from '../components/passport/MyPassportFlow'
@@ -1375,6 +1374,11 @@ export default function ClientDashboard() {
               productsLoading={passportProductsLoading}
               selectedProductId={selectedPassportProductId}
               onSelectProduct={setSelectedPassportProductId}
+              reviewShare={reviewShare}
+              reviewCurrentForms={client?.profileData?.forms || {}}
+              onApproveReview={() => handleApproveEdits(reviewShare?.token)}
+              onDeclineReview={() => handleDeclineEdits(reviewShare?.token)}
+              onDismissReview={() => setReviewShare(null)}
             />
           )}
 
@@ -2370,14 +2374,6 @@ export default function ClientDashboard() {
           )}
         </section>
       </div>
-      <ReviewShareEditsModal
-        open={Boolean(reviewShare)}
-        share={reviewShare}
-        currentForms={client?.profileData?.forms || {}}
-        onClose={() => setReviewShare(null)}
-        onApprove={() => handleApproveEdits(reviewShare?.token)}
-        onDecline={() => handleDeclineEdits(reviewShare?.token)}
-      />
       <Modal title={verificationTitle} open={verificationOpen} onClose={() => setVerificationOpen(false)}>
         <div className="space-y-4">
           <div className="space-y-1">

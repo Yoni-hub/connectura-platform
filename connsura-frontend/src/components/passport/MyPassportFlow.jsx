@@ -64,6 +64,11 @@ export default function MyPassportFlow({
   productsLoading = false,
   selectedProductId = '',
   onSelectProduct,
+  reviewShare = null,
+  reviewCurrentForms = {},
+  onApproveReview,
+  onDeclineReview,
+  onDismissReview,
 }) {
   const persistedUiRef = useRef(loadPassportUiState())
   const [view, setView] = useState(() => {
@@ -308,6 +313,11 @@ export default function MyPassportFlow({
     sessionStorage.removeItem(SHARE_FLOW_STORAGE_KEY)
   }, [view])
 
+  useEffect(() => {
+    if (!reviewShare) return
+    setView('share')
+  }, [reviewShare])
+
   const updateCurrentField = (fieldKey, value) => {
     if (!activeSectionKey) return
     const nextEntries = ensureEntry(activeEntriesRaw).map((entry) => ({ ...entry }))
@@ -528,7 +538,14 @@ export default function MyPassportFlow({
       )}
 
       {view === 'share' && (
-        <PassportSharePanel snapshot={passportShareSnapshot} />
+        <PassportSharePanel
+          snapshot={passportShareSnapshot}
+          reviewShare={reviewShare}
+          reviewCurrentForms={reviewCurrentForms}
+          onApproveReview={onApproveReview}
+          onDeclineReview={onDeclineReview}
+          onDismissReview={onDismissReview}
+        />
       )}
 
       {view === 'editor' && (
