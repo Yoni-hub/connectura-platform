@@ -928,6 +928,11 @@ const normalizeProductSectionKey = (value) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
+const normalizeCaseInsensitiveQuestionText = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+
 const normalizeProductFormSchema = (value) => {
   const parsed = value && typeof value === 'object' ? value : {}
   const sections = Array.isArray(parsed.sections) ? parsed.sections : []
@@ -1017,6 +1022,68 @@ router.put('/forms/products/:id', adminGuard, async (req, res) => {
   res.json({ product: formatProductWithSchema(updated) })
 })
 
+router.post('/forms/questions/deduplicate', adminGuard, async (req, res) => {
+  const productId = Number(req.body?.productId)
+  if (!Number.isInteger(productId) || productId <= 0) {
+    return res.status(400).json({ error: 'Valid productId is required' })
+  }
+
+  const product = await prisma.product.findUnique({ where: { id: productId } })
+  if (!product) return res.status(404).json({ error: 'Product not found' })
+
+  const schema = parseProductFormSchema(product.formSchema)
+  const mappedQuestionIds = new Set(
+    (Array.isArray(schema?.sections) ? schema.sections : [])
+      .flatMap((section) => (Array.isArray(section?.questionIds) ? section.questionIds : []))
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  )
+
+  const questions = await prisma.questionBank.findMany({
+    where: { source: 'SYSTEM' },
+    orderBy: [{ id: 'asc' }],
+    select: { id: true, text: true },
+  })
+
+  const groups = new Map()
+  questions.forEach((question) => {
+    const normalized = normalizeCaseInsensitiveQuestionText(question.text)
+    if (!normalized) return
+    const existing = groups.get(normalized) || []
+    existing.push(question)
+    groups.set(normalized, existing)
+  })
+
+  const toDelete = []
+  groups.forEach((group) => {
+    if (!Array.isArray(group) || group.length <= 1) return
+    const mappedInCurrentProduct = group.filter((question) => mappedQuestionIds.has(Number(question.id)))
+    const keeper = mappedInCurrentProduct[0] || group[0]
+    group.forEach((question) => {
+      if (Number(question.id) === Number(keeper.id)) return
+      if (mappedQuestionIds.has(Number(question.id))) return
+      toDelete.push(question)
+    })
+  })
+
+  if (!toDelete.length) {
+    return res.json({ deleted: 0, deletedIds: [] })
+  }
+
+  const deleteIds = toDelete.map((question) => Number(question.id)).filter((id) => Number.isInteger(id) && id > 0)
+  await prisma.questionBank.deleteMany({ where: { id: { in: deleteIds } } })
+  await Promise.all(
+    toDelete.map((question) =>
+      logAudit(req.admin.id, 'QuestionBank', question.id, 'delete_duplicate_unused_for_product', {
+        productId,
+        text: question.text,
+      })
+    )
+  )
+
+  return res.json({ deleted: deleteIds.length, deletedIds: deleteIds })
+})
+
 router.get('/forms/questions', adminGuard, async (req, res) => {
   const query = String(req.query?.query || '').trim()
   const where = {
@@ -1070,6 +1137,20 @@ const normalizeSelectOptions = (value) => {
   return list
     .map((entry) => String(entry || '').trim())
     .filter(Boolean)
+}
+
+const collectDuplicateValues = (values = []) => {
+  const seen = new Set()
+  const duplicates = new Set()
+  values.forEach((value) => {
+    if (!value) return
+    if (seen.has(value)) {
+      duplicates.add(value)
+      return
+    }
+    seen.add(value)
+  })
+  return Array.from(duplicates)
 }
 
 const resolveFormName = (form, fallbackName) => {
@@ -1237,6 +1318,21 @@ router.post('/questions', adminGuard, async (req, res) => {
     .filter(Boolean)
 
   if (!received.length) return res.status(400).json({ error: 'Question text is required' })
+  const normalizedReceived = received.map((entry) => normalizeQuestion(entry)).filter(Boolean)
+  const duplicateIncoming = collectDuplicateValues(normalizedReceived)
+  if (duplicateIncoming.length) {
+    return res.status(400).json({ error: 'No duplicated questions' })
+  }
+
+  if (!sync) {
+    const existing = await prisma.questionBank.findMany({
+      where: { source: 'SYSTEM', normalized: { in: normalizedReceived } },
+      select: { normalized: true },
+    })
+    if (existing.length) {
+      return res.status(400).json({ error: 'No duplicated questions' })
+    }
+  }
 
   const records = buildQuestionRecords(received, 'SYSTEM', productId || null, null)
   if (!records.length) return res.status(400).json({ error: 'Invalid question text' })

@@ -41,6 +41,11 @@ const ensureUniqueSectionKey = (baseKey, sections) => {
   return `${baseKey}-${cursor}`
 }
 
+const normalizeQuestionDraftText = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+
 export default function AdminFormsTab({ onSessionExpired }) {
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(false)
@@ -122,10 +127,30 @@ export default function AdminFormsTab({ onSessionExpired }) {
     }
   }
 
+  const deduplicateUnusedQuestionsForProduct = async (productId) => {
+    const numericProductId = Number(productId)
+    if (!Number.isInteger(numericProductId) || numericProductId <= 0) return
+    try {
+      const res = await adminApi.post('/admin/forms/questions/deduplicate', { productId: numericProductId })
+      const deleted = Number(res.data?.deleted || 0)
+      if (deleted > 0) {
+        await loadQuestions()
+        toast.success(`Removed ${deleted} duplicated question${deleted === 1 ? '' : 's'} not used in mapping`)
+      }
+    } catch (err) {
+      handleSessionError(err, 'Failed to remove duplicated questions')
+    }
+  }
+
   useEffect(() => {
     ensureDefaultProducts()
     loadQuestions()
   }, [])
+
+  useEffect(() => {
+    if (!selectedProductId) return
+    deduplicateUnusedQuestionsForProduct(selectedProductId)
+  }, [selectedProductId])
 
   const selectedProduct = useMemo(
     () => products.find((item) => String(item.id) === String(selectedProductId)) || null,
@@ -154,6 +179,30 @@ export default function AdminFormsTab({ onSessionExpired }) {
     const text = questionDraft.trim()
     if (!text) {
       toast.error('Enter at least one question')
+      return
+    }
+    const incoming = text
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+    const incomingNormalized = incoming.map((entry) => normalizeQuestionDraftText(entry)).filter(Boolean)
+    const incomingSet = new Set()
+    const duplicateInDraft = new Set()
+    incomingNormalized.forEach((normalized) => {
+      if (incomingSet.has(normalized)) {
+        duplicateInDraft.add(normalized)
+        return
+      }
+      incomingSet.add(normalized)
+    })
+    const existingSet = new Set(
+      questions
+        .map((question) => normalizeQuestionDraftText(question.text || question.label || ''))
+        .filter(Boolean)
+    )
+    const duplicateExisting = incomingNormalized.filter((normalized) => existingSet.has(normalized))
+    if (duplicateInDraft.size > 0 || duplicateExisting.length > 0) {
+      toast.error('No duplicated questions')
       return
     }
     setSavingQuestions(true)

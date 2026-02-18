@@ -32,6 +32,8 @@ const hasNonEmptyValue = (value) => {
   return false
 }
 
+const hasSavedEntries = (entries) => Array.isArray(entries) && entries.some((entry) => hasNonEmptyValue(entry))
+
 export default function MyPassportFlow({
   products = [],
   productsLoading = false,
@@ -98,10 +100,12 @@ export default function MyPassportFlow({
       const loaded = normalizeLoadedEntries(res.data?.values)
       setSectionEntries((prev) => ({ ...prev, [sectionKey]: loaded }))
       setSectionEditingIndex((prev) => ({ ...prev, [sectionKey]: 0 }))
+      return loaded
     } catch (error) {
       toast.error(error.response?.data?.error || 'Unable to load section values')
       setSectionEntries((prev) => ({ ...prev, [sectionKey]: [] }))
       setSectionEditingIndex((prev) => ({ ...prev, [sectionKey]: 0 }))
+      return []
     }
   }
 
@@ -132,7 +136,8 @@ export default function MyPassportFlow({
       setSectionEditingIndex({})
       const firstKey = nextForm?.sections?.[0]?.key
       if (firstKey) {
-        await loadSectionEntries(nextInstanceId, firstKey)
+        const loaded = await loadSectionEntries(nextInstanceId, firstKey)
+        setMode(hasSavedEntries(loaded) ? 'summary' : 'form')
       }
       setSlideVisible(false)
       requestAnimationFrame(() => setSlideVisible(true))
@@ -209,7 +214,16 @@ export default function MyPassportFlow({
   useEffect(() => {
     if (!activeSectionKey || !instanceId) return
     if (Object.prototype.hasOwnProperty.call(sectionEntries, activeSectionKey)) return
-    loadSectionEntries(instanceId, activeSectionKey)
+    let active = true
+    const hydrateSection = async () => {
+      const loaded = await loadSectionEntries(instanceId, activeSectionKey)
+      if (!active) return
+      setMode(hasSavedEntries(loaded) ? 'summary' : 'form')
+    }
+    hydrateSection()
+    return () => {
+      active = false
+    }
   }, [activeSectionKey, instanceId, sectionEntries])
 
   useEffect(() => {
@@ -251,19 +265,31 @@ export default function MyPassportFlow({
     schedulePersist(instanceId, activeSectionKey, nextEntries)
   }
 
+  const editEntry = (entryIndex) => {
+    if (!activeSectionKey) return
+    setSectionEditingIndex((prev) => ({ ...prev, [activeSectionKey]: entryIndex }))
+    setMode('form')
+  }
+
   const goNextSection = () => {
     if (sectionIndex >= sections.length - 1) {
       toast.success('All sections completed')
       return
     }
-    setSectionIndex((prev) => prev + 1)
-    setMode('form')
+    const nextIndex = sectionIndex + 1
+    const nextSectionKey = sections[nextIndex]?.key || ''
+    const nextEntries = sectionEntries[nextSectionKey] || []
+    setSectionIndex(nextIndex)
+    setMode(hasSavedEntries(nextEntries) ? 'summary' : 'form')
   }
 
   const goBackSection = () => {
     if (sectionIndex <= 0) return
-    setSectionIndex((prev) => prev - 1)
-    setMode('form')
+    const prevIndex = sectionIndex - 1
+    const prevSectionKey = sections[prevIndex]?.key || ''
+    const prevEntries = sectionEntries[prevSectionKey] || []
+    setSectionIndex(prevIndex)
+    setMode(hasSavedEntries(prevEntries) ? 'summary' : 'form')
   }
 
   const renderField = (field) => {
@@ -318,22 +344,27 @@ export default function MyPassportFlow({
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {activeSection?.label} #{index + 1}
       </div>
-      <div className="mt-2 space-y-1 text-sm">
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {(activeSection?.fields || []).map((field) => (
-          <div key={`${field.key}-${index}`} className="flex justify-between gap-3">
-            <span className="text-slate-500">{field.label}</span>
-            <span className="text-slate-900 text-right">{formatValue(entry?.[field.key])}</span>
+          <div key={`${field.key}-${index}`} className="flex items-baseline gap-1">
+            <span className="font-semibold text-slate-900">{field.label}:</span>
+            <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
           </div>
         ))}
       </div>
       <div className="mt-3">
-        <button
-          type="button"
-          className="pill-btn-ghost px-3 py-1 text-xs text-red-600"
-          onClick={() => removeEntry(index)}
-        >
-          Remove
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="pill-btn-ghost px-3 py-1 text-xs" onClick={() => editEntry(index)}>
+            Edit
+          </button>
+          <button
+            type="button"
+            className="pill-btn-ghost px-3 py-1 text-xs text-red-600"
+            onClick={() => removeEntry(index)}
+          >
+            Remove
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -379,9 +410,9 @@ export default function MyPassportFlow({
                     {sectionItem.entries.map((entry, entryIndex) => (
                       <div key={`${sectionItem.section.key}-${entryIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
                         {(sectionItem.section.fields || []).map((field) => (
-                          <div key={`${field.key}-${entryIndex}`} className="flex justify-between gap-3 py-0.5 text-sm">
-                            <span className="text-slate-500">{field.label}</span>
-                            <span className="text-slate-900 text-right">{formatValue(entry?.[field.key])}</span>
+                          <div key={`${field.key}-${entryIndex}`} className="inline-flex items-baseline gap-1 py-0.5 pr-4 text-sm">
+                            <span className="font-semibold text-slate-900">{field.label}:</span>
+                            <span className="text-green-700">{formatValue(entry?.[field.key])}</span>
                           </div>
                         ))}
                       </div>
