@@ -99,6 +99,99 @@ const parsePositiveInt = (value, fallback) => {
   return raw
 }
 
+const toTitleWords = (value) =>
+  String(value || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+
+const humanizeTargetType = (targetType) => {
+  const normalized = String(targetType || '').trim()
+  if (!normalized) return 'Record'
+  if (normalized === 'Client') return 'Client'
+  if (normalized === 'SiteContent') return 'Site content'
+  if (normalized === 'FormSchema') return 'Form schema'
+  if (normalized === 'QuestionBank') return 'Question bank'
+  if (normalized === 'CustomerQuestion') return 'Customer question'
+  return toTitleWords(normalized)
+}
+
+const formatCustomerLabel = (customer, fallbackId) => {
+  const id = customer?.id || fallbackId || 'unknown'
+  const name = String(customer?.name || '').trim()
+  const email = String(customer?.user?.email || '').trim()
+  if (name && email) return `${name} (${email})`
+  if (name) return name
+  if (email) return email
+  return `Client #${id}`
+}
+
+const formatAuditActionLabel = (action, targetType) => {
+  const normalized = String(action || '').trim().toLowerCase()
+  const targetLabel = humanizeTargetType(targetType).toLowerCase()
+  if (!normalized) return `Updated ${targetLabel}`
+
+  const exact = {
+    create: `Created ${targetLabel}`,
+    update: `Updated ${targetLabel}`,
+    delete: `Deleted ${targetLabel}`,
+    enable: `Enabled ${targetLabel}`,
+    disable: `Disabled ${targetLabel}`,
+    content_warning: 'Detected content warning',
+    notification_broadcast: 'Sent notification broadcast',
+    promote_to_forms_product: 'Promoted product to forms catalog',
+  }
+  if (exact[normalized]) return exact[normalized]
+
+  const words = normalized
+    .replace(/^client_/i, '')
+    .replace(/^admin_/i, '')
+    .split('_')
+    .filter(Boolean)
+  if (!words.length) return toTitleWords(action)
+  const last = words[words.length - 1]
+  if (last === 'viewed') {
+    const noun = words.slice(0, -1).join(' ') || 'item'
+    return `Viewed ${noun}`
+  }
+  if (last === 'updated') {
+    const noun = words.slice(0, -1).join(' ') || 'item'
+    return `Updated ${noun}`
+  }
+  if (last === 'started') {
+    const noun = words.slice(0, -1).join(' ') || 'process'
+    return `Started ${noun}`
+  }
+  if (last === 'clicked') {
+    const noun = words.slice(0, -1).join(' ') || 'action'
+    return `Clicked ${noun}`
+  }
+  return toTitleWords(words.join(' '))
+}
+
+const formatAuditDetailSummary = (diff, action) => {
+  if (!diff || typeof diff !== 'object') return ''
+  const normalizedAction = String(action || '').trim().toLowerCase()
+  if (normalizedAction === 'client_tab_viewed') {
+    const tab = String(diff.tab_name || '').trim()
+    const section = String(diff.current_section || '').trim()
+    if (tab && section) return `Tab: ${tab}, section: ${section}`
+    if (tab) return `Tab: ${tab}`
+  }
+  const productName = typeof diff.name === 'string' ? diff.name.trim() : ''
+  const sections = Array.isArray(diff.formSchema?.sections) ? diff.formSchema.sections : []
+  if (productName && sections.length) {
+    return `Product "${productName}" with ${sections.length} section${sections.length === 1 ? '' : 's'}`
+  }
+  const keys = Object.keys(diff)
+  if (!keys.length) return 'No additional details'
+  return `Updated fields: ${keys.join(', ')}`
+}
+
 const parseBoolean = (value) => {
   if (value === undefined || value === null) return null
   const normalized = String(value).trim().toLowerCase()
@@ -530,17 +623,119 @@ router.get('/audit', adminGuard, async (req, res) => {
   const hasMore = logs.length > limit
   const trimmed = logs.slice(0, limit)
   const totalPages = Math.max(1, Math.ceil(total / limit))
+
+  const clientIds = Array.from(
+    new Set(
+      trimmed
+        .filter((log) => log.targetType === 'Client')
+        .map((log) => Number(log.targetId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  const productIds = Array.from(
+    new Set(
+      trimmed
+        .filter((log) => log.targetType === 'Product')
+        .map((log) => Number(log.targetId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  const questionBankIds = Array.from(
+    new Set(
+      trimmed
+        .filter((log) => log.targetType === 'QuestionBank')
+        .map((log) => Number(log.targetId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  const customerQuestionIds = Array.from(
+    new Set(
+      trimmed
+        .filter((log) => log.targetType === 'CustomerQuestion')
+        .map((log) => Number(log.targetId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+
+  const [customers, products, questionBankRows, customerQuestions] = await Promise.all([
+    clientIds.length
+      ? prisma.customer.findMany({
+          where: { id: { in: clientIds } },
+          select: { id: true, name: true, user: { select: { email: true } } },
+        })
+      : [],
+    productIds.length
+      ? prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true },
+        })
+      : [],
+    questionBankIds.length
+      ? prisma.questionBank.findMany({
+          where: { id: { in: questionBankIds } },
+          select: { id: true, text: true },
+        })
+      : [],
+    customerQuestionIds.length
+      ? prisma.customerQuestion.findMany({
+          where: { id: { in: customerQuestionIds } },
+          select: { id: true, text: true },
+        })
+      : [],
+  ])
+
+  const customerById = new Map(customers.map((row) => [String(row.id), row]))
+  const productById = new Map(products.map((row) => [String(row.id), row]))
+  const questionById = new Map(questionBankRows.map((row) => [String(row.id), row]))
+  const customerQuestionById = new Map(customerQuestions.map((row) => [String(row.id), row]))
+
   res.json({
-    logs: trimmed.map((log) => ({
-      id: log.id,
-      actorId: log.actorId,
-      actorEmail: log.actor?.email,
-      targetType: log.targetType,
-      targetId: log.targetId,
-      action: log.action,
-      diff: log.diff ? JSON.parse(log.diff) : null,
-      createdAt: log.createdAt,
-    })),
+    logs: trimmed.map((log) => {
+      const parsedDiff = parseJson(log.diff, null)
+      const customer = log.targetType === 'Client' ? customerById.get(String(log.targetId)) : null
+      const product = log.targetType === 'Product' ? productById.get(String(log.targetId)) : null
+      const question = log.targetType === 'QuestionBank' ? questionById.get(String(log.targetId)) : null
+      const customerQuestion =
+        log.targetType === 'CustomerQuestion' ? customerQuestionById.get(String(log.targetId)) : null
+      const actorType = log.actorId ? 'admin' : log.targetType === 'Client' ? 'client' : 'system'
+      const actorLabel = log.actor?.email
+        ? `Admin: ${log.actor.email}`
+        : log.actorId
+        ? `Admin #${log.actorId}`
+        : log.targetType === 'Client'
+        ? `Client: ${formatCustomerLabel(customer, log.targetId)}`
+        : 'System'
+      let targetLabel = `${humanizeTargetType(log.targetType)}: ${log.targetId || 'unknown'}`
+      if (log.targetType === 'Client') {
+        targetLabel = `Client profile: ${formatCustomerLabel(customer, log.targetId)}`
+      } else if (log.targetType === 'Product') {
+        targetLabel = `Product: ${product?.name || `#${log.targetId}`}`
+      } else if (log.targetType === 'SiteContent') {
+        targetLabel = `Content: ${log.targetId}`
+      } else if (log.targetType === 'FormSchema') {
+        targetLabel = `Form schema: ${log.targetId}`
+      } else if (log.targetType === 'QuestionBank') {
+        targetLabel = `Question bank: ${question?.text || `#${log.targetId}`}`
+      } else if (log.targetType === 'CustomerQuestion') {
+        targetLabel = `Customer question: ${customerQuestion?.text || `#${log.targetId}`}`
+      }
+
+      return {
+        id: log.id,
+        actorId: log.actorId,
+        actorEmail: log.actor?.email,
+        actorType,
+        actorLabel,
+        targetType: log.targetType,
+        targetId: log.targetId,
+        targetLabel,
+        action: log.action,
+        actionLabel: formatAuditActionLabel(log.action, log.targetType),
+        detailSummary: formatAuditDetailSummary(parsedDiff, log.action),
+        diff: parsedDiff,
+        createdAt: log.createdAt,
+      }
+    }),
     page: effectivePage,
     limit,
     offset,

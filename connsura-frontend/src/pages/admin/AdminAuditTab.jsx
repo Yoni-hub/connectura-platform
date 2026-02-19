@@ -183,6 +183,30 @@ export default function AdminAuditTab({ onSessionExpired }) {
   const modeLabel = auditMode === 'admin' ? 'admin' : 'client'
   const searchLabel = `Search ${modeLabel} logs`
   const searchPlaceholder = 'Name, email, or ID'
+  const formatDiff = (diff) => {
+    if (diff == null) return '--'
+    if (typeof diff === 'string') return diff
+    try {
+      return JSON.stringify(diff, null, 2)
+    } catch {
+      return String(diff)
+    }
+  }
+  const summarizeDiff = (diff) => {
+    if (!diff || typeof diff !== 'object') return ''
+    const productName = typeof diff.name === 'string' ? diff.name : ''
+    const sections = Array.isArray(diff.formSchema?.sections) ? diff.formSchema.sections : []
+    if (productName && sections.length) {
+      const labels = sections
+        .map((section) => section?.label || section?.key)
+        .filter(Boolean)
+      const labelText = labels.length ? `: ${labels.join(', ')}` : ''
+      return `Updated product "${productName}" (${sections.length} section${sections.length === 1 ? '' : 's'}${labelText})`
+    }
+    const keys = Object.keys(diff)
+    if (!keys.length) return 'Updated (empty diff payload)'
+    return `Updated fields: ${keys.join(', ')}`
+  }
 
   return (
     <div className="space-y-4">
@@ -313,12 +337,18 @@ export default function AdminAuditTab({ onSessionExpired }) {
                 {logs.map((log) => (
                   <tr key={log.id} className="border-t border-slate-100">
                     <td className="px-3 py-2">{new Date(log.createdAt).toLocaleString()}</td>
-                    <td className="px-3 py-2">{log.actorName || log.actorEmail || `#${log.actorId || 'unknown'}`}</td>
+                    <td className="px-3 py-2">{log.actorLabel || log.actorName || log.actorEmail || `#${log.actorId || 'unknown'}`}</td>
                     <td className="px-3 py-2">{log.targetLabel || log.targetId || '--'}</td>
-                    <td className="px-3 py-2">{log.action}</td>
+                    <td className="px-3 py-2">{log.actionLabel || log.action}</td>
                     <td className="px-3 py-2">
                       {log.diff ? (
-                        <pre className="whitespace-pre-wrap text-xs text-slate-600">{log.diff}</pre>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-slate-700">{log.detailSummary || summarizeDiff(log.diff)}</div>
+                          <details>
+                            <summary className="cursor-pointer text-xs text-slate-500">View JSON</summary>
+                            <pre className="mt-1 whitespace-pre-wrap text-xs text-slate-600">{formatDiff(log.diff)}</pre>
+                          </details>
+                        </div>
                       ) : (
                         '--'
                       )}
