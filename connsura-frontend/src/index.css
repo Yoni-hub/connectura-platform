@@ -76,6 +76,29 @@
 }
 
 @media print {
+  body.print-passport-pdf-open {
+    background: #fff;
+    margin: 0;
+  }
+
+  body.print-passport-pdf-open * {
+    visibility: hidden !important;
+  }
+
+  body.print-passport-pdf-open #passport-pdf-print-root,
+  body.print-passport-pdf-open #passport-pdf-print-root * {
+    visibility: visible !important;
+  }
+
+  body.print-passport-pdf-open #passport-pdf-print-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 16px;
+    background: #fff;
+  }
+
   body.print-share-open {
     background: #fff;
     margin: 0;

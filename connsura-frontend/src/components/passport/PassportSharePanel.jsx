@@ -632,57 +632,28 @@ export default function PassportSharePanel({
       return
     }
 
-    const iframe = document.createElement('iframe')
-    iframe.setAttribute('aria-hidden', 'true')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    document.body.appendChild(iframe)
+    const existingRoot = document.getElementById('passport-pdf-print-root')
+    if (existingRoot?.parentNode) existingRoot.parentNode.removeChild(existingRoot)
 
-    const frameWindow = iframe.contentWindow
-    const frameDocument = frameWindow?.document
-    if (!frameWindow || !frameDocument) {
-      document.body.removeChild(iframe)
-      toast.error('Unable to prepare PDF print')
-      return
-    }
+    const printRoot = document.createElement('div')
+    printRoot.id = 'passport-pdf-print-root'
+    printRoot.appendChild(previewNode.cloneNode(true))
+    document.body.appendChild(printRoot)
+    document.body.classList.add('print-passport-pdf-open')
 
-    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((node) => node.outerHTML)
-      .join('\n')
-
-    frameDocument.open()
-    frameDocument.write(`
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Connsura Passport Summary</title>
-          ${styles}
-          <style>
-            body { margin: 24px; background: #fff; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          ${previewNode.outerHTML}
-        </body>
-      </html>
-    `)
-    frameDocument.close()
-
+    let cleaned = false
     const cleanup = () => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+      if (cleaned) return
+      cleaned = true
+      document.body.classList.remove('print-passport-pdf-open')
+      const mounted = document.getElementById('passport-pdf-print-root')
+      if (mounted?.parentNode) mounted.parentNode.removeChild(mounted)
+      window.removeEventListener('afterprint', cleanup)
     }
 
-    frameWindow.onafterprint = cleanup
-    setTimeout(cleanup, 1000)
-    frameWindow.focus()
-    frameWindow.print()
+    window.addEventListener('afterprint', cleanup)
+    setTimeout(cleanup, 2000)
+    window.print()
   }
 
   return (
