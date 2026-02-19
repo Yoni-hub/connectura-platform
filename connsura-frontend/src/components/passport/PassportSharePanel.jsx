@@ -329,6 +329,7 @@ export default function PassportSharePanel({
   onDismissReview,
 }) {
   const persistedOnLoadRef = useRef(loadPersistedShareFlow())
+  const pdfPreviewRef = useRef(null)
   const products = useMemo(() => normalizeProducts(snapshot), [snapshot])
   const [selection, setSelection] = useState(() => createSelection(products))
   const [step, setStep] = useState(() => {
@@ -624,6 +625,66 @@ export default function PassportSharePanel({
     )
   }
 
+  const handlePrintPdf = () => {
+    const previewNode = pdfPreviewRef.current
+    if (!previewNode) {
+      toast.error('PDF preview is not ready yet')
+      return
+    }
+
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('aria-hidden', 'true')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    document.body.appendChild(iframe)
+
+    const frameWindow = iframe.contentWindow
+    const frameDocument = frameWindow?.document
+    if (!frameWindow || !frameDocument) {
+      document.body.removeChild(iframe)
+      toast.error('Unable to prepare PDF print')
+      return
+    }
+
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((node) => node.outerHTML)
+      .join('\n')
+
+    frameDocument.open()
+    frameDocument.write(`
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Connsura Passport Summary</title>
+          ${styles}
+          <style>
+            body { margin: 24px; background: #fff; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          ${previewNode.outerHTML}
+        </body>
+      </html>
+    `)
+    frameDocument.close()
+
+    const cleanup = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+    }
+
+    frameWindow.onafterprint = cleanup
+    setTimeout(cleanup, 1000)
+    frameWindow.focus()
+    frameWindow.print()
+  }
+
   return (
     <div className="surface p-5 space-y-4">
       {reviewShare ? (
@@ -832,13 +893,13 @@ export default function PassportSharePanel({
           )}
 
           {activeMethod === 'pdf' && accessMode !== 'edit' && (
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="space-y-3">
               <div className="text-sm text-slate-600">Preview your PDF before printing.</div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div ref={pdfPreviewRef}>
                 <ShareSummary snapshot={snapshot} sections={sectionsPayload} />
               </div>
               <div className="flex justify-end">
-                <button type="button" className="pill-btn-primary px-5" onClick={() => window.print()}>
+                <button type="button" className="pill-btn-primary px-5" onClick={handlePrintPdf}>
                   Print to PDF
                 </button>
               </div>

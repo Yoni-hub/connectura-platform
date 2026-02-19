@@ -82,8 +82,8 @@ const normalizePassportSelection = (sections) => {
 const hasPassportShare = (snapshot) => Array.isArray(snapshot?.passportV2?.products) && snapshot.passportV2.products.length > 0
 
 const formatPassportEntryValue = (value) => {
+  if (value === null || value === undefined || value === '') return 'Not set'
   if (Array.isArray(value)) return value.join(', ')
-  if (value === null || value === undefined || value === '') return '-'
   return String(value)
 }
 
@@ -131,29 +131,35 @@ export default function ShareSummary({ snapshot, sections }) {
     return (
       <div className="space-y-4">
         {visibleProducts.map((product) => (
-          <div key={product.productInstanceId} className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(0,42,92,0.08)]">
-            <div className="text-base font-semibold text-slate-900">{product.productName}</div>
-            <div className="mt-3 space-y-3">
-              {product.sections.map((section) => (
-                <div key={`${product.productInstanceId}-${section.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-sm font-semibold text-slate-900">{section.label}</div>
-                  <div className="mt-2 space-y-2">
-                    {section.entries.map((entry, entryIndex) => (
-                      <div key={`${product.productInstanceId}-${section.key}-${entryIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                          {section.fields.map((field) => (
-                            <div key={`${section.key}-${field?.key || field?.label}-${entryIndex}`}>
-                              <span className="font-semibold text-slate-900">{field?.label || field?.key || 'Field'}:</span>{' '}
-                              {formatPassportEntryValue(entry?.[field?.key])}
-                            </div>
-                          ))}
-                        </div>
+          <div key={product.productInstanceId} className="p-1">
+            <h3 className="text-lg font-semibold text-slate-900">{product.productName}</h3>
+            {product.sections.map((section) => (
+              <fieldset
+                key={`${product.productInstanceId}-${section.key}`}
+                className="mt-3 rounded-xl border border-slate-300 px-3 pb-3 pt-2"
+              >
+                <legend className="px-2 text-sm font-semibold text-slate-900">{section.label}</legend>
+                {section.entries.map((entry, entryIndex) => (
+                  <div
+                    key={`${product.productInstanceId}-${section.key}-${entryIndex}`}
+                    className={`pt-2 ${entryIndex > 0 ? 'mt-2 border-t border-slate-200' : ''}`}
+                  >
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {section.label} #{entryIndex + 1}
+                    </div>
+                    {(section.fields || []).map((field) => (
+                      <div
+                        key={`${field?.key || field?.label}-${entryIndex}`}
+                        className="inline-flex items-baseline gap-1 py-0.5 pr-4 text-sm"
+                      >
+                        <span className="font-semibold text-slate-900">{field?.label || field?.key || 'Field'}:</span>
+                        <span className="text-green-700">{formatPassportEntryValue(entry?.[field?.key])}</span>
                       </div>
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </fieldset>
+            ))}
           </div>
         ))}
       </div>
