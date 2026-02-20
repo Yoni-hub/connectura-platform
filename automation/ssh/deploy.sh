@@ -255,7 +255,7 @@ cat >> "${DEPLOY_DIR}/docker-compose.yml" <<EOF
       context: ${APP_DIR}
       dockerfile: ${DEPLOY_DIR}/Dockerfile.frontend
       args:
-        VITE_API_URL: https://${API_DOMAIN}
+        VITE_API_URL: /api
     ports:
       - "127.0.0.1:4173:4173"
     restart: unless-stopped
