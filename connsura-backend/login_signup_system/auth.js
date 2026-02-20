@@ -1530,6 +1530,86 @@ router.post('/recovery/reset', async (req, res) => {
   }
 })
 
+router.post('/recovery/email-otp/request', async (req, res) => {
+  const email = normalizeEmail(req.body?.email || '')
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' })
+  }
+  const ip = getRequestIp(req)
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { customer: true },
+    })
+    if (!user || user.role === 'AGENT' || user.customer?.isDisabled) {
+      return res.json({ sent: true })
+    }
+    const result = await sendEmailOtp(email, {
+      ip,
+      template: 'password_recovery',
+      userId: user.id,
+    })
+    return res.json({ sent: true, delivery: result.delivery })
+  } catch (err) {
+    if (err && err.code === 'RATE_LIMIT') {
+      if (err.retryAfterSeconds) {
+        res.set('Retry-After', String(err.retryAfterSeconds))
+      }
+      return res.status(429).json({ error: err.message || 'Too many requests' })
+    }
+    console.error('recovery email otp request error', err)
+    return res.status(500).json({ error: 'Failed to send verification code' })
+  }
+})
+
+router.post('/recovery/email-otp/reset', async (req, res) => {
+  const email = normalizeEmail(req.body?.email || '')
+  const otpCode = String(req.body?.otpCode || '').trim()
+  const newPassword = String(req.body?.newPassword || '')
+  if (!email || !otpCode || !newPassword) {
+    return res.status(400).json({ error: RECOVERY_ERROR })
+  }
+  const attemptKey = `${email}:${req.ip || ''}`
+  const throttle = registerRecoveryAttempt(attemptKey)
+  if (throttle.limited) {
+    return res.status(429).json({ error: 'Too many recovery attempts. Try again later.' })
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { customer: true },
+    })
+    if (!user || user.role === 'AGENT' || user.customer?.isDisabled) {
+      return res.status(400).json({ error: RECOVERY_ERROR })
+    }
+    const verification = await verifyEmailOtp(email, otpCode)
+    if (!verification.valid) {
+      return res.status(400).json({ error: RECOVERY_ERROR })
+    }
+    const hashed = await bcrypt.hash(newPassword, 10)
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        passwordChangedAt: new Date(),
+        passwordPendingHash: null,
+        passwordPendingRequestedAt: null,
+      },
+      include: { customer: true },
+    })
+    recoveryAttempts.delete(attemptKey)
+    notifyPasswordChanged(updated).catch((err) =>
+      console.error('recovery email otp password change notification error', err)
+    )
+    const token = generateToken({ id: updated.id, role: updated.role })
+    setSessionCookie(res, token)
+    return res.json({ token, user: sanitizeUser(updated) })
+  } catch (err) {
+    console.error('recovery email otp reset error', err)
+    return res.status(500).json({ error: RECOVERY_ERROR })
+  }
+})
+
 router.post('/login', async (req, res) => {
   const { email, password } = req.body
   if (!email || !password) {

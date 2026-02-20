@@ -44,12 +44,19 @@ const OTP_TEMPLATES = {
     intro:
       'There is a password change request for your Connsura account. If this is you, enter the code below in your dashboard. If not, contact security@connsura.com immediately.',
   },
+  password_recovery: {
+    subject: 'Reset your Connsura password',
+    heading: 'Reset your password',
+    intro:
+      'A password recovery request was made for your Connsura account. Enter the code below to continue. If this was not you, contact security@connsura.com immediately.',
+  },
 }
 
 const OTP_EVENT_TYPES = {
   email_verify: 'EMAIL_VERIFICATION',
   name_change: 'NAME_CHANGE_VERIFICATION',
   password_change: 'PASSWORD_CHANGE_VERIFICATION',
+  password_recovery: 'PASSWORD_RECOVERY_VERIFICATION',
 }
 
 const resolveTemplate = (template) => {

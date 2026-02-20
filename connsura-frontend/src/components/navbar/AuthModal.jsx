@@ -8,12 +8,7 @@ const createEmptyForm = () => ({
   email: '',
   password: '',
   confirmPassword: '',
-  consents: {
-    terms: false,
-    privacy: false,
-    emailCommunications: false,
-    platformDisclaimer: false,
-  },
+  consentAccepted: false,
 })
 
 const POST_AUTH_REDIRECT_KEY = 'connsura_post_auth_redirect'
@@ -68,11 +63,16 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
       return
     }
 
-    const requiredConsentKeys = ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
-    const missingConsents = requiredConsentKeys.filter((key) => !form.consents?.[key])
-    if (missingConsents.length) {
-      alert('Please accept all required consents to continue.')
+    if (!form.consentAccepted) {
+      alert('Please accept the consent to continue.')
       return
+    }
+
+    const consents = {
+      terms: true,
+      privacy: true,
+      emailCommunications: true,
+      platformDisclaimer: true,
     }
 
     const payload = {
@@ -80,7 +80,7 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
       password: form.password,
       name: form.name,
       role: 'CUSTOMER',
-      consents: form.consents,
+      consents,
     }
 
     const user = await register(payload)
@@ -168,62 +168,29 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
 
         {mode === 'create' && (
           <div className="space-y-2 text-sm text-slate-700">
-            <>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={form.consents.terms}
-                  onChange={(e) => setForm({ ...form, consents: { ...form.consents, terms: e.target.checked } })}
-                />
-                <span>
-                  I agree to the{' '}
-                  <a className="font-semibold text-slate-900 underline" href="/terms" target="_blank" rel="noreferrer">
-                    Terms & Conditions
-                  </a>
-                </span>
-              </label>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={form.consents.privacy}
-                  onChange={(e) => setForm({ ...form, consents: { ...form.consents, privacy: e.target.checked } })}
-                />
-                <span>
-                  I agree to the{' '}
-                  <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
-                    Privacy Policy
-                  </a>{' '}
-                  &{' '}
-                  <a className="font-semibold text-slate-900 underline" href="/data-sharing" target="_blank" rel="noreferrer">
-                    Data Sharing Policy
-                  </a>
-                </span>
-              </label>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={form.consents.emailCommunications}
-                  onChange={(e) =>
-                    setForm({ ...form, consents: { ...form.consents, emailCommunications: e.target.checked } })
-                  }
-                />
-                I agree to receive required system emails related to security, legal updates, and account activity.
-              </label>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={form.consents.platformDisclaimer}
-                  onChange={(e) =>
-                    setForm({ ...form, consents: { ...form.consents, platformDisclaimer: e.target.checked } })
-                  }
-                />
-                I understand Connsura is not an insurance provider
-              </label>
-            </>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={form.consentAccepted}
+                onChange={(e) => setForm({ ...form, consentAccepted: e.target.checked })}
+              />
+              <span>
+                By creating an account, you agree to Connsura&apos;s{' '}
+                <a className="font-semibold text-slate-900 underline" href="/terms" target="_blank" rel="noreferrer">
+                  Terms
+                </a>
+                ,{' '}
+                <a className="font-semibold text-slate-900 underline" href="/privacy" target="_blank" rel="noreferrer">
+                  Privacy Policy
+                </a>{' '}
+                and{' '}
+                <a className="font-semibold text-slate-900 underline" href="/data-sharing" target="_blank" rel="noreferrer">
+                  Data Sharing Policy
+                </a>
+                . You agree to receive required system emails about security, legal updates, and account activity.
+              </span>
+            </label>
           </div>
         )}
 
