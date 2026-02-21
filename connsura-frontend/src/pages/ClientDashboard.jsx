@@ -1245,12 +1245,12 @@ export default function ClientDashboard() {
       <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
         <aside className="surface fixed bottom-0 left-0 right-0 z-30 rounded-none border-t border-slate-200 border-x-0 border-b-0 bg-white/95 backdrop-blur px-3 py-2 lg:static lg:rounded-2xl lg:border lg:border-transparent lg:bg-white/80 lg:backdrop-blur-0 lg:p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 hidden lg:block">Connsura</div>
-          <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
+          <div className="grid grid-cols-3 gap-2 lg:block lg:space-y-1">
             {navItems.map((item) => (
               <button
                 key={item}
                 onClick={() => updateTab(item)}
-                className={`min-w-max rounded-xl px-3 py-2.5 text-sm font-semibold text-center transition whitespace-nowrap lg:w-full lg:text-left flex items-center justify-between gap-2 ${
+                className={`flex h-11 w-full items-center justify-center rounded-xl px-2 text-sm font-semibold text-center transition whitespace-nowrap lg:h-auto lg:justify-between lg:px-3 lg:py-2.5 lg:text-left lg:gap-2 ${
                   activeTab === item ? 'bg-[#e8f0ff] text-[#0b3b8c] shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >

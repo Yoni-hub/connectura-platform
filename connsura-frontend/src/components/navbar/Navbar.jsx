@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AuthModal from './AuthModal'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,7 @@ export default function Navbar() {
   const [authStartMode, setAuthStartMode] = useState('login')
   const { user, logout } = useAuth()
   const nav = useNavigate()
+  const headerRef = useRef(null)
   const isCustomer = user?.role === 'CUSTOMER'
   const customerLabel = user?.name || user?.email || 'Client'
 
@@ -35,6 +36,18 @@ export default function Navbar() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!menuOpen) return
+    const handlePointerDown = (event) => {
+      if (headerRef.current?.contains(event.target)) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+    }
+  }, [menuOpen])
+
   const triggerAuth = () => {
     setAuthStartMode('login')
     setAuthOpen(true)
@@ -48,7 +61,10 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 relative border-b border-transparent bg-white/95 backdrop-blur shadow-none">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-40 relative border-b border-transparent bg-white/95 backdrop-blur shadow-none"
+      >
         <div className="page-shell flex items-center justify-between py-3">
           <Link to="/" className="flex items-center gap-3 font-semibold text-[#0b3b8c]">
             <img
@@ -84,9 +100,6 @@ export default function Navbar() {
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
                   Contact us
                 </Link>
-                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
-                  About us
-                </Link>
               </>
             ) : (
               <>
@@ -106,9 +119,6 @@ export default function Navbar() {
                 </button>
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]">
                   Contact us
-                </Link>
-                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]">
-                  About us
                 </Link>
               </>
             )}
@@ -137,9 +147,6 @@ export default function Navbar() {
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                   Contact us
                 </Link>
-                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                  About us
-                </Link>
               </>
             ) : (
               <>
@@ -165,9 +172,6 @@ export default function Navbar() {
                 </button>
                 <Link to="/contact" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
                   Contact us
-                </Link>
-                <Link to="/about" className="text-slate-700 hover:text-[#0b3b8c]" onClick={() => setMenuOpen(false)}>
-                  About us
                 </Link>
               </>
             )}
