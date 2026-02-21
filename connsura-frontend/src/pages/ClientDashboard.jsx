@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
+import Text from '../components/ui/Text'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import MyPassportFlow from '../components/passport/MyPassportFlow'
@@ -1487,9 +1488,9 @@ export default function ClientDashboard() {
                         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</div>
                         <div className="font-semibold text-slate-900">{emailValue || 'Not set'}</div>
                         {user?.emailPending && (
-                          <div className="text-xs text-amber-700">
+                          <Text as="div" variant="body" className="text-amber-700">
                             Pending: {user.emailPending} (old email stays active until verified)
-                          </div>
+                          </Text>
                         )}
                       </div>
                       <Badge label={isEmailVerified ? 'Verified' : 'Unverified'} tone={isEmailVerified ? 'green' : 'amber'} />
@@ -1559,7 +1560,7 @@ export default function ClientDashboard() {
                       </div>
                     )}
                     {needsEmailVerification && verificationSent && (
-                      <div className="text-xs text-amber-600">Check your email for the verification code.</div>
+                      <Text as="div" variant="body" className="text-amber-600">Check your email for the verification code.</Text>
                     )}
                   </div>
                 </div>
@@ -1613,7 +1614,7 @@ export default function ClientDashboard() {
 
                   {passwordMessage && (
                     <div
-                      className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold ${
                         passwordMessage.type === 'success'
                           ? 'bg-emerald-50 text-emerald-700'
                           : 'bg-rose-50 text-rose-700'
@@ -1705,12 +1706,12 @@ export default function ClientDashboard() {
                           const browserName = resolveBrowserName(entry.userAgent)
                           const locationLabel = resolveDeviceLocation(entry)
                           return (
-                            <div key={entry.id} className="text-xs text-slate-600">
+                            <div key={entry.id} className="text-sm text-slate-600">
                               <div className="font-semibold text-slate-800 break-words">{browserName}</div>
-                              <div className="text-xs text-slate-600 break-words">
+                              <div className="text-sm text-slate-600 break-words">
                                 {entry.ip || 'Unknown IP'} · {locationLabel}
                               </div>
-                              <div className="text-slate-400">{formatTimestamp(entry.timestamp)}</div>
+                              <div className="text-xs text-slate-400">{formatTimestamp(entry.timestamp)}</div>
                             </div>
                           )
                         })}
@@ -1763,15 +1764,15 @@ export default function ClientDashboard() {
                           const browserName = resolveBrowserName(session.userAgent)
                           const locationLabel = resolveDeviceLocation(session)
                           return (
-                            <div key={session.id} className="text-xs text-slate-600">
+                            <div key={session.id} className="text-sm text-slate-600">
                               <div className="font-semibold text-slate-800">
                                 {session.current ? 'Current session' : 'Session'}
                               </div>
-                              <div className="text-xs text-slate-600 break-words">{browserName}</div>
-                              <div className="text-xs text-slate-600 break-words">
+                              <div className="text-sm text-slate-600 break-words">{browserName}</div>
+                              <div className="text-sm text-slate-600 break-words">
                                 {session.ip || 'Unknown IP'} · {locationLabel}
                               </div>
-                              <div className="text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
+                              <div className="text-xs text-slate-400">{session.lastSeenAt ? formatTimestamp(session.lastSeenAt) : ''}</div>
                             </div>
                           )
                         })}
@@ -1832,7 +1833,7 @@ export default function ClientDashboard() {
                       {sharedActivityLoading ? 'Loading...' : sharedActivityOpen ? 'Hide' : 'View'}
                     </button>
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-sm text-slate-500">
                     Active shares: {activeShares.length} | Pending edits: {pendingShares.length}
                   </div>
                   {sharedActivityOpen && sharedActivity.length === 0 && !sharedActivityLoading && (
@@ -1841,11 +1842,11 @@ export default function ClientDashboard() {
                   {sharedActivityOpen && sharedActivity.length > 0 && (
                     <div className="space-y-2">
                       {pagedSharedActivity.map((entry) => (
-                        <div key={entry.id} className="text-xs text-slate-600">
+                        <div key={entry.id} className="text-sm text-slate-600">
                           <div className="font-semibold text-slate-800">{entry.recipient}</div>
                           <div className="text-slate-500">Status: {entry.status}</div>
                           {entry.lastAccessedAt && (
-                            <div className="text-slate-400">{formatTimestamp(entry.lastAccessedAt)}</div>
+                            <div className="text-xs text-slate-400">{formatTimestamp(entry.lastAccessedAt)}</div>
                           )}
                         </div>
                       ))}
@@ -1887,9 +1888,9 @@ export default function ClientDashboard() {
 
                 <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
                   <div className="text-sm font-semibold text-slate-700">Deactivate account</div>
-                  <p className="text-xs text-slate-500">
+                  <Text as="p" variant="body" className="text-slate-500">
                     Temporarily disable your account and revoke active shares.
-                  </p>
+                  </Text>
                   {!deactivateOpen ? (
                     <button
                       type="button"
@@ -1903,9 +1904,7 @@ export default function ClientDashboard() {
                     </button>
                   ) : (
                     <div className="space-y-2">
-                      {deactivateMessage && (
-                        <div className="text-xs font-semibold text-rose-600">{deactivateMessage.text}</div>
-                      )}
+                      {deactivateMessage && <Text as="div" variant="label" className="text-rose-600">{deactivateMessage.text}</Text>}
                       <label className="block text-sm">
                         Password
                         <input
@@ -1943,9 +1942,9 @@ export default function ClientDashboard() {
 
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-2">
                   <div className="text-sm font-semibold text-rose-700">Delete account</div>
-                  <p className="text-xs text-rose-700">
+                  <Text as="p" variant="body" className="text-rose-700">
                     This permanently deletes your account and profile. This cannot be undone.
-                  </p>
+                  </Text>
                   {!deleteOpen ? (
                     <button
                       type="button"
@@ -1962,7 +1961,7 @@ export default function ClientDashboard() {
                     <div className="space-y-2">
                       {deleteMessage && (
                         <div
-                          className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
                             deleteMessage.type === 'success'
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-rose-100 text-rose-700'
@@ -2023,27 +2022,27 @@ export default function ClientDashboard() {
                         {settingsView === 'privacy' && (
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
-                  <div className="text-sm text-slate-500">Cookies</div>
-                  <div className="text-xs text-slate-600">
+                  <Text as="div" variant="muted">Cookies</Text>
+                  <Text as="div" variant="body" className="text-slate-600">
                     We only use essential cookies for sign-in, security, and session management. No ads or tracking.
-                  </div>
+                  </Text>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-3">
-                  <div className="text-sm text-slate-500">Consent history</div>
+                  <Text as="div" variant="muted">Consent history</Text>
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <div className="text-sm font-semibold text-slate-900">Privacy policy</div>
-                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      <Text as="div" variant="label" className="text-slate-900">Privacy policy</Text>
+                      {consentLoading && <Text as="div" variant="body" className="text-slate-700">Loading...</Text>}
                       {!consentLoading && !privacyConsentStatus.consent && (
-                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                        <Text as="div" variant="body" className="text-slate-700">No consent history recorded yet.</Text>
                       )}
                       {!consentLoading && privacyConsentStatus.consent && (
-                        <div className="space-y-1 text-xs text-slate-600">
+                        <div className="space-y-1 text-sm text-slate-600">
                           <div className="font-semibold text-slate-800">
                             {formatConsentLabel(privacyConsentStatus.consent, 'Privacy policy')}
                           </div>
                           {privacyConsentStatus.consent.consentedAt && (
-                            <div className="text-slate-500">
+                            <div className="text-sm text-slate-500">
                               {formatTimestamp(privacyConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2064,18 +2063,18 @@ export default function ClientDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <div className="text-sm font-semibold text-slate-900">Terms &amp; conditions</div>
-                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      <Text as="div" variant="label" className="text-slate-900">Terms &amp; conditions</Text>
+                      {consentLoading && <Text as="div" variant="body" className="text-slate-700">Loading...</Text>}
                       {!consentLoading && !termsConsentStatus.consent && (
-                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                        <Text as="div" variant="body" className="text-slate-700">No consent history recorded yet.</Text>
                       )}
                       {!consentLoading && termsConsentStatus.consent && (
-                        <div className="space-y-1 text-xs text-slate-600">
+                        <div className="space-y-1 text-sm text-slate-600">
                           <div className="font-semibold text-slate-800">
                             {formatConsentLabel(termsConsentStatus.consent, 'Terms')}
                           </div>
                           {termsConsentStatus.consent.consentedAt && (
-                            <div className="text-slate-500">
+                            <div className="text-sm text-slate-500">
                               {formatTimestamp(termsConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2096,18 +2095,18 @@ export default function ClientDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <div className="text-sm font-semibold text-slate-900">Data sharing policy</div>
-                      {consentLoading && <div className="text-sm text-slate-700">Loading...</div>}
+                      <Text as="div" variant="label" className="text-slate-900">Data sharing policy</Text>
+                      {consentLoading && <Text as="div" variant="body" className="text-slate-700">Loading...</Text>}
                       {!consentLoading && !dataSharingConsentStatus.consent && (
-                        <div className="text-sm text-slate-700">No consent history recorded yet.</div>
+                        <Text as="div" variant="body" className="text-slate-700">No consent history recorded yet.</Text>
                       )}
                       {!consentLoading && dataSharingConsentStatus.consent && (
-                        <div className="space-y-1 text-xs text-slate-600">
+                        <div className="space-y-1 text-sm text-slate-600">
                           <div className="font-semibold text-slate-800">
                             {formatConsentLabel(dataSharingConsentStatus.consent, 'Data sharing')}
                           </div>
                           {dataSharingConsentStatus.consent.consentedAt && (
-                            <div className="text-slate-500">
+                            <div className="text-sm text-slate-500">
                               {formatTimestamp(dataSharingConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2130,7 +2129,7 @@ export default function ClientDashboard() {
                 </div>
 
                 <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm space-y-2">
-                  <div className="text-sm text-slate-500">Read policies</div>
+                  <Text as="div" variant="muted">Read policies</Text>
                   <div className="flex flex-wrap gap-3 text-sm">
                     <Link to="/privacy" className="font-semibold text-[#0b3b8c] hover:underline">
                       Read privacy policy
@@ -2151,15 +2150,15 @@ export default function ClientDashboard() {
                           <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                             <div className="space-y-1">
                               <h3 className="text-lg font-semibold">Notifications</h3>
-                              <p className="text-xs text-slate-500">
+                              <Text as="p" variant="body" className="text-slate-500">
                                 Some notifications are required for security and core functionality and can't be turned off.
-                              </p>
+                              </Text>
                             </div>
 
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
-                                className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                                className={`rounded-full px-3 py-1 text-sm font-semibold border ${
                                   notificationTab === 'email'
                                     ? 'bg-[#0b3b8c] text-white border-[#0b3b8c]'
                                     : 'bg-white text-slate-600 border-slate-200'
@@ -2170,7 +2169,7 @@ export default function ClientDashboard() {
                               </button>
                               <button
                                 type="button"
-                                className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                                className={`rounded-full px-3 py-1 text-sm font-semibold border ${
                                   notificationTab === 'inapp'
                                     ? 'bg-[#0b3b8c] text-white border-[#0b3b8c]'
                                     : 'bg-white text-slate-600 border-slate-200'
@@ -2182,16 +2181,18 @@ export default function ClientDashboard() {
                             </div>
 
                             <div className="flex items-center justify-between gap-3">
-                              <div className="text-xs text-slate-500">Changes save automatically.</div>
-                              {notificationSaving && <div className="text-xs text-slate-500">Saving...</div>}
+                              <Text as="div" variant="body" className="text-slate-500">Changes save automatically.</Text>
+                              {notificationSaving && <Text as="div" variant="body" className="text-slate-500">Saving...</Text>}
                               {!notificationSaving && notificationMessage && (
-                                <div
-                                  className={`text-xs font-semibold ${
+                                <Text
+                                  as="div"
+                                  variant="label"
+                                  className={`text-sm font-semibold ${
                                     notificationMessage === 'Saved' ? 'text-emerald-600' : 'text-rose-600'
                                   }`}
                                 >
                                   {notificationMessage}
-                                </div>
+                                </Text>
                               )}
                             </div>
 
@@ -2207,11 +2208,11 @@ export default function ClientDashboard() {
                                         <div className="text-sm font-semibold text-slate-900">
                                           Login alerts
                                         </div>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Receive an email when a new sign-in is detected.
-                                        </div>
+                                        </Text>
                                       </div>
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                         Always allowed
                                       </span>
                                     </div>
@@ -2220,11 +2221,11 @@ export default function ClientDashboard() {
                                         <div className="text-sm font-semibold text-slate-900">
                                           Password or email changes
                                         </div>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Receive an email when your password or email is changed.
-                                        </div>
+                                        </Text>
                                       </div>
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                         Always allowed
                                       </span>
                                     </div>
@@ -2233,11 +2234,11 @@ export default function ClientDashboard() {
                                         <div className="text-sm font-semibold text-slate-900">
                                           Legal & policy updates
                                         </div>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Updates to Privacy Policy, Terms, or Data Sharing Policy.
-                                        </div>
+                                        </Text>
                                       </div>
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                         Always allowed
                                       </span>
                                     </div>
@@ -2252,14 +2253,14 @@ export default function ClientDashboard() {
                                         <div className="text-sm font-semibold text-slate-900">
                                           Profile sharing activity
                                         </div>
-                                        <div className="text-xs text-slate-500">Receive notifications when your profile is:</div>
-                                        <ul className="mt-1 list-disc pl-4 text-xs text-slate-500 space-y-1">
+                                        <Text as="div" variant="body" className="text-slate-500">Receive notifications when your profile is:</Text>
+                                        <ul className="mt-1 list-disc pl-4 text-sm text-slate-500 space-y-1">
                                           <li>shared</li>
                                           <li>access revoked</li>
                                           <li>updated by a recipient</li>
                                         </ul>
                                       </div>
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                         Always allowed
                                       </span>
                                     </div>
@@ -2268,9 +2269,9 @@ export default function ClientDashboard() {
                                         <label htmlFor="notif-profile-updates" className="text-sm font-semibold text-slate-900">
                                           Insurance profile updates
                                         </label>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Get notified when your profile information is updated.
-                                        </div>
+                                        </Text>
                                       </div>
                                       <input
                                         id="notif-profile-updates"
@@ -2299,9 +2300,9 @@ export default function ClientDashboard() {
                                         <label htmlFor="notif-feature-updates" className="text-sm font-semibold text-slate-900">
                                           Feature updates & improvements
                                         </label>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Learn about new features and important improvements.
-                                        </div>
+                                        </Text>
                                       </div>
                                       <input
                                         id="notif-feature-updates"
@@ -2330,9 +2331,9 @@ export default function ClientDashboard() {
                                         <label htmlFor="notif-marketing" className="text-sm font-semibold text-slate-900">
                                           Tips, announcements & offers
                                         </label>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Occasional helpful updates and platform news.
-                                        </div>
+                                        </Text>
                                       </div>
                                       <input
                                         id="notif-marketing"
@@ -2365,11 +2366,11 @@ export default function ClientDashboard() {
                                         <div className="text-sm font-semibold text-slate-900">
                                           Dashboard reminders & activity badges
                                         </div>
-                                        <div className="text-xs text-slate-500">
+                                        <Text as="div" variant="body" className="text-slate-500">
                                           Alerts and reminders related to your account and insurance profile activity.
-                                        </div>
+                                        </Text>
                                       </div>
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                         Always allowed
                                       </span>
                                     </div>
@@ -2406,7 +2407,7 @@ export default function ClientDashboard() {
               autoComplete="one-time-code"
             />
             {verificationError && (
-              <div className="text-xs font-semibold text-rose-600">{verificationError}</div>
+              <div className="text-sm font-semibold text-rose-600">{verificationError}</div>
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -2432,3 +2433,5 @@ export default function ClientDashboard() {
     </main>
   )
 }
+
+

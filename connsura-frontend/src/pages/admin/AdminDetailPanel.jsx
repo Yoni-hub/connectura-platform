@@ -22,11 +22,11 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2.5">
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Name
               <input className={input} value={tab.form.name} onChange={(e) => patchTabForm(tab.key, { name: e.target.value })} />
             </label>
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Email
               <input
                 className={input}
@@ -35,7 +35,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 type="email"
               />
             </label>
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Password (hashed)
               <input
                 className={input}
@@ -44,7 +44,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 type="text"
               />
             </label>
-            <div className="flex items-center gap-3 text-[13px] font-semibold text-slate-700">
+            <div className="flex items-center gap-3 text-sm font-semibold text-slate-700">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -56,7 +56,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
             </div>
           </div>
           <div className="space-y-2.5">
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Preferred languages (comma-separated)
               <input
                 className={input}
@@ -64,7 +64,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 onChange={(e) => patchTabForm(tab.key, { preferredLangs: e.target.value })}
               />
             </label>
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Coverages (comma-separated)
               <input
                 className={input}
@@ -72,7 +72,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 onChange={(e) => patchTabForm(tab.key, { coverages: e.target.value })}
               />
             </label>
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Prior insurance (comma-separated)
               <input
                 className={input}
@@ -80,7 +80,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 onChange={(e) => patchTabForm(tab.key, { priorInsurance: e.target.value })}
               />
             </label>
-            <label className="block text-[13px] font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-slate-700">
               Profile data (JSON)
               <textarea
                 className={textarea}
@@ -104,3 +104,4 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
   }
   return null
 }
+

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { api } from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
+import Text from '../ui/Text'
 
 const getSessionId = () => {
   if (typeof window === 'undefined') return 'server'
@@ -133,19 +134,19 @@ export default function AuthenticatorPanel() {
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm text-slate-500">Authenticator app</div>
-          <div className="font-semibold text-slate-900">Google Authenticator recovery</div>
+          <Text as="div" variant="muted">Authenticator app</Text>
+          <Text as="div" variant="label" className="text-slate-900">Google Authenticator recovery</Text>
         </div>
         <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
           {enabled ? 'Enabled' : 'Optional'}
         </div>
       </div>
 
-      <p className="text-sm text-slate-600">
+      <Text as="p" variant="body" className="text-slate-600">
         Add Google Authenticator to recover your account even if you lose access to email.
-      </p>
+      </Text>
       <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-        <div className="font-semibold text-slate-700">Setup guide</div>
+        <Text as="div" variant="label" className="text-slate-700">Setup guide</Text>
         <ul className="mt-2 list-disc pl-5 space-y-1">
           <li>WHEN: set this up right after your first login.</li>
           <li>
@@ -183,13 +184,13 @@ export default function AuthenticatorPanel() {
               )}
             </div>
             <div className="space-y-2 text-sm">
-              <div className="text-slate-600">Scan the QR code with your authenticator app.</div>
+              <Text as="div" variant="body" className="text-slate-600">Scan the QR code with your authenticator app.</Text>
               <div>
-                <div className="text-slate-500">Manual setup key</div>
+                <Text as="div" variant="muted">Manual setup key</Text>
                 <div className="font-mono text-slate-900 break-all">{setupData.secret}</div>
               </div>
               <div>
-                <div className="text-slate-500">Recovery ID</div>
+                <Text as="div" variant="muted">Recovery ID</Text>
                 <div className="font-mono text-slate-900">{setupData.recoveryId}</div>
               </div>
             </div>
@@ -197,7 +198,7 @@ export default function AuthenticatorPanel() {
 
           {Array.isArray(setupData.backupCodes) && setupData.backupCodes.length > 0 && (
             <div className="space-y-2">
-              <div className="text-sm font-semibold text-slate-700">Backup codes (save these now)</div>
+              <Text as="div" variant="label" className="text-slate-700">Backup codes (save these now)</Text>
               <div className="grid gap-2 sm:grid-cols-2">
                 {setupData.backupCodes.map((code) => (
                   <div key={code} className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700">
@@ -205,9 +206,9 @@ export default function AuthenticatorPanel() {
                   </div>
                 ))}
               </div>
-              <div className="text-xs text-slate-500">
+              <Text as="div" variant="caption">
                 Backup codes are shown only once. Store them in a safe place.
-              </div>
+              </Text>
             </div>
           )}
 
@@ -247,8 +248,8 @@ export default function AuthenticatorPanel() {
       {enabled && (
         <div className="space-y-4">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            <div className="font-semibold">Authenticator is set up</div>
-            <div className="text-emerald-800">You can use your recovery ID and codes if you forget your password.</div>
+            <Text as="div" variant="label" className="text-emerald-900">Authenticator is set up</Text>
+            <Text as="div" variant="body" className="text-emerald-800">You can use your recovery ID and codes if you forget your password.</Text>
           </div>
           <button
             type="button"
@@ -259,7 +260,9 @@ export default function AuthenticatorPanel() {
           </button>
           <Modal title="Disable authenticator" open={disableOpen} onClose={() => setDisableOpen(false)}>
             <div className="space-y-3 text-sm text-slate-600">
-              <p>Confirm your password, then enter either an authenticator code or a backup code.</p>
+              <Text as="p" variant="body" className="text-slate-600">
+                Confirm your password, then enter either an authenticator code or a backup code.
+              </Text>
             </div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm">

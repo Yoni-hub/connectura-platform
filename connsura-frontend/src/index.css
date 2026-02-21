@@ -10,8 +10,7 @@
   }
 
   body {
-    @apply min-h-screen text-slate-900;
-    font-family: 'Source Sans 3', 'Helvetica Neue', Arial, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    @apply min-h-screen font-sans text-slate-900;
     background: #f7f9fc;
     overflow-x: hidden;
   }

@@ -207,17 +207,17 @@ export default function AdminErrorsTab({ onSessionExpired }) {
                     {event.sessionId && <span>Session: {event.sessionId}</span>}
                   </div>
                   {event.stack && (
-                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-[11px] text-slate-700">
+                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                       {event.stack}
                     </pre>
                   )}
                   {event.componentStack && (
-                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-[11px] text-slate-700">
+                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                       {event.componentStack}
                     </pre>
                   )}
                   {event.metadata && (
-                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-[11px] text-slate-700">
+                    <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                       {JSON.stringify(event.metadata, null, 2)}
                     </pre>
                   )}
@@ -254,3 +254,4 @@ export default function AdminErrorsTab({ onSessionExpired }) {
     </div>
   )
 }
+

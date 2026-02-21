@@ -212,7 +212,7 @@ export default function AdminNotificationLogsTab({ onSessionExpired }) {
     const preview = text.length > 600 ? `${text.slice(0, 600)}...` : text
     return (
       <div className="space-y-2">
-        <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-[11px] text-slate-700">
+        <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
           {expanded ? text : preview}
         </pre>
         {text.length > 600 && (
@@ -565,3 +565,4 @@ export default function AdminNotificationLogsTab({ onSessionExpired }) {
     </div>
   )
 }
+

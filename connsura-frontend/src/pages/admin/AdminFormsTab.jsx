@@ -659,7 +659,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          className="pill-btn-ghost px-2 py-1 text-[11px]"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
                           onClick={() => moveMappedQuestion(question.id, -1)}
                           disabled={index === 0}
                         >
@@ -667,7 +667,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
                         </button>
                         <button
                           type="button"
-                          className="pill-btn-ghost px-2 py-1 text-[11px]"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
                           onClick={() => moveMappedQuestion(question.id, 1)}
                           disabled={index === selectedSectionQuestions.length - 1}
                         >
@@ -741,3 +741,4 @@ export default function AdminFormsTab({ onSessionExpired }) {
     </div>
   )
 }
+
