@@ -5,6 +5,7 @@ import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Heading from '../components/ui/Heading'
 import Text from '../components/ui/Text'
+import PasswordRequirements from '../components/ui/PasswordRequirements'
 import { validatePasswordPolicy } from '../utils/passwordPolicy'
 
 const createAuthenticatorForm = () => ({
@@ -45,7 +46,6 @@ export default function AccountRecovery() {
     }
     const passwordPolicy = validatePasswordPolicy(passwordForm.password)
     if (!passwordPolicy.valid) {
-      toast.error(passwordPolicy.message)
       return false
     }
     return true
@@ -256,6 +256,7 @@ export default function AccountRecovery() {
               />
             </label>
           </div>
+          <PasswordRequirements password={passwordForm.password} />
 
           <div className="flex flex-wrap gap-3">
             <button

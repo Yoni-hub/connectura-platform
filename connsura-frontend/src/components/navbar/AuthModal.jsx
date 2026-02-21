@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
 import Heading from '../ui/Heading'
 import Text from '../ui/Text'
+import PasswordRequirements from '../ui/PasswordRequirements'
 import { validatePasswordPolicy } from '../../utils/passwordPolicy'
 
 const createEmptyForm = () => ({
@@ -67,7 +68,6 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
     }
     const passwordPolicy = validatePasswordPolicy(form.password)
     if (!passwordPolicy.valid) {
-      alert(passwordPolicy.message)
       return
     }
 
@@ -171,6 +171,7 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
                 />
               </label>
             </div>
+            <PasswordRequirements password={form.password} />
           </div>
         )}
 

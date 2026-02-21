@@ -10,6 +10,7 @@ import Text from '../components/ui/Text'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import MyPassportFlow from '../components/passport/MyPassportFlow'
+import PasswordRequirements from '../components/ui/PasswordRequirements'
 import { validatePasswordPolicy } from '../utils/passwordPolicy'
 
 const navItems = ['Overview', 'My Passport', 'Settings']
@@ -822,7 +823,6 @@ export default function ClientDashboard() {
     }
     const passwordPolicy = validatePasswordPolicy(newPassword)
     if (!passwordPolicy.valid) {
-      setPasswordMessage({ type: 'error', text: passwordPolicy.message })
       return
     }
     setPasswordUpdating(true)
@@ -1662,6 +1662,7 @@ export default function ClientDashboard() {
                           />
                         </label>
                       </div>
+                      <PasswordRequirements password={newPassword} />
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
