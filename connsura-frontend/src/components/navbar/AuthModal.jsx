@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
 import Heading from '../ui/Heading'
 import Text from '../ui/Text'
+import { validatePasswordPolicy } from '../../utils/passwordPolicy'
 
 const createEmptyForm = () => ({
   name: '',
@@ -62,6 +63,11 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
 
     if (form.password !== form.confirmPassword) {
       alert('Passwords do not match')
+      return
+    }
+    const passwordPolicy = validatePasswordPolicy(form.password)
+    if (!passwordPolicy.valid) {
+      alert(passwordPolicy.message)
       return
     }
 

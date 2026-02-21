@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { API_URL } from '../services/api'
 import { adminApi, clearAdminToken, setAdminToken } from '../services/adminApi'
 import AdminDetailPanel from './admin/AdminDetailPanel'
+import { validatePasswordPolicy } from '../utils/passwordPolicy'
 
 const AdminClientsTab = lazy(() => import('./admin/AdminClientsTab'))
 const AdminAuditTab = lazy(() => import('./admin/AdminAuditTab'))
@@ -139,7 +140,7 @@ export default function Admin({ initialView = 'clients' }) {
         form: {
           name: detail.name || '',
           email: detail.email || '',
-          password: detail.userPassword || '',
+          password: '',
           preferredLangs: joinList(detail.preferredLangs),
           coverages: joinList(detail.coverages),
           priorInsurance: joinList(detail.priorInsurance),
@@ -164,12 +165,20 @@ export default function Admin({ initialView = 'clients' }) {
     const payload = {
       name: tab.form.name,
       email: tab.form.email,
-      password: tab.form.password,
       preferredLangs: splitList(tab.form.preferredLangs),
       coverages: splitList(tab.form.coverages),
       priorInsurance: splitList(tab.form.priorInsurance),
       profileData: profileDataParsed,
       isDisabled: Boolean(tab.form.isDisabled),
+    }
+    const nextPassword = String(tab.form.password || '')
+    if (nextPassword.trim()) {
+      const passwordPolicy = validatePasswordPolicy(nextPassword)
+      if (!passwordPolicy.valid) {
+        toast.error(passwordPolicy.message)
+        return
+      }
+      payload.password = nextPassword
     }
     patchTab(tab.key, { saving: true })
     try {
@@ -183,7 +192,7 @@ export default function Admin({ initialView = 'clients' }) {
           ...tab.form,
           name: updated.name || '',
           email: updated.email || '',
-          password: updated.userPassword || tab.form.password,
+          password: '',
           preferredLangs: joinList(updated.preferredLangs),
           coverages: joinList(updated.coverages),
           priorInsurance: joinList(updated.priorInsurance),

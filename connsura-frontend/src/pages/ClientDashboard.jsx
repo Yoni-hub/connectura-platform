@@ -10,6 +10,7 @@ import Text from '../components/ui/Text'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
 import MyPassportFlow from '../components/passport/MyPassportFlow'
+import { validatePasswordPolicy } from '../utils/passwordPolicy'
 
 const navItems = ['Overview', 'My Passport', 'Settings']
 const SETTINGS_ITEMS = [
@@ -817,6 +818,11 @@ export default function ClientDashboard() {
     }
     if (newPassword !== confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'Passwords do not match.' })
+      return
+    }
+    const passwordPolicy = validatePasswordPolicy(newPassword)
+    if (!passwordPolicy.valid) {
+      setPasswordMessage({ type: 'error', text: passwordPolicy.message })
       return
     }
     setPasswordUpdating(true)

@@ -5,6 +5,7 @@ import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Heading from '../components/ui/Heading'
 import Text from '../components/ui/Text'
+import { validatePasswordPolicy } from '../utils/passwordPolicy'
 
 const createAuthenticatorForm = () => ({
   identifier: '',
@@ -40,6 +41,11 @@ export default function AccountRecovery() {
     }
     if (passwordForm.password !== passwordForm.confirmPassword) {
       toast.error('Passwords do not match')
+      return false
+    }
+    const passwordPolicy = validatePasswordPolicy(passwordForm.password)
+    if (!passwordPolicy.valid) {
+      toast.error(passwordPolicy.message)
       return false
     }
     return true

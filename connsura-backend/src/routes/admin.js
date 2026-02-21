@@ -13,6 +13,8 @@ const { SITE_CONTENT_DEFAULTS, sanitizeContent, checkComplianceWarnings } = requ
 const { DEFAULT_CREATE_PROFILE_SCHEMA } = require('../utils/formSchema')
 const { slugify } = require('../utils/productCatalog')
 const { buildQuestionRecords, normalizeQuestion } = require('../utils/questionBank')
+const { validatePasswordPolicy } = require('../utils/passwordPolicy')
+const { isRateLimited, registerFailure, clearFailures } = require('../utils/loginRateLimit')
 
 const router = express.Router()
 
@@ -22,6 +24,9 @@ const NOTIFICATION_EXPORT_MAX = Number(process.env.NOTIFICATION_EXPORT_MAX || 3)
 const notificationExportRates = new Map()
 const NOTIFICATION_CHANNELS = new Set(['EMAIL', 'IN_APP'])
 const NOTIFICATION_STATUSES = new Set(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'])
+const ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS = Number(process.env.ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
+const ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = Number(process.env.ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 8)
+const ADMIN_LOGIN_RATE_LIMIT_MESSAGE = 'Too many admin login attempts. Please wait a few minutes and try again.'
 
 const parseDurationMs = (value) => {
   const raw = String(value || '').trim()
@@ -62,13 +67,55 @@ const formatCustomer = (customer) => ({
   id: customer.id,
   name: customer.name,
   email: customer.user?.email,
-  userPassword: customer.user?.password,
   preferredLangs: parseJson(customer.preferredLangs, []),
   coverages: parseJson(customer.coverages, []),
   priorInsurance: parseJson(customer.priorInsurance, []),
   profileData: parseJson(customer.profileData, {}),
   isDisabled: customer.isDisabled,
 })
+
+const getRequestIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for']
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded
+  const ip = raw || req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ''
+  return String(ip).split(',')[0].trim().replace(/^::ffff:/, '')
+}
+
+const getAdminLoginRateLimitStatus = ({ ip, identifier }) => {
+  const ipStatus = isRateLimited({
+    scope: 'admin-login',
+    key: ip ? `ip:${ip}` : '',
+    maxAttempts: ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    windowMs: ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  const identifierStatus = isRateLimited({
+    scope: 'admin-login',
+    key: identifier ? `id:${identifier}` : '',
+    maxAttempts: ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    windowMs: ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  const limited = ipStatus.limited || identifierStatus.limited
+  const retryAfterSeconds = Math.max(ipStatus.retryAfterSeconds || 0, identifierStatus.retryAfterSeconds || 0)
+  return { limited, retryAfterSeconds }
+}
+
+const registerAdminLoginFailure = ({ ip, identifier }) => {
+  registerFailure({
+    scope: 'admin-login',
+    key: ip ? `ip:${ip}` : '',
+    windowMs: ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  registerFailure({
+    scope: 'admin-login',
+    key: identifier ? `id:${identifier}` : '',
+    windowMs: ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+}
+
+const clearAdminLoginFailures = ({ ip, identifier }) => {
+  clearFailures({ scope: 'admin-login', key: ip ? `ip:${ip}` : '' })
+  clearFailures({ scope: 'admin-login', key: identifier ? `id:${identifier}` : '' })
+}
 
 const logAudit = async (actorId, targetType, targetId, action, diff = null) => {
   try {
@@ -344,11 +391,27 @@ const formatErrorEvent = (event) => ({
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body
+  const identifier = String(email || '').trim().toLowerCase()
+  const ip = getRequestIp(req)
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+  const rateLimit = getAdminLoginRateLimitStatus({ ip, identifier })
+  if (rateLimit.limited) {
+    if (rateLimit.retryAfterSeconds) {
+      res.set('Retry-After', String(rateLimit.retryAfterSeconds))
+    }
+    return res.status(429).json({ error: ADMIN_LOGIN_RATE_LIMIT_MESSAGE })
+  }
   const admin = await prisma.adminUser.findUnique({ where: { email } })
-  if (!admin) return res.status(400).json({ error: 'Invalid credentials' })
+  if (!admin) {
+    registerAdminLoginFailure({ ip, identifier })
+    return res.status(400).json({ error: 'Invalid credentials' })
+  }
   const match = await bcrypt.compare(password, admin.password)
-  if (!match) return res.status(400).json({ error: 'Invalid credentials' })
+  if (!match) {
+    registerAdminLoginFailure({ ip, identifier })
+    return res.status(400).json({ error: 'Invalid credentials' })
+  }
+  clearAdminLoginFailures({ ip, identifier })
   const token = generateToken({ adminId: admin.id, role: admin.role, type: 'ADMIN' }, { expiresIn: ADMIN_JWT_EXPIRY })
   const cookieOptions = getAdminCookieOptions()
   res.cookie(ADMIN_AUTH_COOKIE, token, { ...cookieOptions, maxAge: getAdminCookieMaxAge() })
@@ -477,7 +540,13 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
   const data = {}
   const userUpdates = {}
   if (payload.email !== undefined) userUpdates.email = payload.email
-  if (payload.password !== undefined) userUpdates.password = await bcrypt.hash(payload.password, 10)
+  if (typeof payload.password === 'string' && payload.password.trim()) {
+    const passwordPolicy = validatePasswordPolicy(payload.password)
+    if (!passwordPolicy.valid) {
+      return res.status(400).json({ error: passwordPolicy.message })
+    }
+    userUpdates.password = await bcrypt.hash(payload.password, 10)
+  }
   if (payload.name !== undefined) data.name = payload.name
   if (payload.preferredLangs !== undefined) data.preferredLangs = JSON.stringify(payload.preferredLangs)
   if (payload.coverages !== undefined) data.coverages = JSON.stringify(payload.coverages)

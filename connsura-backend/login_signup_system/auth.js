@@ -32,6 +32,8 @@ const {
   consumeBackupCode,
   generateRecoveryId,
 } = require('../src/utils/totp')
+const { validatePasswordPolicy } = require('../src/utils/passwordPolicy')
+const { isRateLimited, registerFailure, clearFailures } = require('../src/utils/loginRateLimit')
 
 const router = express.Router()
 
@@ -139,6 +141,9 @@ const PASSWORD_PENDING_TTL_MS = Number(
 const RECOVERY_WINDOW_MS = Number(process.env.RECOVERY_WINDOW_MS || 15 * 60 * 1000)
 const RECOVERY_MAX_ATTEMPTS = Number(process.env.RECOVERY_MAX_ATTEMPTS || 5)
 const RECOVERY_ERROR = 'Unable to recover account. Check your details and try again.'
+const LOGIN_RATE_LIMIT_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 8)
+const LOGIN_RATE_LIMIT_MESSAGE = 'Too many login attempts. Please wait a few minutes and try again.'
 const recoveryAttempts = new Map()
 
 const getRequestIp = (req) => {
@@ -474,6 +479,42 @@ const ensureRecoveryId = async (current) => {
   throw new Error('Unable to generate a recovery ID')
 }
 
+const getAuthLoginRateLimitStatus = ({ ip, identifier }) => {
+  const ipStatus = isRateLimited({
+    scope: 'auth-login',
+    key: ip ? `ip:${ip}` : '',
+    maxAttempts: LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  const identifierStatus = isRateLimited({
+    scope: 'auth-login',
+    key: identifier ? `id:${identifier}` : '',
+    maxAttempts: LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  const limited = ipStatus.limited || identifierStatus.limited
+  const retryAfterSeconds = Math.max(ipStatus.retryAfterSeconds || 0, identifierStatus.retryAfterSeconds || 0)
+  return { limited, retryAfterSeconds }
+}
+
+const registerAuthLoginFailure = ({ ip, identifier }) => {
+  registerFailure({
+    scope: 'auth-login',
+    key: ip ? `ip:${ip}` : '',
+    windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+  registerFailure({
+    scope: 'auth-login',
+    key: identifier ? `id:${identifier}` : '',
+    windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  })
+}
+
+const clearAuthLoginFailures = ({ ip, identifier }) => {
+  clearFailures({ scope: 'auth-login', key: ip ? `ip:${ip}` : '' })
+  clearFailures({ scope: 'auth-login', key: identifier ? `id:${identifier}` : '' })
+}
+
 router.post('/register', async (req, res) => {
   try {
     const {
@@ -498,6 +539,13 @@ router.post('/register', async (req, res) => {
         await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'missing_fields' })
       }
       return res.status(400).json({ error: 'Email, password, and name are required' })
+    }
+    const passwordPolicy = validatePasswordPolicy(password)
+    if (!passwordPolicy.valid) {
+      if (isCustomer) {
+        await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'weak_password' })
+      }
+      return res.status(400).json({ error: passwordPolicy.message })
     }
     const requiredConsentKeys = ['terms', 'privacy', 'emailCommunications', 'platformDisclaimer']
     const missingConsents = requiredConsentKeys.filter((key) => !consents?.[key])
@@ -1191,6 +1239,10 @@ router.post('/password/request', authGuard, async (req, res) => {
       }
       return res.status(400).json({ error: 'Current and new password are required' })
     }
+    const passwordPolicy = validatePasswordPolicy(newPassword)
+    if (!passwordPolicy.valid) {
+      return res.status(400).json({ error: passwordPolicy.message })
+    }
     const match = await bcrypt.compare(currentPassword, user.password)
     if (!match) {
       if (user.role === 'CUSTOMER') {
@@ -1388,6 +1440,10 @@ router.post('/password', authGuard, async (req, res) => {
       }
       return res.status(400).json({ error: 'Current and new password are required' })
     }
+    const passwordPolicy = validatePasswordPolicy(newPassword)
+    if (!passwordPolicy.valid) {
+      return res.status(400).json({ error: passwordPolicy.message })
+    }
     const match = await bcrypt.compare(currentPassword, user.password)
     if (!match) {
       if (user.role === 'CUSTOMER') {
@@ -1468,6 +1524,10 @@ router.post('/recovery/reset', async (req, res) => {
   const newPassword = String(req.body?.newPassword || '')
   if (!identifier || !newPassword || (!code && !backupCode)) {
     return res.status(400).json({ error: RECOVERY_ERROR })
+  }
+  const passwordPolicy = validatePasswordPolicy(newPassword)
+  if (!passwordPolicy.valid) {
+    return res.status(400).json({ error: passwordPolicy.message })
   }
   const attemptKey = `${identifier.toLowerCase()}:${req.ip || ''}`
   const throttle = registerRecoveryAttempt(attemptKey)
@@ -1569,6 +1629,10 @@ router.post('/recovery/email-otp/reset', async (req, res) => {
   if (!email || !otpCode || !newPassword) {
     return res.status(400).json({ error: RECOVERY_ERROR })
   }
+  const passwordPolicy = validatePasswordPolicy(newPassword)
+  if (!passwordPolicy.valid) {
+    return res.status(400).json({ error: passwordPolicy.message })
+  }
   const attemptKey = `${email}:${req.ip || ''}`
   const throttle = registerRecoveryAttempt(attemptKey)
   if (throttle.limited) {
@@ -1612,26 +1676,43 @@ router.post('/recovery/email-otp/reset', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body
+  const identifier = normalizeEmail(email || '')
+  const ip = getRequestIp(req)
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' })
+  }
+  const rateLimit = getAuthLoginRateLimitStatus({ ip, identifier })
+  if (rateLimit.limited) {
+    if (rateLimit.retryAfterSeconds) {
+      res.set('Retry-After', String(rateLimit.retryAfterSeconds))
+    }
+    return res.status(429).json({ error: LOGIN_RATE_LIMIT_MESSAGE })
   }
   try {
     const user = await prisma.user.findUnique({
       where: { email },
       include: { customer: true },
     })
-    if (!user) return res.status(400).json({ error: 'Invalid credentials' })
+    if (!user) {
+      registerAuthLoginFailure({ ip, identifier })
+      return res.status(400).json({ error: 'Invalid credentials' })
+    }
     if (user.role === 'AGENT') {
+      registerAuthLoginFailure({ ip, identifier })
       return res.status(403).json({ error: 'This account type is disabled' })
     }
     if (user.customer?.isDisabled) {
+      registerAuthLoginFailure({ ip, identifier })
       return res.status(403).json({ error: 'Account is deactivated' })
     }
     const match = await bcrypt.compare(password, user.password)
-    if (!match) return res.status(400).json({ error: 'Invalid credentials' })
+    if (!match) {
+      registerAuthLoginFailure({ ip, identifier })
+      return res.status(400).json({ error: 'Invalid credentials' })
+    }
+    clearAuthLoginFailures({ ip, identifier })
     if (user.role === 'CUSTOMER') {
       const sessionId = req.body?.sessionId ? String(req.body.sessionId) : null
-      const ip = getRequestIp(req)
       const userAgent = String(req.headers['user-agent'] || '')
       const customerId = user.customer?.id || user.id
       let deviceId = getCookieValue(req, DEVICE_COOKIE_NAME)

@@ -36,12 +36,12 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
               />
             </label>
             <label className="block text-sm font-semibold text-slate-700">
-              Password (hashed)
+              New password (leave blank to keep current)
               <input
                 className={input}
                 value={tab.form.password}
                 onChange={(e) => patchTabForm(tab.key, { password: e.target.value })}
-                type="text"
+                type="password"
               />
             </label>
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-700">
