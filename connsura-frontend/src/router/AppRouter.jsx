@@ -16,6 +16,7 @@ import PassportProductEditor from '../pages/PassportProductEditor'
 import AccountRecovery from '../pages/AccountRecovery'
 import AccountDeleted from '../pages/AccountDeleted'
 import NotFound from '../pages/NotFound'
+import DevTypography from '../pages/dev/DevTypography'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/navbar/Navbar'
 import Footer from '../components/footer/Footer'
@@ -129,6 +130,7 @@ function Layout() {
           />
           <Route path="/recover" element={<AccountRecovery />} />
           <Route path="/account-deleted" element={<AccountDeleted />} />
+          {import.meta.env.DEV && <Route path="/dev/typography" element={<DevTypography />} />}
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/errors" element={<Admin initialView="errors" />} />
           <Route path="*" element={<NotFound />} />

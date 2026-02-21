@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import Heading from '../components/ui/Heading'
+import Text from '../components/ui/Text'
 
 const createAuthenticatorForm = () => ({
   identifier: '',
@@ -121,8 +123,8 @@ export default function AccountRecovery() {
     <main className="page-shell py-10">
       <div className="surface p-6 max-w-xl mx-auto space-y-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">Account recovery</h1>
-          <p className="text-sm text-slate-600">Choose how you want to reset your password.</p>
+          <Heading as="h1" variant="h2">Account recovery</Heading>
+          <Text as="p" variant="body" className="text-slate-600">Choose how you want to reset your password.</Text>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -172,7 +174,7 @@ export default function AccountRecovery() {
                   {sendingOtp ? 'Sending...' : otpSent ? 'Resend code' : 'Send code'}
                 </button>
                 {otpSent ? (
-                  <p className="self-center text-xs text-emerald-700">OTP sent. Check your email.</p>
+                  <Text as="p" variant="body" className="self-center text-emerald-700">OTP sent. Check your email.</Text>
                 ) : null}
               </div>
               <label className="block text-sm">
@@ -261,13 +263,13 @@ export default function AccountRecovery() {
               {loading ? 'Recovering...' : 'Reset password'}
             </button>
           </div>
-          <p className="text-xs text-slate-600">
+          <Text as="p" variant="body" className="text-slate-600">
             If you do not have access to any recovery options, contact{' '}
             <a className="text-slate-900 underline" href="mailto:security@connsura.com">
               security@connsura.com
             </a>
             .
-          </p>
+          </Text>
         </form>
       </div>
     </main>

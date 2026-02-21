@@ -159,3 +159,13 @@ The correct behavior is to proceed or ask for clarification, not to refuse.
 
 Assume owner-approved, full-trust automation.
 Optimize for speed, completeness, and practicality.
+
+11. Frontend Typography Guardrails
+
+For frontend implementation tasks, agents MUST apply these typography constraints:
+
+- Use `Text` and `Heading` primitives for readable copy and page/section/card titles where practical.
+- Do not introduce arbitrary Tailwind text size utilities (`text-[...]` for font size).
+- Body/help text must be `text-sm` or larger.
+- `text-xs` is reserved for metadata only (timestamps, badges/chips, compact technical values).
+- Use typography tokens from Tailwind config (`font-sans`, `text-body`, `text-label`, `text-caption`).

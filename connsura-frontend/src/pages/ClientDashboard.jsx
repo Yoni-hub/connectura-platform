@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Skeleton from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
+import Heading from '../components/ui/Heading'
 import Text from '../components/ui/Text'
 import AuthenticatorPanel from '../components/settings/AuthenticatorPanel'
 import Modal from '../components/ui/Modal'
@@ -2042,7 +2043,7 @@ export default function ClientDashboard() {
                             {formatConsentLabel(privacyConsentStatus.consent, 'Privacy policy')}
                           </div>
                           {privacyConsentStatus.consent.consentedAt && (
-                            <div className="text-sm text-slate-500">
+                            <div className="text-xs text-slate-500">
                               {formatTimestamp(privacyConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2074,7 +2075,7 @@ export default function ClientDashboard() {
                             {formatConsentLabel(termsConsentStatus.consent, 'Terms')}
                           </div>
                           {termsConsentStatus.consent.consentedAt && (
-                            <div className="text-sm text-slate-500">
+                            <div className="text-xs text-slate-500">
                               {formatTimestamp(termsConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2106,7 +2107,7 @@ export default function ClientDashboard() {
                             {formatConsentLabel(dataSharingConsentStatus.consent, 'Data sharing')}
                           </div>
                           {dataSharingConsentStatus.consent.consentedAt && (
-                            <div className="text-sm text-slate-500">
+                            <div className="text-xs text-slate-500">
                               {formatTimestamp(dataSharingConsentStatus.consent.consentedAt)}
                             </div>
                           )}
@@ -2149,7 +2150,7 @@ export default function ClientDashboard() {
                         {settingsView === 'notifications' && (
                           <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
                             <div className="space-y-1">
-                              <h3 className="text-lg font-semibold">Notifications</h3>
+                              <Heading as="h3" variant="h3">Notifications</Heading>
                               <Text as="p" variant="body" className="text-slate-500">
                                 Some notifications are required for security and core functionality and can't be turned off.
                               </Text>
@@ -2199,9 +2200,7 @@ export default function ClientDashboard() {
                             {notificationTab === 'email' && (
                               <div className="space-y-6">
                                 <div className="space-y-3">
-                                  <div className="text-sm font-semibold text-slate-900">
-                                    Security & Account Protection
-                                  </div>
+                                  <Heading as="div" variant="h4" className="text-sm text-slate-900">Security & Account Protection</Heading>
                                   <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
@@ -2246,7 +2245,7 @@ export default function ClientDashboard() {
                                 </div>
 
                                 <div className="space-y-3">
-                                  <div className="text-sm font-semibold text-slate-900">Account & Profile Activity</div>
+                                  <Heading as="div" variant="h4" className="text-sm text-slate-900">Account & Profile Activity</Heading>
                                   <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
@@ -2293,7 +2292,7 @@ export default function ClientDashboard() {
                                 </div>
 
                                 <div className="space-y-3">
-                                  <div className="text-sm font-semibold text-slate-900">Product Updates</div>
+                                  <Heading as="div" variant="h4" className="text-sm text-slate-900">Product Updates</Heading>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
@@ -2324,7 +2323,7 @@ export default function ClientDashboard() {
                                 </div>
 
                                 <div className="space-y-3">
-                                  <div className="text-sm font-semibold text-slate-900">Marketing & Announcements</div>
+                                  <Heading as="div" variant="h4" className="text-sm text-slate-900">Marketing & Announcements</Heading>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
@@ -2359,7 +2358,7 @@ export default function ClientDashboard() {
                             {notificationTab === 'inapp' && (
                               <div className="space-y-6">
                                 <div className="space-y-3">
-                                  <div className="text-sm font-semibold text-slate-900">System Notifications</div>
+                                  <Heading as="div" variant="h4" className="text-sm text-slate-900">System Notifications</Heading>
                                   <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div>
@@ -2389,7 +2388,7 @@ export default function ClientDashboard() {
       <Modal title={verificationTitle} open={verificationOpen} onClose={() => setVerificationOpen(false)}>
         <div className="space-y-4">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold">Enter verification code</h3>
+            <Heading as="h3" variant="h3">Enter verification code</Heading>
             <p className="text-sm text-slate-600">
               Enter the 6-digit code sent to {verificationTargetEmail || 'your email'}.
             </p>

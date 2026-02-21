@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Modal from '../ui/Modal'
+import Heading from '../ui/Heading'
+import Text from '../ui/Text'
 
 const createEmptyForm = () => ({
   name: '',
@@ -98,12 +100,12 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
         onSubmit={handleSubmit}
       >
         <div className="space-y-1">
-          <p className="text-2xl font-bold text-slate-900">
+          <Heading as="p" variant="h2" className="font-bold">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
-          </p>
-          <p className="text-sm text-slate-600">
+          </Heading>
+          <Text as="p" variant="body" className="text-slate-600">
             {mode === 'login' ? 'Sign in to your dashboard.' : 'Access your client dashboard and insurance profile.'}
-          </p>
+          </Text>
         </div>
 
         <label className="block text-sm">
@@ -224,8 +226,10 @@ export default function AuthModal({ open, onClose, startMode = 'login' }) {
           </button>
         )}
 
-        <div className="flex items-center justify-center gap-2 text-sm text-slate-700">
-          {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
+        <div className="flex items-center justify-center gap-2">
+          <Text as="span" variant="body" className="text-slate-700">
+            {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
+          </Text>
           <button
             type="button"
             className="font-semibold text-[#006aff]"
