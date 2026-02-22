@@ -63,6 +63,14 @@ After the run completes:
 - Server log: `/opt/connsura/deployments.log`
 - Orchestrator log: `automation/deployments.log`
 
+## EC2 auto-recovery (staging)
+- Region: `us-east-1`
+- Instance: `i-0d9447cfa53e1ed9d`
+- Auto-recover alarm: `connsura-staging-ec2-system-auto-recover` (`StatusCheckFailed_System` -> `ec2:recover`)
+- Auto-reboot alarm: `connsura-staging-ec2-instance-auto-reboot` (`StatusCheckFailed_Instance` -> `ec2:reboot`)
+- Check alarm status:
+  - `aws cloudwatch describe-alarms --region us-east-1 --alarm-names connsura-staging-ec2-system-auto-recover connsura-staging-ec2-instance-auto-reboot`
+
 ## Database access (staging)
 - SSH tunnel: `ssh -L 5432:localhost:5432 <user>@<host>` then connect to `localhost:5432`.
 - Read-only creds live at `/opt/connsura/env/db_readonly.env` (chmod 600).
