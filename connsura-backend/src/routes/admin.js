@@ -557,7 +557,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body
   const identifier = String(email || '').trim().toLowerCase()
   const ip = getRequestIp(req)
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+  if (!identifier || !password) return res.status(400).json({ error: 'Email and password required' })
   const rateLimit = getAdminLoginRateLimitStatus({ ip, identifier })
   if (rateLimit.limited) {
     if (rateLimit.retryAfterSeconds) {
@@ -565,7 +565,7 @@ router.post('/login', async (req, res) => {
     }
     return res.status(429).json({ error: ADMIN_LOGIN_RATE_LIMIT_MESSAGE })
   }
-  const admin = await prisma.adminUser.findUnique({ where: { email } })
+  const admin = await prisma.adminUser.findUnique({ where: { email: identifier } })
   if (!admin) {
     registerAdminLoginFailure({ ip, identifier })
     return res.status(400).json({ error: 'Invalid credentials' })

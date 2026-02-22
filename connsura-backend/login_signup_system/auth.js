@@ -524,17 +524,18 @@ router.post('/register', async (req, res) => {
       languages = [],
       consents = {},
     } = req.body
+    const normalizedEmail = normalizeEmail(email || '')
     const requestedRole = String(req.body?.role || 'CUSTOMER').toUpperCase()
     if (requestedRole !== 'CUSTOMER') {
       return res.status(403).json({ error: 'Only customer accounts are supported' })
     }
     const role = 'CUSTOMER'
     const isCustomer = true
-    const auditTarget = normalizeEmail(email) || 'unknown'
+    const auditTarget = normalizedEmail || 'unknown'
     if (isCustomer) {
       await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_SUBMITTED')
     }
-    if (!email || !password || !name) {
+    if (!normalizedEmail || !password || !name) {
       if (isCustomer) {
         await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'missing_fields' })
       }
@@ -555,7 +556,7 @@ router.post('/register', async (req, res) => {
       }
       return res.status(400).json({ error: 'Consent required', code: 'CONSENT_REQUIRED', missingConsents })
     }
-    const existing = await prisma.user.findUnique({ where: { email } })
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existing) {
       if (isCustomer) {
         await logClientAudit(auditTarget, 'CLIENT_SIGN_UP_FAILED', { reason: 'email_exists' })
@@ -565,7 +566,7 @@ router.post('/register', async (req, res) => {
     const hashed = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashed,
         role,
         customer: {
@@ -1678,7 +1679,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body
   const identifier = normalizeEmail(email || '')
   const ip = getRequestIp(req)
-  if (!email || !password) {
+  if (!identifier || !password) {
     return res.status(400).json({ error: 'Email and password required' })
   }
   const rateLimit = getAuthLoginRateLimitStatus({ ip, identifier })
@@ -1690,7 +1691,7 @@ router.post('/login', async (req, res) => {
   }
   try {
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: identifier },
       include: { customer: true },
     })
     if (!user) {
