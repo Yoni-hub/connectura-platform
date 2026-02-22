@@ -14,14 +14,6 @@ const AdminLegalTab = lazy(() => import('./admin/AdminLegalTab'))
 const AdminNotificationLogsTab = lazy(() => import('./admin/AdminNotificationLogsTab'))
 const AdminOtpTab = lazy(() => import('./admin/AdminOtpTab'))
 
-const splitList = (value = '') =>
-  value
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean)
-
-const joinList = (value = []) => (Array.isArray(value) ? value.filter(Boolean).join(', ') : '')
-
 export default function Admin({ initialView = 'clients' }) {
   const [admin, setAdmin] = useState(null)
   const [authChecking, setAuthChecking] = useState(true)
@@ -141,10 +133,6 @@ export default function Admin({ initialView = 'clients' }) {
           name: detail.name || '',
           email: detail.email || '',
           password: '',
-          preferredLangs: joinList(detail.preferredLangs),
-          coverages: joinList(detail.coverages),
-          priorInsurance: joinList(detail.priorInsurance),
-          profileData: JSON.stringify(detail.profileData || {}, null, 2),
           isDisabled: Boolean(detail.isDisabled),
         },
       })
@@ -155,20 +143,9 @@ export default function Admin({ initialView = 'clients' }) {
   }
 
   const saveClientTab = async (tab) => {
-    let profileDataParsed = {}
-    try {
-      profileDataParsed = tab.form.profileData ? JSON.parse(tab.form.profileData) : {}
-    } catch {
-      toast.error('Profile data must be valid JSON')
-      return
-    }
     const payload = {
       name: tab.form.name,
       email: tab.form.email,
-      preferredLangs: splitList(tab.form.preferredLangs),
-      coverages: splitList(tab.form.coverages),
-      priorInsurance: splitList(tab.form.priorInsurance),
-      profileData: profileDataParsed,
       isDisabled: Boolean(tab.form.isDisabled),
     }
     const nextPassword = String(tab.form.password || '')
@@ -193,10 +170,6 @@ export default function Admin({ initialView = 'clients' }) {
           name: updated.name || '',
           email: updated.email || '',
           password: '',
-          preferredLangs: joinList(updated.preferredLangs),
-          coverages: joinList(updated.coverages),
-          priorInsurance: joinList(updated.priorInsurance),
-          profileData: JSON.stringify(updated.profileData || {}, null, 2),
           isDisabled: Boolean(updated.isDisabled),
         },
       })

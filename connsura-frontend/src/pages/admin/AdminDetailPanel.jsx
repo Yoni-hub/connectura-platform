@@ -5,12 +5,13 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
   if (tab.loading) return <div className="text-slate-600">Loading details...</div>
   if (!tab.form) return <div className="text-slate-500">No details loaded.</div>
   const input = 'mt-1 w-1/5 min-w-[140px] rounded-lg border border-slate-200 px-3 py-2 text-sm'
-  const textarea = `${input} min-h-[100px]`
   if (tab.type === 'client') {
+    const passportProducts = Array.isArray(tab.data?.passportSummary?.products) ? tab.data.passportSummary.products : []
+    const passportStats = tab.data?.passportSummary?.stats || {}
     return (
       <div className="space-y-3 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-slate-600">Client #{tab.id} - full profile and sign-up details</div>
+          <div className="text-slate-600">Client #{tab.id} account controls and passport summary</div>
           <div className="flex gap-2">
             <button type="button" className="pill-btn-ghost px-3 py-1" onClick={() => closeTab(tab.key)}>
               Close tab
@@ -54,41 +55,27 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 Disabled
               </label>
             </div>
-          </div>
-          <div className="space-y-2.5">
-            <label className="block text-sm font-semibold text-slate-700">
-              Preferred languages (comma-separated)
-              <input
-                className={input}
-                value={tab.form.preferredLangs}
-                onChange={(e) => patchTabForm(tab.key, { preferredLangs: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Coverages (comma-separated)
-              <input
-                className={input}
-                value={tab.form.coverages}
-                onChange={(e) => patchTabForm(tab.key, { coverages: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Prior insurance (comma-separated)
-              <input
-                className={input}
-                value={tab.form.priorInsurance}
-                onChange={(e) => patchTabForm(tab.key, { priorInsurance: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Profile data (JSON)
-              <textarea
-                className={textarea}
-                value={tab.form.profileData}
-                onChange={(e) => patchTabForm(tab.key, { profileData: e.target.value })}
-                spellCheck={false}
-              />
-            </label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-sm font-semibold text-slate-700">Passport data</div>
+              <div className="mt-2 text-sm text-slate-600">
+                Products: {Number(passportStats.activeProducts || 0)} | Sections saved:{' '}
+                {Number(passportStats.sectionResponseCount || 0)} | Custom questions:{' '}
+                {Number(passportStats.customQuestionCount || 0)}
+              </div>
+              {passportProducts.length === 0 && (
+                <div className="mt-2 text-sm text-slate-500">No active passport products.</div>
+              )}
+              {passportProducts.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {passportProducts.map((product) => (
+                    <div key={product.id} className="text-sm text-slate-700">
+                      {product.productName} ({product.productSource}) - sections {product.sectionResponseCount}, custom questions{' '}
+                      {product.customQuestionCount}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-2">

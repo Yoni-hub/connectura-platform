@@ -67,12 +67,41 @@ const formatCustomer = (customer) => ({
   id: customer.id,
   name: customer.name,
   email: customer.user?.email,
-  preferredLangs: parseJson(customer.preferredLangs, []),
-  coverages: parseJson(customer.coverages, []),
-  priorInsurance: parseJson(customer.priorInsurance, []),
-  profileData: parseJson(customer.profileData, {}),
   isDisabled: customer.isDisabled,
 })
+
+const formatAdminClientDetail = (customer) => {
+  const products = Array.isArray(customer.passportProducts)
+    ? customer.passportProducts.map((product) => ({
+        id: product.id,
+        productName: product.productName,
+        productSource: product.productSource,
+        adminProductId: product.adminProductId || null,
+        adminProductName: product.adminProduct?.name || null,
+        updatedAt: product.updatedAt,
+        sectionResponseCount: Array.isArray(product.sectionResponses) ? product.sectionResponses.length : 0,
+        customQuestionCount: Array.isArray(product.customQuestions) ? product.customQuestions.length : 0,
+      }))
+    : []
+
+  const stats = products.reduce(
+    (acc, product) => {
+      acc.activeProducts += 1
+      acc.sectionResponseCount += Number(product.sectionResponseCount || 0)
+      acc.customQuestionCount += Number(product.customQuestionCount || 0)
+      return acc
+    },
+    { activeProducts: 0, sectionResponseCount: 0, customQuestionCount: 0 }
+  )
+
+  return {
+    ...formatCustomer(customer),
+    passportSummary: {
+      products,
+      stats,
+    },
+  }
+}
 
 const getRequestIp = (req) => {
   const forwarded = req.headers['x-forwarded-for']
@@ -528,10 +557,21 @@ router.get('/clients', adminGuard, async (req, res) => {
 router.get('/clients/:id', adminGuard, async (req, res) => {
   const customer = await prisma.customer.findUnique({
     where: { id: Number(req.params.id) },
-    include: { user: true },
+    include: {
+      user: true,
+      passportProducts: {
+        where: { deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          adminProduct: { select: { id: true, name: true } },
+          customQuestions: { select: { id: true } },
+          sectionResponses: { select: { id: true } },
+        },
+      },
+    },
   })
   if (!customer) return res.status(404).json({ error: 'Client not found' })
-  res.json({ client: formatCustomer(customer) })
+  res.json({ client: formatAdminClientDetail(customer) })
 })
 
 router.put('/clients/:id', adminGuard, async (req, res) => {
@@ -548,10 +588,6 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
     userUpdates.password = await bcrypt.hash(payload.password, 10)
   }
   if (payload.name !== undefined) data.name = payload.name
-  if (payload.preferredLangs !== undefined) data.preferredLangs = JSON.stringify(payload.preferredLangs)
-  if (payload.coverages !== undefined) data.coverages = JSON.stringify(payload.coverages)
-  if (payload.priorInsurance !== undefined) data.priorInsurance = JSON.stringify(payload.priorInsurance)
-  if (payload.profileData !== undefined) data.profileData = JSON.stringify(payload.profileData)
   if (payload.isDisabled !== undefined) data.isDisabled = payload.isDisabled
 
   const customer = await prisma.customer.update({
@@ -560,10 +596,21 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
       ...data,
       ...(Object.keys(userUpdates).length ? { user: { update: userUpdates } } : {}),
     },
-    include: { user: true },
+    include: {
+      user: true,
+      passportProducts: {
+        where: { deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          adminProduct: { select: { id: true, name: true } },
+          customQuestions: { select: { id: true } },
+          sectionResponses: { select: { id: true } },
+        },
+      },
+    },
   })
   await logAudit(req.admin.id, 'Client', id, 'update', { ...data, ...(Object.keys(userUpdates).length ? { user: userUpdates } : {}) })
-  res.json({ client: formatCustomer(customer) })
+  res.json({ client: formatAdminClientDetail(customer) })
 })
 
 router.post('/clients/:id/disable', adminGuard, async (req, res) => {
