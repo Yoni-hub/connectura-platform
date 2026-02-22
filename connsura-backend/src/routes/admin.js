@@ -70,7 +70,123 @@ const formatCustomer = (customer) => ({
   isDisabled: customer.isDisabled,
 })
 
-const formatAdminClientDetail = (customer) => {
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const normalizeResponseEntries = (values) => {
+  if (Array.isArray(values?.entries)) {
+    return values.entries.filter((entry) => isPlainObject(entry))
+  }
+  if (isPlainObject(values) && Object.keys(values).length > 0) {
+    return [values]
+  }
+  return []
+}
+
+const normalizeSectionKey = (value) => String(value || '').trim().toLowerCase()
+
+const parseProductSections = (formSchema) => {
+  const parsed = parseJson(formSchema, {})
+  return Array.isArray(parsed?.sections) ? parsed.sections : []
+}
+
+const buildAdminQuestionLabelMap = async (customer) => {
+  const questionIds = Array.from(
+    new Set(
+      (customer.passportProducts || [])
+        .filter((product) => product.productSource === 'ADMIN_PRODUCT')
+        .flatMap((product) => parseProductSections(product.adminProduct?.formSchema))
+        .flatMap((section) => (Array.isArray(section?.questionIds) ? section.questionIds : []))
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  if (!questionIds.length) return new Map()
+  const questions = await prisma.questionBank.findMany({
+    where: { id: { in: questionIds }, source: 'SYSTEM' },
+    select: { id: true, text: true },
+  })
+  return new Map(questions.map((question) => [String(question.id), question.text]))
+}
+
+const formatSectionDisplayRows = ({ product, sectionResponse, adminQuestionLabelMap }) => {
+  const entries = normalizeResponseEntries(sectionResponse.values)
+  const sectionKey = normalizeSectionKey(sectionResponse.sectionKey)
+  const customQuestionLabelMap = new Map(
+    Array.isArray(product.customQuestions)
+      ? product.customQuestions.map((question) => [String(question.id), question.questionText])
+      : []
+  )
+
+  const adminSections = parseProductSections(product.adminProduct?.formSchema)
+  const sectionMetaByKey = new Map(
+    adminSections.map((section) => [
+      normalizeSectionKey(section?.key),
+      {
+        label: String(section?.label || section?.key || sectionKey || 'Section').trim(),
+        questionIds: Array.isArray(section?.questionIds) ? section.questionIds.map((id) => String(id)) : [],
+      },
+    ])
+  )
+  const sectionMeta = sectionMetaByKey.get(sectionKey) || null
+  const sectionLabel = sectionMeta?.label || (sectionResponse.sectionKey || 'Section')
+  const orderedFieldIds = sectionMeta?.questionIds || []
+
+  const formatValue = (value) => {
+    if (value === null || value === undefined || value === '') return 'Not set'
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    return JSON.stringify(value)
+  }
+
+  const entryRows = entries.map((entry, index) => {
+    const fields = []
+    const keysSeen = new Set()
+
+    orderedFieldIds.forEach((fieldId) => {
+      if (!Object.prototype.hasOwnProperty.call(entry, fieldId)) return
+      keysSeen.add(fieldId)
+      const rawValue = entry[fieldId]
+      fields.push({
+        key: fieldId,
+        label:
+          adminQuestionLabelMap.get(fieldId) ||
+          customQuestionLabelMap.get(fieldId) ||
+          `Field ${fieldId}`,
+        value: formatValue(rawValue),
+      })
+    })
+
+    Object.keys(entry).forEach((fieldKey) => {
+      if (keysSeen.has(fieldKey)) return
+      const rawValue = entry[fieldKey]
+      fields.push({
+        key: fieldKey,
+        label:
+          adminQuestionLabelMap.get(fieldKey) ||
+          customQuestionLabelMap.get(fieldKey) ||
+          fieldKey,
+        value: formatValue(rawValue),
+      })
+    })
+
+    return {
+      index,
+      fields,
+    }
+  })
+
+  return {
+    id: sectionResponse.id,
+    sectionKey,
+    sectionLabel,
+    updatedAt: sectionResponse.updatedAt,
+    entryCount: entryRows.length,
+    entries: entryRows,
+  }
+}
+
+const formatAdminClientDetail = async (customer) => {
+  const adminQuestionLabelMap = await buildAdminQuestionLabelMap(customer)
   const products = Array.isArray(customer.passportProducts)
     ? customer.passportProducts.map((product) => ({
         id: product.id,
@@ -81,6 +197,25 @@ const formatAdminClientDetail = (customer) => {
         updatedAt: product.updatedAt,
         sectionResponseCount: Array.isArray(product.sectionResponses) ? product.sectionResponses.length : 0,
         customQuestionCount: Array.isArray(product.customQuestions) ? product.customQuestions.length : 0,
+        sections: Array.isArray(product.sectionResponses)
+          ? product.sectionResponses.map((section) =>
+              formatSectionDisplayRows({
+                product,
+                sectionResponse: section,
+                adminQuestionLabelMap,
+              })
+            )
+          : [],
+        customQuestions: Array.isArray(product.customQuestions)
+          ? product.customQuestions.map((question) => ({
+              id: question.id,
+              questionText: question.questionText,
+              inputType: question.inputType || 'general',
+              options: question.options ?? null,
+              orderIndex: question.orderIndex || 0,
+              updatedAt: question.updatedAt,
+            }))
+          : [],
       }))
     : []
 
@@ -563,15 +698,33 @@ router.get('/clients/:id', adminGuard, async (req, res) => {
         where: { deletedAt: null },
         orderBy: { updatedAt: 'desc' },
         include: {
-          adminProduct: { select: { id: true, name: true } },
-          customQuestions: { select: { id: true } },
-          sectionResponses: { select: { id: true } },
+          adminProduct: { select: { id: true, name: true, formSchema: true } },
+          customQuestions: {
+            orderBy: { orderIndex: 'asc' },
+            select: {
+              id: true,
+              questionText: true,
+              inputType: true,
+              options: true,
+              orderIndex: true,
+              updatedAt: true,
+            },
+          },
+          sectionResponses: {
+            orderBy: { sectionKey: 'asc' },
+            select: {
+              id: true,
+              sectionKey: true,
+              values: true,
+              updatedAt: true,
+            },
+          },
         },
       },
     },
   })
   if (!customer) return res.status(404).json({ error: 'Client not found' })
-  res.json({ client: formatAdminClientDetail(customer) })
+  res.json({ client: await formatAdminClientDetail(customer) })
 })
 
 router.put('/clients/:id', adminGuard, async (req, res) => {
@@ -602,15 +755,33 @@ router.put('/clients/:id', adminGuard, async (req, res) => {
         where: { deletedAt: null },
         orderBy: { updatedAt: 'desc' },
         include: {
-          adminProduct: { select: { id: true, name: true } },
-          customQuestions: { select: { id: true } },
-          sectionResponses: { select: { id: true } },
+          adminProduct: { select: { id: true, name: true, formSchema: true } },
+          customQuestions: {
+            orderBy: { orderIndex: 'asc' },
+            select: {
+              id: true,
+              questionText: true,
+              inputType: true,
+              options: true,
+              orderIndex: true,
+              updatedAt: true,
+            },
+          },
+          sectionResponses: {
+            orderBy: { sectionKey: 'asc' },
+            select: {
+              id: true,
+              sectionKey: true,
+              values: true,
+              updatedAt: true,
+            },
+          },
         },
       },
     },
   })
   await logAudit(req.admin.id, 'Client', id, 'update', { ...data, ...(Object.keys(userUpdates).length ? { user: userUpdates } : {}) })
-  res.json({ client: formatAdminClientDetail(customer) })
+  res.json({ client: await formatAdminClientDetail(customer) })
 })
 
 router.post('/clients/:id/disable', adminGuard, async (req, res) => {

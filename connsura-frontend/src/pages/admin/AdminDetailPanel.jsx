@@ -66,11 +66,55 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
                 <div className="mt-2 text-sm text-slate-500">No active passport products.</div>
               )}
               {passportProducts.length > 0 && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-2 space-y-3">
                   {passportProducts.map((product) => (
-                    <div key={product.id} className="text-sm text-slate-700">
-                      {product.productName} ({product.productSource}) - sections {product.sectionResponseCount}, custom questions{' '}
-                      {product.customQuestionCount}
+                    <div key={product.id} className="rounded-md border border-slate-200 bg-white p-2">
+                      <div className="text-sm font-semibold text-slate-700">
+                        {product.productName} ({product.productSource})
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Sections: {product.sectionResponseCount} | Custom questions: {product.customQuestionCount}
+                      </div>
+                      {Array.isArray(product.sections) && product.sections.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {product.sections.map((section) => (
+                            <div key={section.id} className="rounded border border-slate-100 p-2">
+                              <div className="text-xs font-semibold uppercase text-slate-500">
+                                {section.sectionLabel || section.sectionKey}
+                              </div>
+                              {Array.isArray(section.entries) && section.entries.length > 0 ? (
+                                <div className="mt-1 space-y-2">
+                                  {section.entries.map((entry) => (
+                                    <div key={`${section.id}-${entry.index}`} className="rounded border border-slate-100 bg-slate-50 p-2">
+                                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                        Entry #{Number(entry.index || 0) + 1}
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                                        {(entry.fields || []).map((field) => (
+                                          <div key={`${section.id}-${entry.index}-${field.key}`} className="text-xs text-slate-700">
+                                            <span className="font-semibold text-slate-900">{field.label}:</span> {field.value}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="mt-1 text-xs text-slate-500">No saved entries.</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {Array.isArray(product.customQuestions) && product.customQuestions.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {product.customQuestions.map((question) => (
+                            <div key={question.id} className="text-xs text-slate-700">
+                              [{question.inputType}] {question.questionText}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
