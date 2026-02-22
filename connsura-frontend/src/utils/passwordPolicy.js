@@ -1,4 +1,4 @@
-export const MIN_PASSWORD_LENGTH = 12
+export const MIN_PASSWORD_LENGTH = 8
 
 export const PASSWORD_POLICY_MESSAGE =
   `Password must be at least ${MIN_PASSWORD_LENGTH} characters and include uppercase, lowercase, a number, and a symbol.`

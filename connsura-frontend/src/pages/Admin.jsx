@@ -291,7 +291,7 @@ export default function Admin({ initialView = 'clients' }) {
           ))}
         </div>
         {activeDetailTab && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm max-w-xl md:max-w-3xl">
+          <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <AdminDetailPanel
               tab={activeDetailTab}
               closeTab={closeTab}

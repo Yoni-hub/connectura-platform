@@ -4,7 +4,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
   if (!tab) return null
   if (tab.loading) return <div className="text-slate-600">Loading details...</div>
   if (!tab.form) return <div className="text-slate-500">No details loaded.</div>
-  const input = 'mt-1 w-1/5 min-w-[140px] rounded-lg border border-slate-200 px-3 py-2 text-sm'
+  const input = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
   if (tab.type === 'client') {
     const passportProducts = Array.isArray(tab.data?.passportSummary?.products) ? tab.data.passportSummary.products : []
     const passportStats = tab.data?.passportSummary?.stats || {}
@@ -21,7 +21,7 @@ export default function AdminDetailPanel({ tab, closeTab, saveClientTab, patchTa
             </button>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3">
           <div className="space-y-2.5">
             <label className="block text-sm font-semibold text-slate-700">
               Name

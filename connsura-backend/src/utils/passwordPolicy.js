@@ -1,4 +1,4 @@
-const MIN_PASSWORD_LENGTH = Number(process.env.PASSWORD_MIN_LENGTH || 12)
+const MIN_PASSWORD_LENGTH = Number(process.env.PASSWORD_MIN_LENGTH || 8)
 
 const PASSWORD_POLICY_MESSAGE =
   `Password must be at least ${MIN_PASSWORD_LENGTH} characters and include uppercase, lowercase, a number, and a symbol.`

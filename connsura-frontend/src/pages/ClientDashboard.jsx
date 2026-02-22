@@ -1377,7 +1377,10 @@ export default function ClientDashboard() {
                     <button
                       type="button"
                       className={reminderLinkClass}
-                      onClick={() => updateTab('Settings')}
+                      onClick={() => {
+                        setSettingsView('security')
+                        updateTab('Settings')
+                      }}
                     >
                       Set up authenticator
                     </button>

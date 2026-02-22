@@ -138,7 +138,7 @@ export default function AuthenticatorPanel() {
           <Text as="div" variant="label" className="text-slate-900">Google Authenticator recovery</Text>
         </div>
         <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-          {enabled ? 'Enabled' : 'Optional'}
+          {enabled ? 'Enabled' : 'Recommended'}
         </div>
       </div>
 
