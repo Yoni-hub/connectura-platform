@@ -3,6 +3,12 @@ import toast from 'react-hot-toast'
 import { adminApi } from '../../services/adminApi'
 
 const INPUT_TYPES = ['general', 'select', 'yes/no', 'number', 'date', 'text']
+const normalizeInputType = (value = '') => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (INPUT_TYPES.includes(normalized)) return normalized
+  if (normalized === 'yesno' || normalized === 'yes-no' || normalized === 'yes_no') return 'yes/no'
+  return 'general'
+}
 
 const normalizeSectionKey = (value = '') =>
   String(value || '')
@@ -17,6 +23,7 @@ const normalizeSections = (schema) => {
     .map((section, index) => {
       const key = normalizeSectionKey(section?.key || section?.label || `section-${index + 1}`)
       const label = String(section?.label || key || `Section ${index + 1}`).trim()
+      const sourceSectionKey = normalizeSectionKey(section?.sourceSectionKey || '')
       const questionIds = Array.isArray(section?.questionIds)
         ? Array.from(
             new Set(
@@ -26,8 +33,34 @@ const normalizeSections = (schema) => {
             )
           )
         : []
+      const validQuestionIds = new Set(questionIds.map((id) => String(id)))
+      const rawOverrides =
+        section?.questionOverrides && typeof section.questionOverrides === 'object'
+          ? section.questionOverrides
+          : {}
+      const questionOverrides = Object.entries(rawOverrides).reduce((acc, [questionId, config]) => {
+        const id = Number(questionId)
+        if (!Number.isInteger(id) || id <= 0) return acc
+        if (!validQuestionIds.has(String(id))) return acc
+        const inputType = normalizeInputType(config?.inputType)
+        const next = { inputType }
+        if (inputType === 'select') {
+          const options = Array.isArray(config?.selectOptions)
+            ? config.selectOptions.map((entry) => String(entry || '').trim()).filter(Boolean)
+            : []
+          next.selectOptions = Array.from(new Set(options))
+        }
+        acc[String(id)] = next
+        return acc
+      }, {})
       if (!key) return null
-      return { key, label, questionIds }
+      return {
+        key,
+        label,
+        questionIds,
+        ...(Object.keys(questionOverrides).length ? { questionOverrides } : {}),
+        ...(sourceSectionKey ? { sourceSectionKey } : {}),
+      }
     })
     .filter(Boolean)
 }
@@ -55,13 +88,17 @@ export default function AdminFormsTab({ onSessionExpired }) {
 
   const [questions, setQuestions] = useState([])
   const [questionsLoading, setQuestionsLoading] = useState(false)
+  const [sharedSectionsLoading, setSharedSectionsLoading] = useState(false)
+  const [sharedSections, setSharedSections] = useState([])
   const [questionDraft, setQuestionDraft] = useState('')
   const [savingQuestions, setSavingQuestions] = useState(false)
   const [savingSchema, setSavingSchema] = useState(false)
+  const [savingSharedSections, setSavingSharedSections] = useState(false)
 
   const [sectionsDraft, setSectionsDraft] = useState([])
   const [selectedSectionKey, setSelectedSectionKey] = useState('')
   const [newSectionLabel, setNewSectionLabel] = useState('')
+  const [selectedSharedSectionKey, setSelectedSharedSectionKey] = useState('')
 
   const [mappingSearch, setMappingSearch] = useState('')
   const [selectedMappingQuestionId, setSelectedMappingQuestionId] = useState('')
@@ -107,6 +144,22 @@ export default function AdminFormsTab({ onSessionExpired }) {
     }
   }
 
+  const loadSharedSections = async () => {
+    setSharedSectionsLoading(true)
+    try {
+      const res = await adminApi.get('/admin/forms/sections')
+      const librarySections = normalizeSections(res.data?.schema)
+      setSharedSections(librarySections)
+      if (!selectedSharedSectionKey) {
+        setSelectedSharedSectionKey(librarySections[0]?.key || '')
+      }
+    } catch (err) {
+      handleSessionError(err, 'Failed to load shared sections')
+    } finally {
+      setSharedSectionsLoading(false)
+    }
+  }
+
   const deduplicateUnusedQuestionsForProduct = async (productId) => {
     const numericProductId = Number(productId)
     if (!Number.isInteger(numericProductId) || numericProductId <= 0) return
@@ -125,6 +178,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
   useEffect(() => {
     loadProducts()
     loadQuestions()
+    loadSharedSections()
   }, [])
 
   useEffect(() => {
@@ -154,6 +208,84 @@ export default function AdminFormsTab({ onSessionExpired }) {
     () => sectionsDraft.find((section) => section.key === selectedSectionKey) || null,
     [sectionsDraft, selectedSectionKey]
   )
+
+  const countQuestionMappings = (questionId) => {
+    const normalized = Number(questionId)
+    if (!Number.isInteger(normalized) || normalized <= 0) return 0
+    return products.reduce((sum, product) => {
+      const sections = normalizeSections(product.formSchema)
+      return (
+        sum +
+        sections.reduce(
+          (sectionCount, section) =>
+            sectionCount + (Array.isArray(section.questionIds) && section.questionIds.includes(normalized) ? 1 : 0),
+          0
+        )
+      )
+    }, 0)
+  }
+
+  const saveProductSectionsSnapshot = async (nextSections, successMessage = '') => {
+    if (!selectedProduct) throw new Error('Select a product first')
+    await adminApi.put(`/admin/forms/products/${selectedProduct.id}`, {
+      name: selectedProduct.name,
+      formSchema: { sections: nextSections },
+    })
+    setSectionsDraft(nextSections)
+    await loadProducts()
+    if (successMessage) toast.success(successMessage)
+  }
+
+  const applyProductOnlyQuestionConfig = async (question, patch = {}) => {
+    if (!selectedProduct || !selectedSection) {
+      toast.error('Select a product and section first')
+      return false
+    }
+    const questionId = Number(question?.id)
+    if (!Number.isInteger(questionId) || questionId <= 0) return false
+    if (!Array.isArray(selectedSection.questionIds) || !selectedSection.questionIds.includes(questionId)) {
+      toast.error('Question must be mapped in the selected section')
+      return false
+    }
+
+    const nextSections = sectionsDraft.map((section) => {
+      if (section.key !== selectedSection.key) return section
+      const currentOverrides =
+        section.questionOverrides && typeof section.questionOverrides === 'object'
+          ? { ...section.questionOverrides }
+          : {}
+      const currentOverride = currentOverrides[String(questionId)] || {}
+      const nextInputType = normalizeInputType(
+        patch.inputType ?? currentOverride.inputType ?? question.inputType ?? question.type ?? 'general'
+      )
+      const nextOverride = { inputType: nextInputType }
+      if (nextInputType === 'select') {
+        const resolvedOptions = Array.isArray(patch.selectOptions)
+          ? patch.selectOptions
+          : Array.isArray(currentOverride.selectOptions)
+            ? currentOverride.selectOptions
+            : Array.isArray(question.selectOptions)
+              ? question.selectOptions
+              : []
+        nextOverride.selectOptions = Array.from(
+          new Set(resolvedOptions.map((entry) => String(entry || '').trim()).filter(Boolean))
+        )
+      }
+      currentOverrides[String(questionId)] = nextOverride
+      return {
+        ...section,
+        questionOverrides: currentOverrides,
+      }
+    })
+
+    try {
+      await saveProductSectionsSnapshot(nextSections, 'Saved product-only field configuration')
+      return true
+    } catch (err) {
+      handleSessionError(err, 'Failed to save product-only field configuration')
+      return false
+    }
+  }
 
   const addQuestions = async () => {
     const text = questionDraft.trim()
@@ -201,15 +333,38 @@ export default function AdminFormsTab({ onSessionExpired }) {
   }
 
   const updateQuestionInputType = async (questionId, inputType) => {
-    setQuestions((prev) =>
-      prev.map((question) =>
-        Number(question.id) === Number(questionId) ? { ...question, inputType } : question
+    const question = questions.find((row) => Number(row.id) === Number(questionId))
+    if (!question) return
+    const normalizedType = normalizeInputType(inputType)
+    const usageCount = countQuestionMappings(questionId)
+    const canScopeToProduct =
+      Boolean(selectedProduct && selectedSection) &&
+      Array.isArray(selectedSection?.questionIds) &&
+      selectedSection.questionIds.includes(Number(questionId))
+
+    if (usageCount > 1 && canScopeToProduct) {
+      const applyGlobally = window.confirm(
+        `This question is shared in ${usageCount} section mappings. Press OK to apply globally to all products, or Cancel to apply only to this product section.`
       )
-    )
+      if (!applyGlobally) {
+        await applyProductOnlyQuestionConfig(question, {
+          inputType: normalizedType,
+          selectOptions:
+            normalizedType === 'select'
+              ? Array.isArray(question.selectOptions)
+                ? question.selectOptions
+                : []
+              : [],
+        })
+        return
+      }
+    }
+
     try {
-      await adminApi.put(`/admin/questions/${questionId}`, { source: 'SYSTEM', inputType })
-    } catch (err) {
+      await adminApi.put(`/admin/questions/${questionId}`, { source: 'SYSTEM', inputType: normalizedType })
       await loadQuestions()
+      toast.success('Updated global question input type')
+    } catch (err) {
       handleSessionError(err, 'Failed to update input type')
     }
   }
@@ -233,17 +388,35 @@ export default function AdminFormsTab({ onSessionExpired }) {
       toast.error('Add at least one choice')
       return
     }
+    const usageCount = countQuestionMappings(question.id)
+    const canScopeToProduct =
+      Boolean(selectedProduct && selectedSection) &&
+      Array.isArray(selectedSection?.questionIds) &&
+      selectedSection.questionIds.includes(Number(question.id))
+
+    if (usageCount > 1 && canScopeToProduct) {
+      const applyGlobally = window.confirm(
+        `This question is shared in ${usageCount} section mappings. Press OK to apply these choices globally, or Cancel to save choices only for this product section.`
+      )
+      if (!applyGlobally) {
+        await applyProductOnlyQuestionConfig(question, {
+          inputType: 'select',
+          selectOptions: options,
+        })
+        setQuestionOptionDrafts((prev) => ({ ...prev, [key]: options.join(', ') }))
+        return
+      }
+    }
+
     try {
       await adminApi.put(`/admin/questions/${question.id}`, {
         source: 'SYSTEM',
         inputType: 'select',
         selectOptions: options,
       })
-      setQuestions((prev) =>
-        prev.map((row) => (Number(row.id) === Number(question.id) ? { ...row, selectOptions: options } : row))
-      )
+      await loadQuestions()
       setQuestionOptionDrafts((prev) => ({ ...prev, [key]: options.join(', ') }))
-      toast.success('Choices saved')
+      toast.success('Saved global choices')
     } catch (err) {
       handleSessionError(err, 'Failed to save select choices')
     }
@@ -374,6 +547,74 @@ export default function AdminFormsTab({ onSessionExpired }) {
     setNewSectionLabel('')
   }
 
+  const addSharedSectionToProduct = () => {
+    if (!selectedProduct) {
+      toast.error('Select a product first')
+      return
+    }
+    const shared = sharedSections.find((section) => section.key === selectedSharedSectionKey)
+    if (!shared) {
+      toast.error('Select a shared section')
+      return
+    }
+    const existing = sectionsDraft.find(
+      (section) =>
+        normalizeSectionKey(section.sourceSectionKey || section.key || '') ===
+        normalizeSectionKey(shared.key || '')
+    )
+    if (existing) {
+      setSelectedSectionKey(existing.key)
+      toast('That shared section is already attached to this product')
+      return
+    }
+    const key = ensureUniqueSectionKey(normalizeSectionKey(shared.key || shared.label), sectionsDraft)
+    const nextSection = {
+      key,
+      label: String(shared.label || shared.key).trim(),
+      questionIds: Array.isArray(shared.questionIds) ? [...shared.questionIds] : [],
+      sourceSectionKey: shared.key,
+    }
+    setSectionsDraft((prev) => [...prev, nextSection])
+    setSelectedSectionKey(key)
+    toast.success(`Added shared section "${nextSection.label}"`)
+  }
+
+  const saveSelectedSectionAsShared = async () => {
+    if (!selectedSection) {
+      toast.error('Select a section first')
+      return
+    }
+    const sharedKey = normalizeSectionKey(selectedSection.sourceSectionKey || selectedSection.key || selectedSection.label)
+    if (!sharedKey) {
+      toast.error('Section key is invalid')
+      return
+    }
+    const payloadSections = [
+      ...sharedSections.filter((section) => section.key !== sharedKey),
+      {
+        key: sharedKey,
+        label: String(selectedSection.label || sharedKey).trim(),
+        questionIds: Array.isArray(selectedSection.questionIds) ? [...selectedSection.questionIds] : [],
+      },
+    ]
+    setSavingSharedSections(true)
+    try {
+      await adminApi.put('/admin/forms/sections', { schema: { sections: payloadSections } })
+      setSharedSections(payloadSections)
+      setSelectedSharedSectionKey(sharedKey)
+      setSectionsDraft((prev) =>
+        prev.map((section) =>
+          section.key === selectedSection.key ? { ...section, sourceSectionKey: sharedKey } : section
+        )
+      )
+      toast.success('Shared section library updated')
+    } catch (err) {
+      handleSessionError(err, 'Failed to save shared section')
+    } finally {
+      setSavingSharedSections(false)
+    }
+  }
+
   const removeSection = (sectionKey) => {
     const section = sectionsDraft.find((row) => row.key === sectionKey)
     const confirmed = window.confirm(`Remove section "${section?.label || sectionKey}"?`)
@@ -395,16 +636,38 @@ export default function AdminFormsTab({ onSessionExpired }) {
     const id = String(question.id || '')
     return text.includes(normalizedMappingSearch) || id.includes(normalizedMappingSearch)
   })
-  const selectedMappingQuestion = questions.find(
-    (question) => String(question.id) === String(selectedMappingQuestionId)
-  )
   const selectedSectionQuestions = useMemo(() => {
     if (!selectedSection) return []
     const byId = new Map(questions.map((question) => [Number(question.id), question]))
+    const overrides =
+      selectedSection.questionOverrides && typeof selectedSection.questionOverrides === 'object'
+        ? selectedSection.questionOverrides
+        : {}
     return (selectedSection.questionIds || [])
-      .map((id) => byId.get(Number(id)))
+      .map((id) => {
+        const base = byId.get(Number(id))
+        if (!base) return null
+        const override = overrides[String(id)] || null
+        const effectiveInputType = override?.inputType || base.inputType || 'general'
+        const effectiveSelectOptions =
+          effectiveInputType === 'select'
+            ? Array.isArray(override?.selectOptions)
+              ? override.selectOptions
+              : Array.isArray(base.selectOptions)
+                ? base.selectOptions
+                : []
+            : []
+        return {
+          ...base,
+          effectiveInputType,
+          effectiveSelectOptions,
+          hasProductOverride: Boolean(override),
+        }
+      })
       .filter(Boolean)
   }, [selectedSection, questions])
+  const selectedMappingQuestion =
+    selectedSectionQuestions.find((question) => String(question.id) === String(selectedMappingQuestionId)) || null
 
   useEffect(() => {
     if (!selectedSectionQuestions.length) {
@@ -487,6 +750,32 @@ export default function AdminFormsTab({ onSessionExpired }) {
             <button type="button" className="pill-btn-primary mt-3 px-4" onClick={addSection}>
               Add Section
             </button>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <label className="block text-sm font-semibold text-slate-700">
+                Add existing shared section
+                <select
+                  className={inputClass}
+                  value={selectedSharedSectionKey}
+                  onChange={(event) => setSelectedSharedSectionKey(event.target.value)}
+                  disabled={sharedSectionsLoading || sharedSections.length === 0}
+                >
+                  <option value="">Select shared section</option>
+                  {sharedSections.map((section) => (
+                    <option key={section.key} value={section.key}>
+                      {section.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="pill-btn-ghost mt-3 px-4"
+                onClick={addSharedSectionToProduct}
+                disabled={!selectedSharedSectionKey || sharedSectionsLoading}
+              >
+                Attach Shared Section
+              </button>
+            </div>
             <div className="mt-3 space-y-2">
               {sectionsDraft.map((section) => (
                 <div
@@ -503,6 +792,9 @@ export default function AdminFormsTab({ onSessionExpired }) {
                     onClick={() => setSelectedSectionKey(section.key)}
                   >
                     {section.label}
+                    {section.sourceSectionKey && (
+                      <span className="ml-2 text-xs font-normal text-slate-500">shared: {section.sourceSectionKey}</span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -516,6 +808,16 @@ export default function AdminFormsTab({ onSessionExpired }) {
               {!sectionsDraft.length && (
                 <div className="text-xs text-slate-500">No sections yet for this product.</div>
               )}
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                className="pill-btn-ghost px-4"
+                onClick={saveSelectedSectionAsShared}
+                disabled={!selectedSection || savingSharedSections}
+              >
+                {savingSharedSections ? 'Saving Shared...' : 'Save Selected Section To Shared Library'}
+              </button>
             </div>
           </div>
         </div>
@@ -689,11 +991,14 @@ export default function AdminFormsTab({ onSessionExpired }) {
                 <div className="font-semibold text-slate-800">
                   #{selectedMappingQuestion.id} {selectedMappingQuestion.text || selectedMappingQuestion.label}
                 </div>
+                {selectedMappingQuestion.hasProductOverride && (
+                  <div className="mt-1 text-xs text-sky-700">Product-only override active for this section.</div>
+                )}
                 <label className="mt-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Input type
                   <select
                     className={inputClass}
-                    value={selectedMappingQuestion.inputType || 'general'}
+                    value={selectedMappingQuestion.effectiveInputType || selectedMappingQuestion.inputType || 'general'}
                     onChange={(event) => updateQuestionInputType(selectedMappingQuestion.id, event.target.value)}
                   >
                     {INPUT_TYPES.map((type) => (
@@ -703,7 +1008,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
                     ))}
                   </select>
                 </label>
-                {(selectedMappingQuestion.inputType || 'general') === 'select' && (
+                {(selectedMappingQuestion.effectiveInputType || selectedMappingQuestion.inputType || 'general') === 'select' && (
                   <div className="mt-2 space-y-2">
                     <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Select choices (comma separated)
@@ -711,8 +1016,8 @@ export default function AdminFormsTab({ onSessionExpired }) {
                         className={inputClass}
                         value={
                           questionOptionDrafts[String(selectedMappingQuestion.id)] ??
-                          (Array.isArray(selectedMappingQuestion.selectOptions)
-                            ? selectedMappingQuestion.selectOptions.join(', ')
+                          (Array.isArray(selectedMappingQuestion.effectiveSelectOptions)
+                            ? selectedMappingQuestion.effectiveSelectOptions.join(', ')
                             : '')
                         }
                         onChange={(event) =>

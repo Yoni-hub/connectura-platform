@@ -1431,10 +1431,52 @@ const normalizeProductSectionKey = (value) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
+const SHARED_SECTION_LIBRARY_SLUG = 'shared-sections-library'
+
 const normalizeCaseInsensitiveQuestionText = (value = '') =>
   String(value || '')
     .trim()
     .toLowerCase()
+
+const FORM_SCHEMA_INPUT_TYPES = new Set(['general', 'select', 'yes/no', 'number', 'date', 'text'])
+const normalizeFormSchemaInputType = (value) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (FORM_SCHEMA_INPUT_TYPES.has(normalized)) return normalized
+  if (normalized === 'yesno' || normalized === 'yes-no' || normalized === 'yes_no') return 'yes/no'
+  return 'general'
+}
+
+const normalizeSectionQuestionOverrides = (rawOverrides, allowedQuestionIds = []) => {
+  if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) return {}
+  const allowed = new Set(
+    (Array.isArray(allowedQuestionIds) ? allowedQuestionIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+      .map((id) => String(id))
+  )
+  return Object.entries(rawOverrides).reduce((acc, [rawQuestionId, rawConfig]) => {
+    const questionId = Number(rawQuestionId)
+    if (!Number.isInteger(questionId) || questionId <= 0) return acc
+    const key = String(questionId)
+    if (allowed.size && !allowed.has(key)) return acc
+    if (!rawConfig || typeof rawConfig !== 'object' || Array.isArray(rawConfig)) return acc
+
+    const inputType = normalizeFormSchemaInputType(rawConfig.inputType)
+    const nextConfig = { inputType }
+    if (inputType === 'select') {
+      const optionsRaw = Array.isArray(rawConfig.selectOptions)
+        ? rawConfig.selectOptions
+        : String(rawConfig.selectOptions || '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean)
+      const selectOptions = optionsRaw.map((entry) => String(entry || '').trim()).filter(Boolean)
+      nextConfig.selectOptions = Array.from(new Set(selectOptions))
+    }
+    acc[key] = nextConfig
+    return acc
+  }, {})
+}
 
 const normalizeProductFormSchema = (value) => {
   const parsed = value && typeof value === 'object' ? value : {}
@@ -1444,6 +1486,7 @@ const normalizeProductFormSchema = (value) => {
       .map((section, index) => {
         const key = normalizeProductSectionKey(section?.key || section?.label || `section-${index + 1}`)
         const label = String(section?.label || key || `Section ${index + 1}`).trim()
+        const sourceSectionKey = normalizeProductSectionKey(section?.sourceSectionKey || '')
         const questionIds = Array.isArray(section?.questionIds)
           ? Array.from(
               new Set(
@@ -1453,11 +1496,54 @@ const normalizeProductFormSchema = (value) => {
               )
             )
           : []
+        const questionOverrides = normalizeSectionQuestionOverrides(section?.questionOverrides, questionIds)
         if (!key) return null
-        return { key, label, questionIds }
+        return {
+          key,
+          label,
+          questionIds,
+          ...(Object.keys(questionOverrides).length ? { questionOverrides } : {}),
+          ...(sourceSectionKey ? { sourceSectionKey } : {}),
+        }
       })
       .filter(Boolean),
   }
+}
+
+const normalizeSharedSectionSchema = (value) => {
+  const normalized = normalizeProductFormSchema(value)
+  return {
+    sections: normalized.sections.map((section) => ({
+      key: section.key,
+      label: section.label,
+      questionIds: Array.isArray(section.questionIds) ? section.questionIds : [],
+    })),
+  }
+}
+
+const buildSharedSectionSeedFromProducts = async () => {
+  const products = await prisma.product.findMany({ orderBy: [{ updatedAt: 'desc' }] })
+  const byKey = new Map()
+  products.forEach((product) => {
+    const schema = parseProductFormSchema(product.formSchema)
+    const sections = Array.isArray(schema?.sections) ? schema.sections : []
+    sections.forEach((section, index) => {
+      const key = normalizeProductSectionKey(section?.sourceSectionKey || section?.key || section?.label || '')
+      if (!key || byKey.has(key)) return
+      const label = String(section?.label || section?.key || `Section ${index + 1}`).trim()
+      const questionIds = Array.isArray(section?.questionIds)
+        ? Array.from(
+            new Set(
+              section.questionIds
+                .map((id) => Number(id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+            )
+          )
+        : []
+      byKey.set(key, { key, label: label || key, questionIds })
+    })
+  })
+  return { sections: Array.from(byKey.values()) }
 }
 
 const formatProductWithSchema = (product) => ({
@@ -1477,6 +1563,67 @@ router.get('/forms/products', adminGuard, async (req, res) => {
     return sections.length > 0
   })
   res.json({ products: configuredProducts.map(formatProductWithSchema) })
+})
+
+router.get('/forms/sections', adminGuard, async (req, res) => {
+  const existing = await prisma.formSchema.findUnique({ where: { slug: SHARED_SECTION_LIBRARY_SLUG } })
+  if (existing) {
+    return res.json({ schema: normalizeSharedSectionSchema(parseJson(existing.schema, {})) })
+  }
+
+  const seeded = await buildSharedSectionSeedFromProducts()
+  if (seeded.sections.length) {
+    await prisma.formSchema.create({
+      data: {
+        slug: SHARED_SECTION_LIBRARY_SLUG,
+        schema: JSON.stringify(seeded),
+        updatedBy: req.admin?.email || String(req.admin?.id || ''),
+      },
+    })
+  }
+  return res.json({ schema: seeded })
+})
+
+router.put('/forms/sections', adminGuard, async (req, res) => {
+  const incomingSchema = req.body?.schema
+  const normalized = normalizeSharedSectionSchema(incomingSchema)
+
+  const allQuestionIds = Array.from(
+    new Set(
+      normalized.sections
+        .flatMap((section) => section.questionIds || [])
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+  if (allQuestionIds.length) {
+    const found = await prisma.questionBank.findMany({
+      where: { id: { in: allQuestionIds }, source: 'SYSTEM' },
+      select: { id: true },
+    })
+    const foundIds = new Set(found.map((row) => row.id))
+    const missing = allQuestionIds.filter((id) => !foundIds.has(id))
+    if (missing.length) {
+      return res.status(400).json({ error: `Unknown questionIds: ${missing.join(', ')}` })
+    }
+  }
+
+  const entry = await prisma.formSchema.upsert({
+    where: { slug: SHARED_SECTION_LIBRARY_SLUG },
+    create: {
+      slug: SHARED_SECTION_LIBRARY_SLUG,
+      schema: JSON.stringify(normalized),
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+    },
+    update: {
+      schema: JSON.stringify(normalized),
+      updatedBy: req.admin?.email || String(req.admin?.id || ''),
+    },
+  })
+
+  await logAudit(req.admin.id, 'FormSchema', SHARED_SECTION_LIBRARY_SLUG, 'update_shared_sections', {
+    sectionCount: normalized.sections.length,
+  })
+  return res.json({ schema: normalizeSharedSectionSchema(parseJson(entry.schema, {})) })
 })
 
 router.put('/forms/products/:id', adminGuard, async (req, res) => {

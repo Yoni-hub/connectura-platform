@@ -41,6 +41,30 @@ const parseFormSchema = (value) => {
   return { sections }
 }
 
+const normalizeSectionQuestionOverrides = (rawOverrides = {}, allowedQuestionIds = []) => {
+  if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) return {}
+  const allowed = new Set(
+    (Array.isArray(allowedQuestionIds) ? allowedQuestionIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+      .map((id) => String(id))
+  )
+  return Object.entries(rawOverrides).reduce((acc, [rawQuestionId, rawConfig]) => {
+    const questionId = Number(rawQuestionId)
+    if (!Number.isInteger(questionId) || questionId <= 0) return acc
+    const key = String(questionId)
+    if (allowed.size && !allowed.has(key)) return acc
+    if (!rawConfig || typeof rawConfig !== 'object' || Array.isArray(rawConfig)) return acc
+    const inputType = normalizeInputType(rawConfig.inputType)
+    const nextConfig = { inputType }
+    if (inputType === 'select') {
+      nextConfig.selectOptions = toOptions(rawConfig.selectOptions)
+    }
+    acc[key] = nextConfig
+    return acc
+  }, {})
+}
+
 const ensureOwnedCustomer = async (userId) => {
   const customer = await prisma.customer.findUnique({ where: { userId } })
   if (!customer) return null
@@ -210,18 +234,26 @@ const buildAdminProductSections = async (product) => {
       const label = String(section?.label || key || `Section ${sectionIndex + 1}`).trim()
       if (!key) return null
       const fieldIds = Array.isArray(section?.questionIds) ? section.questionIds : []
+      const questionOverrides = normalizeSectionQuestionOverrides(section?.questionOverrides, fieldIds)
       const fields = fieldIds
         .map((id) => Number(id))
         .filter((id) => Number.isInteger(id) && id > 0)
         .map((id) => byId.get(id))
         .filter(Boolean)
-        .map((question) => ({
-          key: String(question.id),
-          label: question.text,
-          type: question.inputType || 'general',
-          options: parseJson(question.selectOptions, []),
-          questionId: question.id,
-        }))
+        .map((question) => {
+          const override = questionOverrides[String(question.id)] || null
+          const type = override?.inputType || question.inputType || 'general'
+          const options = type === 'select'
+            ? (override?.selectOptions || parseJson(question.selectOptions, []))
+            : []
+          return {
+            key: String(question.id),
+            label: question.text,
+            type,
+            options,
+            questionId: question.id,
+          }
+        })
       return { key, label, fields }
     })
     .filter(Boolean)
