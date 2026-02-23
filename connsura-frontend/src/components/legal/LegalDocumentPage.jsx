@@ -1,4 +1,4 @@
-import { useLegalDocument } from '../../hooks/useLegalDocument'
+ï»¿import { useLegalDocument } from '../../hooks/useLegalDocument'
 import { LEGAL_RICH_TEXT_CLASS } from '../../styles/legalTypography'
 import { renderSiteContent } from '../../utils/siteContent'
 
@@ -28,7 +28,7 @@ export default function LegalDocumentPage({ type, title, contactEmail }) {
         )}
         <div className="text-xs text-slate-500">
           {document?.version ? `Version ${document.version}` : ''}
-          {document?.version && publishedDate ? ' · ' : ''}
+          {document?.version && publishedDate ? ' - ' : ''}
           {publishedDate ? `Published ${publishedDate}` : ''}
         </div>
       </div>
@@ -46,4 +46,5 @@ export default function LegalDocumentPage({ type, title, contactEmail }) {
     </main>
   )
 }
+
 
