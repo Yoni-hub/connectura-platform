@@ -74,3 +74,21 @@ After the run completes:
 ## Database access (staging)
 - SSH tunnel: `ssh -L 5432:localhost:5432 <user>@<host>` then connect to `localhost:5432`.
 - Read-only creds live at `/opt/connsura/env/db_readonly.env` (chmod 600).
+
+## Local SQL helper (PowerShell)
+- Use `automation/Invoke-ConnsuraSql.ps1` to run SQL against the local Docker Postgres container without PowerShell quote escaping issues.
+- It pipes SQL over stdin to `psql`, so quoted identifiers (for example `"SiteContent"` and `"lastUpdated"`) work reliably.
+
+Examples:
+
+```powershell
+@'
+SELECT slug, title, "lastUpdated"
+FROM "SiteContent"
+ORDER BY slug;
+'@ | .\automation\Invoke-ConnsuraSql.ps1
+```
+
+```powershell
+.\automation\Invoke-ConnsuraSql.ps1 -FilePath .\query.sql
+```

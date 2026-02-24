@@ -74,6 +74,24 @@
   }
 }
 
+@layer utilities {
+  /* Prevent mobile browsers from auto-zooming when text inputs receive focus. */
+  @media (max-width: 768px) {
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='number'],
+    input[type='search'],
+    input[type='tel'],
+    input[type='url'],
+    input[type='date'],
+    input[type='datetime-local'],
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
 @media print {
   body.print-passport-pdf-open {
     background: #fff;
