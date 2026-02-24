@@ -144,6 +144,16 @@ const RECOVERY_ERROR = 'Unable to recover account. Check your details and try ag
 const LOGIN_RATE_LIMIT_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
 const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 8)
 const LOGIN_RATE_LIMIT_MESSAGE = 'Too many login attempts. Please wait a few minutes and try again.'
+const AUTH_REQUEST_RATE_LIMIT_WINDOW_MS = Number(
+  process.env.AUTH_REQUEST_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000
+)
+const AUTH_LOGIN_REQUEST_RATE_LIMIT_MAX = Number(process.env.AUTH_LOGIN_REQUEST_RATE_LIMIT_MAX || 20)
+const AUTH_REGISTER_REQUEST_RATE_LIMIT_MAX = Number(process.env.AUTH_REGISTER_REQUEST_RATE_LIMIT_MAX || 8)
+const AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX = Number(process.env.AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX || 10)
+const AUTH_RECOVERY_OTP_REQUEST_RATE_LIMIT_MAX = Number(
+  process.env.AUTH_RECOVERY_OTP_REQUEST_RATE_LIMIT_MAX || 6
+)
+const AUTH_RATE_LIMIT_MESSAGE = 'Too many requests. Please wait a few minutes and try again.'
 const recoveryAttempts = new Map()
 
 const getRequestIp = (req) => {
@@ -515,6 +525,19 @@ const clearAuthLoginFailures = ({ ip, identifier }) => {
   clearFailures({ scope: 'auth-login', key: identifier ? `id:${identifier}` : '' })
 }
 
+const hitRequestRateLimit = ({ scope, key, maxAttempts, windowMs, res }) => {
+  if (!key) return false
+  const status = isRateLimited({ scope, key, maxAttempts, windowMs })
+  if (status.limited) {
+    if (status.retryAfterSeconds) {
+      res.set('Retry-After', String(status.retryAfterSeconds))
+    }
+    return true
+  }
+  registerFailure({ scope, key, windowMs })
+  return false
+}
+
 router.post('/register', async (req, res) => {
   try {
     const {
@@ -525,6 +548,25 @@ router.post('/register', async (req, res) => {
       consents = {},
     } = req.body
     const normalizedEmail = normalizeEmail(email || '')
+    const requestIp = getRequestIp(req)
+    if (
+      hitRequestRateLimit({
+        scope: 'auth-register-request',
+        key: requestIp ? `ip:${requestIp}` : '',
+        maxAttempts: AUTH_REGISTER_REQUEST_RATE_LIMIT_MAX,
+        windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+        res,
+      }) ||
+      hitRequestRateLimit({
+        scope: 'auth-register-request',
+        key: normalizedEmail ? `email:${normalizedEmail}` : '',
+        maxAttempts: AUTH_REGISTER_REQUEST_RATE_LIMIT_MAX,
+        windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+        res,
+      })
+    ) {
+      return res.status(429).json({ error: AUTH_RATE_LIMIT_MESSAGE })
+    }
     const requestedRole = String(req.body?.role || 'CUSTOMER').toUpperCase()
     if (requestedRole !== 'CUSTOMER') {
       return res.status(403).json({ error: 'Only customer accounts are supported' })
@@ -1520,11 +1562,31 @@ router.post('/password', authGuard, async (req, res) => {
 
 router.post('/recovery/reset', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim()
+  const requestIp = getRequestIp(req)
   const code = String(req.body?.code || '').trim()
   const backupCode = String(req.body?.backupCode || '').trim()
   const newPassword = String(req.body?.newPassword || '')
   if (!identifier || !newPassword || (!code && !backupCode)) {
     return res.status(400).json({ error: RECOVERY_ERROR })
+  }
+  const normalizedIdentifierKey = identifier.toLowerCase()
+  if (
+    hitRequestRateLimit({
+      scope: 'auth-recovery-reset-request',
+      key: requestIp ? `ip:${requestIp}` : '',
+      maxAttempts: AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    }) ||
+    hitRequestRateLimit({
+      scope: 'auth-recovery-reset-request',
+      key: normalizedIdentifierKey ? `id:${normalizedIdentifierKey}` : '',
+      maxAttempts: AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    })
+  ) {
+    return res.status(429).json({ error: AUTH_RATE_LIMIT_MESSAGE })
   }
   const passwordPolicy = validatePasswordPolicy(newPassword)
   if (!passwordPolicy.valid) {
@@ -1597,6 +1659,24 @@ router.post('/recovery/email-otp/request', async (req, res) => {
     return res.status(400).json({ error: 'Email is required' })
   }
   const ip = getRequestIp(req)
+  if (
+    hitRequestRateLimit({
+      scope: 'auth-recovery-otp-request',
+      key: ip ? `ip:${ip}` : '',
+      maxAttempts: AUTH_RECOVERY_OTP_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    }) ||
+    hitRequestRateLimit({
+      scope: 'auth-recovery-otp-request',
+      key: email ? `email:${email}` : '',
+      maxAttempts: AUTH_RECOVERY_OTP_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    })
+  ) {
+    return res.status(429).json({ error: AUTH_RATE_LIMIT_MESSAGE })
+  }
   try {
     const user = await prisma.user.findUnique({
       where: { email },
@@ -1625,10 +1705,29 @@ router.post('/recovery/email-otp/request', async (req, res) => {
 
 router.post('/recovery/email-otp/reset', async (req, res) => {
   const email = normalizeEmail(req.body?.email || '')
+  const requestIp = getRequestIp(req)
   const otpCode = String(req.body?.otpCode || '').trim()
   const newPassword = String(req.body?.newPassword || '')
   if (!email || !otpCode || !newPassword) {
     return res.status(400).json({ error: RECOVERY_ERROR })
+  }
+  if (
+    hitRequestRateLimit({
+      scope: 'auth-recovery-email-reset-request',
+      key: requestIp ? `ip:${requestIp}` : '',
+      maxAttempts: AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    }) ||
+    hitRequestRateLimit({
+      scope: 'auth-recovery-email-reset-request',
+      key: email ? `email:${email}` : '',
+      maxAttempts: AUTH_RECOVERY_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    })
+  ) {
+    return res.status(429).json({ error: AUTH_RATE_LIMIT_MESSAGE })
   }
   const passwordPolicy = validatePasswordPolicy(newPassword)
   if (!passwordPolicy.valid) {
@@ -1681,6 +1780,24 @@ router.post('/login', async (req, res) => {
   const ip = getRequestIp(req)
   if (!identifier || !password) {
     return res.status(400).json({ error: 'Email and password required' })
+  }
+  if (
+    hitRequestRateLimit({
+      scope: 'auth-login-request',
+      key: ip ? `ip:${ip}` : '',
+      maxAttempts: AUTH_LOGIN_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    }) ||
+    hitRequestRateLimit({
+      scope: 'auth-login-request',
+      key: identifier ? `id:${identifier}` : '',
+      maxAttempts: AUTH_LOGIN_REQUEST_RATE_LIMIT_MAX,
+      windowMs: AUTH_REQUEST_RATE_LIMIT_WINDOW_MS,
+      res,
+    })
+  ) {
+    return res.status(429).json({ error: AUTH_RATE_LIMIT_MESSAGE })
   }
   const rateLimit = getAuthLoginRateLimitStatus({ ip, identifier })
   if (rateLimit.limited) {
