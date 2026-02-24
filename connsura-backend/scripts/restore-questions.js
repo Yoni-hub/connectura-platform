@@ -28,6 +28,7 @@ const prisma = new PrismaClient();
       sortOrder: row.sortOrder ?? null,
       inputType: row.inputType || 'general',
       selectOptions: row.selectOptions ? JSON.stringify(row.selectOptions) : '[]',
+      helperText: typeof row.helperText === 'string' && row.helperText.trim() ? row.helperText.trim() : null,
     }));
   if (!toCreate.length) {
     console.log('All backup system questions already present.');

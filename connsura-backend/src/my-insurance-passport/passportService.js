@@ -205,6 +205,7 @@ const getSchemaQuestions = async () => {
   return rows.map((row) => ({
     id: row.id,
     label: row.text,
+    helperText: row.helperText || '',
     type: row.inputType || 'general',
     options: parseJson(row.selectOptions, []),
     productId: row.productId,
@@ -249,6 +250,7 @@ const buildAdminProductSections = async (product) => {
           return {
             key: String(question.id),
             label: question.text,
+            helperText: question.helperText || '',
             type,
             options,
             questionId: question.id,

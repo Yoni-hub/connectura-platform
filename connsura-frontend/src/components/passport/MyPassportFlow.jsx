@@ -91,7 +91,9 @@ export default function MyPassportFlow({
   const [collapsedEditorCards, setCollapsedEditorCards] = useState({})
   const [collapsedSummaryCards, setCollapsedSummaryCards] = useState({})
   const [collapsedSummaryProducts, setCollapsedSummaryProducts] = useState({})
+  const [openHelperFieldKey, setOpenHelperFieldKey] = useState('')
   const saveTimersRef = useRef({})
+  const openHelperContainerRef = useRef(null)
 
   const sections = useMemo(() => (Array.isArray(form?.sections) ? form.sections : []), [form?.sections])
   const activeSection = sections[sectionIndex] || null
@@ -290,6 +292,27 @@ export default function MyPassportFlow({
   }, [sectionIndex, mode, activeSectionKey])
 
   useEffect(() => {
+    if (!openHelperFieldKey) return undefined
+    const handlePointerDown = (event) => {
+      if (openHelperContainerRef.current?.contains(event.target)) return
+      setOpenHelperFieldKey('')
+    }
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setOpenHelperFieldKey('')
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [openHelperFieldKey])
+
+  useEffect(() => {
+    setOpenHelperFieldKey('')
+  }, [activeSectionKey, mode])
+
+  useEffect(() => {
     const existing = persistedUiRef.current || {}
     const byProduct = { ...(existing.byProduct || {}) }
     if (selectedProductId) {
@@ -420,14 +443,19 @@ export default function MyPassportFlow({
     setMode(hasSavedEntries(prevEntries) ? 'summary' : 'form')
   }
 
-  const renderField = (field) => {
+  const renderField = (field, inputId) => {
     const value = activeEntry[field.key] ?? ''
     const type = String(field.type || 'general').toLowerCase()
     if (type === 'select' || type === 'yes/no') {
       const options =
         Array.isArray(field.options) && field.options.length ? field.options : type === 'yes/no' ? ['Yes', 'No'] : []
       return (
-        <select className={inputClass} value={value} onChange={(event) => updateCurrentField(field.key, event.target.value)}>
+        <select
+          id={inputId}
+          className={inputClass}
+          value={value}
+          onChange={(event) => updateCurrentField(field.key, event.target.value)}
+        >
           <option value="">Select</option>
           {options.map((option) => (
             <option key={`${field.key}-${option}`} value={option}>
@@ -440,6 +468,7 @@ export default function MyPassportFlow({
     if (type === 'number') {
       return (
         <input
+          id={inputId}
           className={inputClass}
           type="number"
           value={value}
@@ -450,6 +479,7 @@ export default function MyPassportFlow({
     if (type === 'date') {
       return (
         <input
+          id={inputId}
           className={inputClass}
           type="date"
           value={value}
@@ -459,6 +489,7 @@ export default function MyPassportFlow({
     }
     return (
       <input
+        id={inputId}
         className={inputClass}
         type="text"
         value={value}
@@ -683,12 +714,43 @@ export default function MyPassportFlow({
 
               {mode === 'form' && (
                 <div className="space-y-3">
-                  {(activeSection.fields || []).map((field) => (
-                    <label key={field.key} className="block space-y-1 text-sm text-slate-700">
-                      <div>{field.label}</div>
-                      {renderField(field)}
-                    </label>
-                  ))}
+                  {(activeSection.fields || []).map((field) => {
+                    const inputId = `passport-${String(activeSectionKey || 'section')}-${String(field.key || 'field')}`
+                    const helperText = String(field.helperText || '').trim()
+                    const helperKey = `${String(activeSectionKey || '')}:${String(field.key || '')}`
+                    const isHelperOpen = openHelperFieldKey === helperKey
+                    return (
+                      <div key={field.key} className="block space-y-1 text-sm text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <label htmlFor={inputId}>{field.label}</label>
+                          {helperText && (
+                            <div className="relative" ref={isHelperOpen ? openHelperContainerRef : null}>
+                              <button
+                                type="button"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                                aria-label={`Show help for ${field.label}`}
+                                aria-expanded={isHelperOpen}
+                                aria-controls={`helper-tooltip-${field.key}`}
+                                onClick={() => setOpenHelperFieldKey((prev) => (prev === helperKey ? '' : helperKey))}
+                              >
+                                ?
+                              </button>
+                              {isHelperOpen && (
+                                <div
+                                  id={`helper-tooltip-${field.key}`}
+                                  role="tooltip"
+                                  className="absolute left-0 top-7 z-20 max-w-[260px] rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 shadow-lg"
+                                >
+                                  {helperText}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {renderField(field, inputId)}
+                      </div>
+                    )
+                  })}
                   <div className="pt-2">
                     <button type="button" className="pill-btn-primary px-5" onClick={() => setMode('summary')}>
                       Next

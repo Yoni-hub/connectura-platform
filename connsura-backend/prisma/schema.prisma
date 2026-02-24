@@ -351,6 +351,7 @@ model QuestionBank {
   source     QuestionSource @default(SYSTEM)
   inputType  String         @default("general")
   selectOptions String      @default("[]")
+  helperText String?
   productId  Int?
   customerId Int?
   createdAt  DateTime       @default(now())

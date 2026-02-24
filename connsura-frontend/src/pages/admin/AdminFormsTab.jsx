@@ -103,6 +103,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
   const [mappingSearch, setMappingSearch] = useState('')
   const [selectedMappingQuestionId, setSelectedMappingQuestionId] = useState('')
   const [questionOptionDrafts, setQuestionOptionDrafts] = useState({})
+  const [questionHelperTextDrafts, setQuestionHelperTextDrafts] = useState({})
 
   const handleSessionError = (err, fallbackMessage) => {
     if (err?.response?.status === 401) {
@@ -419,6 +420,23 @@ export default function AdminFormsTab({ onSessionExpired }) {
       toast.success('Saved global choices')
     } catch (err) {
       handleSessionError(err, 'Failed to save select choices')
+    }
+  }
+
+  const saveQuestionHelperText = async (question) => {
+    const key = String(question.id)
+    const draft = questionHelperTextDrafts[key]
+    const helperText = String(draft ?? question.helperText ?? '').trim()
+    try {
+      await adminApi.put(`/admin/questions/${question.id}`, {
+        source: 'SYSTEM',
+        helperText,
+      })
+      await loadQuestions()
+      setQuestionHelperTextDrafts((prev) => ({ ...prev, [key]: helperText }))
+      toast.success(helperText ? 'Saved helper text' : 'Helper text removed')
+    } catch (err) {
+      handleSessionError(err, 'Failed to save helper text')
     }
   }
 
@@ -1038,6 +1056,32 @@ export default function AdminFormsTab({ onSessionExpired }) {
                     </button>
                   </div>
                 )}
+                <div className="mt-2 space-y-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Helper text (tooltip)
+                    <textarea
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm min-h-[84px]"
+                      value={
+                        questionHelperTextDrafts[String(selectedMappingQuestion.id)] ??
+                        String(selectedMappingQuestion.helperText || '')
+                      }
+                      onChange={(event) =>
+                        setQuestionHelperTextDrafts((prev) => ({
+                          ...prev,
+                          [String(selectedMappingQuestion.id)]: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional plain text shown in tooltip next to this question"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="pill-btn-ghost px-3 py-1 text-xs"
+                    onClick={() => saveQuestionHelperText(selectedMappingQuestion)}
+                  >
+                    Save helper text
+                  </button>
+                </div>
               </div>
             </div>
           )}

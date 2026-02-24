@@ -1760,6 +1760,7 @@ router.get('/forms/questions', adminGuard, async (req, res) => {
       id: row.id,
       label: row.text,
       text: row.text,
+      helperText: row.helperText || '',
       type: row.inputType || 'general',
       inputType: row.inputType || 'general',
       options: parseJson(row.selectOptions, []),
@@ -1934,6 +1935,7 @@ router.get('/questions', adminGuard, async (req, res) => {
       text: row.text,
       source: 'SYSTEM',
       productId: row.productId,
+      helperText: row.helperText || '',
       inputType: row.inputType || 'general',
       selectOptions: parseJson(row.selectOptions, []),
       customerId: null,
@@ -1946,6 +1948,7 @@ router.get('/questions', adminGuard, async (req, res) => {
       text: row.text,
       source: 'CUSTOMER',
       productId: row.productId,
+      helperText: '',
       inputType: 'general',
       selectOptions: [],
       customerId: row.customerId,
@@ -2070,6 +2073,7 @@ router.post('/questions', adminGuard, async (req, res) => {
         text: question.text,
         source: question.source,
         productId: question.productId,
+        helperText: question.helperText || '',
         inputType: question.inputType || 'general',
         selectOptions: parseJson(question.selectOptions, []),
       })),
@@ -2118,6 +2122,7 @@ router.post('/questions', adminGuard, async (req, res) => {
         text: question.text,
         source: question.source,
         productId: question.productId,
+        helperText: question.helperText || '',
         inputType: question.inputType || 'general',
         selectOptions: parseJson(question.selectOptions, []),
     })),
@@ -2181,6 +2186,7 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
         source: 'CUSTOMER',
         productId: updated.productId,
         formName: updated.formName,
+        helperText: '',
         inputType: 'general',
         selectOptions: [],
       },
@@ -2194,10 +2200,15 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
   const nextSelectOptions = hasSelectOptions
     ? normalizeSelectOptions(req.body?.selectOptions)
     : parseJson(existing.selectOptions, [])
+  const hasHelperText = Object.prototype.hasOwnProperty.call(req.body || {}, 'helperText')
+  const nextHelperText = hasHelperText ? String(req.body?.helperText || '').trim() : null
   const nextText = String(req.body?.text || '').trim()
   const data = {
     inputType: nextInputType,
     selectOptions: JSON.stringify(nextSelectOptions),
+  }
+  if (hasHelperText) {
+    data.helperText = nextHelperText || null
   }
   if (nextText) {
     const normalized = normalizeQuestion(nextText)
@@ -2212,6 +2223,7 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
   await logAudit(req.admin.id, 'QuestionBank', id, 'update', {
     text: nextText || updated.text,
     inputType: nextInputType,
+    ...(hasHelperText ? { helperText: nextHelperText || null } : {}),
   })
   res.json({
     question: {
@@ -2219,6 +2231,7 @@ router.put('/questions/:id', adminGuard, async (req, res) => {
       text: updated.text,
       source: updated.source,
       productId: updated.productId,
+      helperText: updated.helperText || '',
       inputType: updated.inputType || 'general',
       selectOptions: parseJson(updated.selectOptions, []),
     },
