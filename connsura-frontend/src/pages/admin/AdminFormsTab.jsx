@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../services/adminApi'
 
@@ -99,13 +99,15 @@ export default function AdminFormsTab({ onSessionExpired }) {
   const [selectedSectionKey, setSelectedSectionKey] = useState('')
   const [newSectionLabel, setNewSectionLabel] = useState('')
   const [selectedSharedSectionKey, setSelectedSharedSectionKey] = useState('')
+  const [editingSectionKey, setEditingSectionKey] = useState('')
+  const [editingSectionLabel, setEditingSectionLabel] = useState('')
 
   const [mappingSearch, setMappingSearch] = useState('')
   const [selectedMappingQuestionId, setSelectedMappingQuestionId] = useState('')
   const [questionOptionDrafts, setQuestionOptionDrafts] = useState({})
   const [questionHelperTextDrafts, setQuestionHelperTextDrafts] = useState({})
 
-  const handleSessionError = (err, fallbackMessage) => {
+  const handleSessionError = useCallback((err, fallbackMessage) => {
     if (err?.response?.status === 401) {
       if (typeof onSessionExpired === 'function') onSessionExpired()
       toast.error('Session expired')
@@ -113,26 +115,27 @@ export default function AdminFormsTab({ onSessionExpired }) {
     }
     toast.error(err?.response?.data?.error || fallbackMessage)
     return false
-  }
+  }, [onSessionExpired])
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     setProductsLoading(true)
     try {
       const res = await adminApi.get('/admin/forms/products')
       const list = Array.isArray(res.data?.products) ? res.data.products : []
       setProducts(list)
-      const hasSelected = list.some((item) => String(item.id) === String(selectedProductId))
-      if (!hasSelected) {
-        setSelectedProductId(list.length ? String(list[0].id) : '')
-      }
+      setSelectedProductId((prev) => {
+        const hasSelected = list.some((item) => String(item.id) === String(prev))
+        if (hasSelected) return prev
+        return list.length ? String(list[0].id) : ''
+      })
     } catch (err) {
       handleSessionError(err, 'Failed to load products')
     } finally {
       setProductsLoading(false)
     }
-  }
+  }, [handleSessionError])
 
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
     setQuestionsLoading(true)
     try {
       const res = await adminApi.get('/admin/forms/questions')
@@ -143,25 +146,23 @@ export default function AdminFormsTab({ onSessionExpired }) {
     } finally {
       setQuestionsLoading(false)
     }
-  }
+  }, [handleSessionError])
 
-  const loadSharedSections = async () => {
+  const loadSharedSections = useCallback(async () => {
     setSharedSectionsLoading(true)
     try {
       const res = await adminApi.get('/admin/forms/sections')
       const librarySections = normalizeSections(res.data?.schema)
       setSharedSections(librarySections)
-      if (!selectedSharedSectionKey) {
-        setSelectedSharedSectionKey(librarySections[0]?.key || '')
-      }
+      setSelectedSharedSectionKey((prev) => prev || librarySections[0]?.key || '')
     } catch (err) {
       handleSessionError(err, 'Failed to load shared sections')
     } finally {
       setSharedSectionsLoading(false)
     }
-  }
+  }, [handleSessionError])
 
-  const deduplicateUnusedQuestionsForProduct = async (productId) => {
+  const deduplicateUnusedQuestionsForProduct = useCallback(async (productId) => {
     const numericProductId = Number(productId)
     if (!Number.isInteger(numericProductId) || numericProductId <= 0) return
     try {
@@ -174,18 +175,18 @@ export default function AdminFormsTab({ onSessionExpired }) {
     } catch (err) {
       handleSessionError(err, 'Failed to remove duplicated questions')
     }
-  }
+  }, [handleSessionError, loadQuestions])
 
   useEffect(() => {
     loadProducts()
     loadQuestions()
     loadSharedSections()
-  }, [])
+  }, [loadProducts, loadQuestions, loadSharedSections])
 
   useEffect(() => {
     if (!selectedProductId) return
     deduplicateUnusedQuestionsForProduct(selectedProductId)
-  }, [selectedProductId])
+  }, [selectedProductId, deduplicateUnusedQuestionsForProduct])
 
   const selectedProduct = useMemo(
     () => products.find((item) => String(item.id) === String(selectedProductId)) || null,
@@ -197,12 +198,16 @@ export default function AdminFormsTab({ onSessionExpired }) {
       setSectionsDraft([])
       setSelectedSectionKey('')
       setSelectedMappingQuestionId('')
+      setEditingSectionKey('')
+      setEditingSectionLabel('')
       return
     }
     const nextSections = normalizeSections(selectedProduct.formSchema)
     setSectionsDraft(nextSections)
     setSelectedSectionKey(nextSections[0]?.key || '')
     setSelectedMappingQuestionId('')
+    setEditingSectionKey('')
+    setEditingSectionLabel('')
   }, [selectedProduct])
 
   const selectedSection = useMemo(
@@ -642,8 +647,36 @@ export default function AdminFormsTab({ onSessionExpired }) {
       if (selectedSectionKey === sectionKey) {
         setSelectedSectionKey(next[0]?.key || '')
       }
+      if (editingSectionKey === sectionKey) {
+        setEditingSectionKey('')
+        setEditingSectionLabel('')
+      }
       return next
     })
+  }
+
+  const startEditingSection = (section) => {
+    if (!section?.key) return
+    setEditingSectionKey(section.key)
+    setEditingSectionLabel(String(section.label || '').trim())
+  }
+
+  const cancelEditingSection = () => {
+    setEditingSectionKey('')
+    setEditingSectionLabel('')
+  }
+
+  const saveEditedSectionLabel = (sectionKey) => {
+    const label = String(editingSectionLabel || '').trim()
+    if (!label) {
+      toast.error('Enter a section name')
+      return
+    }
+    setSectionsDraft((prev) =>
+      prev.map((section) => (section.key === sectionKey ? { ...section, label } : section))
+    )
+    cancelEditingSection()
+    toast.success('Section name updated')
   }
 
   const moveSection = (sectionKey, direction) => {
@@ -818,17 +851,64 @@ export default function AdminFormsTab({ onSessionExpired }) {
                       : 'border-slate-200 bg-white'
                   }`}
                 >
-                  <button
-                    type="button"
-                    className="text-left font-semibold text-slate-800"
-                    onClick={() => setSelectedSectionKey(section.key)}
-                  >
-                    {section.label}
-                    {section.sourceSectionKey && (
-                      <span className="ml-2 text-xs font-normal text-slate-500">shared: {section.sourceSectionKey}</span>
-                    )}
-                  </button>
+                  {editingSectionKey === section.key ? (
+                    <div className="mr-2 flex-1">
+                      <input
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                        value={editingSectionLabel}
+                        onChange={(event) => setEditingSectionLabel(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            saveEditedSectionLabel(section.key)
+                          } else if (event.key === 'Escape') {
+                            event.preventDefault()
+                            cancelEditingSection()
+                          }
+                        }}
+                        placeholder="Enter section name"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-left font-semibold text-slate-800"
+                      onClick={() => setSelectedSectionKey(section.key)}
+                    >
+                      {section.label}
+                      {section.sourceSectionKey && (
+                        <span className="ml-2 text-xs font-normal text-slate-500">shared: {section.sourceSectionKey}</span>
+                      )}
+                    </button>
+                  )}
                   <div className="flex items-center gap-1">
+                    {editingSectionKey === section.key ? (
+                      <>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
+                          onClick={() => saveEditedSectionLabel(section.key)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
+                          onClick={cancelEditingSection}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="pill-btn-ghost px-2 py-1 text-xs"
+                        onClick={() => startEditingSection(section)}
+                      >
+                        Edit
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="pill-btn-ghost px-2 py-1 text-xs"
