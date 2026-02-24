@@ -646,6 +646,20 @@ export default function AdminFormsTab({ onSessionExpired }) {
     })
   }
 
+  const moveSection = (sectionKey, direction) => {
+    setSectionsDraft((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : []
+      const index = list.findIndex((section) => section.key === sectionKey)
+      if (index === -1) return prev
+      const nextIndex = index + direction
+      if (nextIndex < 0 || nextIndex >= list.length) return prev
+      const temp = list[index]
+      list[index] = list[nextIndex]
+      list[nextIndex] = temp
+      return list
+    })
+  }
+
   const inputClass = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
   const normalizedMappingSearch = mappingSearch.trim().toLowerCase()
   const filteredMappingQuestions = questions.filter((question) => {
@@ -795,7 +809,7 @@ export default function AdminFormsTab({ onSessionExpired }) {
               </button>
             </div>
             <div className="mt-3 space-y-2">
-              {sectionsDraft.map((section) => (
+              {sectionsDraft.map((section, index) => (
                 <div
                   key={section.key}
                   className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
@@ -814,13 +828,31 @@ export default function AdminFormsTab({ onSessionExpired }) {
                       <span className="ml-2 text-xs font-normal text-slate-500">shared: {section.sourceSectionKey}</span>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-red-600"
-                    onClick={() => removeSection(section.key)}
-                  >
-                    Remove
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-2 py-1 text-xs"
+                      onClick={() => moveSection(section.key, -1)}
+                      disabled={index === 0}
+                    >
+                      Up
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-btn-ghost px-2 py-1 text-xs"
+                      onClick={() => moveSection(section.key, 1)}
+                      disabled={index === sectionsDraft.length - 1}
+                    >
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-red-600"
+                      onClick={() => removeSection(section.key)}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
               {!sectionsDraft.length && (

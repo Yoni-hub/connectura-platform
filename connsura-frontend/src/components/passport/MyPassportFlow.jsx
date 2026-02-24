@@ -733,13 +733,13 @@ export default function MyPassportFlow({
                                 aria-controls={`helper-tooltip-${field.key}`}
                                 onClick={() => setOpenHelperFieldKey((prev) => (prev === helperKey ? '' : helperKey))}
                               >
-                                ?
+                                i
                               </button>
                               {isHelperOpen && (
                                 <div
                                   id={`helper-tooltip-${field.key}`}
                                   role="tooltip"
-                                  className="absolute left-0 top-7 z-20 max-w-[260px] rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 shadow-lg"
+                                  className="absolute left-0 top-7 z-20 w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 shadow-lg"
                                 >
                                   {helperText}
                                 </div>
