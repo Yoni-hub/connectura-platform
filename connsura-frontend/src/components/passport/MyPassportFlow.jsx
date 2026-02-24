@@ -92,8 +92,10 @@ export default function MyPassportFlow({
   const [collapsedSummaryCards, setCollapsedSummaryCards] = useState({})
   const [collapsedSummaryProducts, setCollapsedSummaryProducts] = useState({})
   const [openHelperFieldKey, setOpenHelperFieldKey] = useState('')
+  const [helperTooltipOffsetX, setHelperTooltipOffsetX] = useState(0)
   const saveTimersRef = useRef({})
   const openHelperContainerRef = useRef(null)
+  const openHelperTooltipRef = useRef(null)
 
   const sections = useMemo(() => (Array.isArray(form?.sections) ? form.sections : []), [form?.sections])
   const activeSection = sections[sectionIndex] || null
@@ -305,6 +307,36 @@ export default function MyPassportFlow({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
+    }
+  }, [openHelperFieldKey])
+
+  useEffect(() => {
+    if (!openHelperFieldKey) {
+      setHelperTooltipOffsetX(0)
+      return undefined
+    }
+
+    const clampTooltipToViewport = () => {
+      if (!openHelperTooltipRef.current) return
+      const rect = openHelperTooltipRef.current.getBoundingClientRect()
+      const margin = 8
+      let nextOffset = 0
+      if (rect.right > window.innerWidth - margin) {
+        nextOffset -= rect.right - (window.innerWidth - margin)
+      }
+      if (rect.left < margin) {
+        nextOffset += margin - rect.left
+      }
+      setHelperTooltipOffsetX(Math.round(nextOffset))
+    }
+
+    const frame = requestAnimationFrame(clampTooltipToViewport)
+    window.addEventListener('resize', clampTooltipToViewport)
+    window.addEventListener('scroll', clampTooltipToViewport, true)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', clampTooltipToViewport)
+      window.removeEventListener('scroll', clampTooltipToViewport, true)
     }
   }, [openHelperFieldKey])
 
@@ -739,7 +771,9 @@ export default function MyPassportFlow({
                                 <div
                                   id={`helper-tooltip-${field.key}`}
                                   role="tooltip"
+                                  ref={openHelperTooltipRef}
                                   className="absolute left-0 top-7 z-20 w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 shadow-lg"
+                                  style={{ transform: `translateX(${helperTooltipOffsetX}px)` }}
                                 >
                                   {helperText}
                                 </div>
