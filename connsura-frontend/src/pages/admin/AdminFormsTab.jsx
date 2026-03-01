@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../services/adminApi'
+import { API_URL } from '../../services/api'
 
 const INPUT_TYPES = ['general', 'select', 'yes/no', 'number', 'date', 'text']
 const normalizeInputType = (value = '') => {
@@ -94,6 +95,11 @@ export default function AdminFormsTab({ onSessionExpired }) {
   const [savingQuestions, setSavingQuestions] = useState(false)
   const [savingSchema, setSavingSchema] = useState(false)
   const [savingSharedSections, setSavingSharedSections] = useState(false)
+  const [editingQuestionId, setEditingQuestionId] = useState('')
+  const [editingQuestionText, setEditingQuestionText] = useState('')
+  const [savingQuestionId, setSavingQuestionId] = useState('')
+  const [removingQuestionId, setRemovingQuestionId] = useState('')
+  const [questionBankSearch, setQuestionBankSearch] = useState('')
 
   const [sectionsDraft, setSectionsDraft] = useState([])
   const [selectedSectionKey, setSelectedSectionKey] = useState('')
@@ -445,6 +451,89 @@ export default function AdminFormsTab({ onSessionExpired }) {
     }
   }
 
+  const startEditingQuestion = (question) => {
+    const questionId = String(question?.id || '')
+    if (!questionId) return
+    setEditingQuestionId(questionId)
+    setEditingQuestionText(String(question?.text || question?.label || '').trim())
+  }
+
+  const cancelEditingQuestion = () => {
+    setEditingQuestionId('')
+    setEditingQuestionText('')
+  }
+
+  const saveEditedQuestionText = async (questionId) => {
+    const id = Number(questionId)
+    if (!Number.isInteger(id) || id <= 0) return
+    const text = String(editingQuestionText || '').trim()
+    if (!text) {
+      toast.error('Enter a question')
+      return
+    }
+    setSavingQuestionId(String(id))
+    try {
+      await adminApi.put(`/admin/questions/${id}`, { source: 'SYSTEM', text })
+      await loadQuestions()
+      cancelEditingQuestion()
+      toast.success('Question updated')
+    } catch (err) {
+      handleSessionError(err, 'Failed to update question')
+    } finally {
+      setSavingQuestionId('')
+    }
+  }
+
+  const removeQuestion = async (question) => {
+    const id = Number(question?.id)
+    if (!Number.isInteger(id) || id <= 0) return
+    const usageCount = countQuestionMappings(id)
+    const confirmed = window.confirm(
+      usageCount > 0
+        ? `Remove question "${question?.text || question?.label || `#${id}`}"? It is currently mapped in ${usageCount} section${usageCount === 1 ? '' : 's'}.`
+        : `Remove question "${question?.text || question?.label || `#${id}`}"?`
+    )
+    if (!confirmed) return
+
+    setRemovingQuestionId(String(id))
+    try {
+      await adminApi.delete(`/admin/questions/${id}`, { params: { source: 'SYSTEM' } })
+      setSectionsDraft((prev) =>
+        prev.map((section) => {
+          const nextQuestionIds = Array.isArray(section.questionIds)
+            ? section.questionIds.filter((questionId) => Number(questionId) !== id)
+            : []
+          const rawOverrides =
+            section.questionOverrides && typeof section.questionOverrides === 'object'
+              ? section.questionOverrides
+              : {}
+          const nextOverrides = Object.entries(rawOverrides).reduce((acc, [questionId, config]) => {
+            if (Number(questionId) === id) return acc
+            acc[questionId] = config
+            return acc
+          }, {})
+          return {
+            ...section,
+            questionIds: nextQuestionIds,
+            ...(Object.keys(nextOverrides).length ? { questionOverrides: nextOverrides } : {}),
+          }
+        })
+      )
+      if (String(selectedMappingQuestionId) === String(id)) {
+        setSelectedMappingQuestionId('')
+      }
+      if (String(editingQuestionId) === String(id)) {
+        cancelEditingQuestion()
+      }
+      await loadQuestions()
+      toast.success('Question removed')
+    } catch (err) {
+      handleSessionError(err, 'Failed to remove question')
+    } finally {
+      setRemovingQuestionId('')
+    }
+  }
+
   const toggleMappedQuestion = (questionId) => {
     if (!selectedSection) {
       toast.error('Select a section first')
@@ -695,6 +784,13 @@ export default function AdminFormsTab({ onSessionExpired }) {
 
   const inputClass = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm'
   const normalizedMappingSearch = mappingSearch.trim().toLowerCase()
+  const normalizedQuestionBankSearch = questionBankSearch.trim().toLowerCase()
+  const filteredQuestionBankQuestions = questions.filter((question) => {
+    if (!normalizedQuestionBankSearch) return true
+    const text = String(question.text || question.label || '').toLowerCase()
+    const id = String(question.id || '')
+    return text.includes(normalizedQuestionBankSearch) || id.includes(normalizedQuestionBankSearch)
+  })
   const filteredMappingQuestions = questions.filter((question) => {
     if (!normalizedMappingSearch) return true
     const text = String(question.text || question.label || '').toLowerCase()
@@ -752,6 +848,10 @@ export default function AdminFormsTab({ onSessionExpired }) {
       <div>
         <h2 className="text-xl font-semibold">Forms Content Manager</h2>
         <p className="text-slate-600">Manage products, sections, question bank, input types, and mapping.</p>
+        <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+          <span className="font-semibold uppercase tracking-wide">API URL</span>
+          <code className="truncate">{API_URL}</code>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 md:items-start">
@@ -970,6 +1070,100 @@ export default function AdminFormsTab({ onSessionExpired }) {
             >
               {savingQuestions ? 'Adding...' : 'Add Questions'}
             </button>
+          </div>
+          <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Search question bank
+            <input
+              className={inputClass}
+              value={questionBankSearch}
+              onChange={(event) => setQuestionBankSearch(event.target.value)}
+              placeholder="Search by question text or ID"
+            />
+          </label>
+          <div className="mt-3 space-y-2 max-h-[260px] overflow-auto pr-1">
+            {questionsLoading && <div className="text-slate-500">Loading question bank...</div>}
+            {!questionsLoading &&
+              filteredQuestionBankQuestions.map((question) => {
+                const isEditing = String(editingQuestionId) === String(question.id)
+                const isSaving = String(savingQuestionId) === String(question.id)
+                const isRemoving = String(removingQuestionId) === String(question.id)
+                return (
+                  <div
+                    key={`question-bank-${question.id}`}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  >
+                    {isEditing ? (
+                      <div className="mr-2 flex-1">
+                        <input
+                          className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                          value={editingQuestionText}
+                          onChange={(event) => setEditingQuestionText(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              saveEditedQuestionText(question.id)
+                            } else if (event.key === 'Escape') {
+                              event.preventDefault()
+                              cancelEditingQuestion()
+                            }
+                          }}
+                          placeholder="Enter question text"
+                          autoFocus
+                        />
+                      </div>
+                    ) : (
+                      <div className="mr-2 flex-1">
+                        <div className="font-semibold text-slate-800">
+                          #{question.id} {question.text || question.label}
+                        </div>
+                        <div className="text-xs text-slate-500">Type: {question.inputType || 'general'}</div>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-2 py-1 text-xs"
+                            onClick={() => saveEditedQuestionText(question.id)}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn-ghost px-2 py-1 text-xs"
+                            onClick={cancelEditingQuestion}
+                            disabled={isSaving}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pill-btn-ghost px-2 py-1 text-xs"
+                          onClick={() => startEditingQuestion(question)}
+                          disabled={Boolean(removingQuestionId)}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-red-600"
+                        onClick={() => removeQuestion(question)}
+                        disabled={isSaving || isRemoving}
+                      >
+                        {isRemoving ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            {!questionsLoading && filteredQuestionBankQuestions.length === 0 && (
+              <div className="text-slate-500">No questions match your search.</div>
+            )}
           </div>
         </div>
       </div>
