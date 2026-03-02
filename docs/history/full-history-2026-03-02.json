@@ -1,0 +1,275 @@
+{
+  "mode": "full",
+  "period": "Repository inception -> HEAD",
+  "summary": {
+    "total_commits": 189,
+    "authors": [
+      {
+        "name": "yonathan",
+        "count": 189
+      }
+    ],
+    "categories": {
+      "feature": 72,
+      "bugfix": 24,
+      "infra": 16,
+      "other": 64,
+      "security": 8,
+      "refactor": 2,
+      "docs": 3
+    },
+    "top_files": [
+      {
+        "name": "connsura-frontend/src/pages/ClientDashboard.jsx",
+        "count": 52
+      },
+      {
+        "name": "connsura-frontend/src/pages/CreateProfile.jsx",
+        "count": 39
+      },
+      {
+        "name": "connsura-backend/src/routes/admin.js",
+        "count": 30
+      },
+      {
+        "name": "connsura-frontend/src/router/AppRouter.jsx",
+        "count": 29
+      },
+      {
+        "name": "connsura-backend/prisma/schema.prisma",
+        "count": 28
+      },
+      {
+        "name": "connsura-frontend/src/pages/Admin.jsx",
+        "count": 24
+      },
+      {
+        "name": "connsura-backend/login_signup_system/auth.js",
+        "count": 21
+      },
+      {
+        "name": "connsura-frontend/src/pages/AgentDashboard.jsx",
+        "count": 19
+      },
+      {
+        "name": "connsura-backend/src/routes/customers.js",
+        "count": 17
+      },
+      {
+        "name": "automation/ssh/deploy.sh",
+        "count": 15
+      }
+    ],
+    "top_dirs": [
+      {
+        "name": "connsura-frontend",
+        "count": 514
+      },
+      {
+        "name": "connsura-backend",
+        "count": 440
+      },
+      {
+        "name": "connectura-backend",
+        "count": 132
+      },
+      {
+        "name": "connectura-frontend",
+        "count": 131
+      },
+      {
+        "name": "project_memory",
+        "count": 44
+      },
+      {
+        "name": "automation",
+        "count": 34
+      },
+      {
+        "name": "(root)",
+        "count": 27
+      },
+      {
+        "name": "docs",
+        "count": 23
+      },
+      {
+        "name": "connsura-ai-system",
+        "count": 22
+      },
+      {
+        "name": "legal",
+        "count": 19
+      }
+    ],
+    "risk_commits": [
+      {
+        "hash": "64e6ed09a60800e5b1733b9137bb4fcfa058898c",
+        "author": "yonathan",
+        "date": "2026-02-28",
+        "subject": "chore(scripts): add staging form sync helper",
+        "files": [
+          "connsura-backend/scripts/sync-forms-from-staging.js"
+        ]
+      },
+      {
+        "hash": "d4674a1f4e38bf9bcfa16d1d733d82cdfc330c2a",
+        "author": "yonathan",
+        "date": "2026-02-24",
+        "subject": "fix(mobile): prevent input auto-zoom and add SQL helper",
+        "files": [
+          "automation/Invoke-ConnsuraSql.ps1",
+          "automation/README.md",
+          "connsura-frontend/src/index.css"
+        ]
+      },
+      {
+        "hash": "761c45737538de6be2d262084a6b02729efb4b83",
+        "author": "yonathan",
+        "date": "2026-02-23",
+        "subject": "security(auth): add strict request rate limits for login and recovery endpoints",
+        "files": [
+          "connsura-backend/login_signup_system/auth.js"
+        ]
+      },
+      {
+        "hash": "ebebb3e5f26a12bd495d9770e7901f01832f59de",
+        "author": "yonathan",
+        "date": "2026-02-23",
+        "subject": "chore(staging): redirect api subdomain traffic to /api path",
+        "files": [
+          "automation/ssh/provision.sh"
+        ]
+      },
+      {
+        "hash": "af28d094fb11eaea3848c1becbffa886e45dfff4",
+        "author": "yonathan",
+        "date": "2026-02-22",
+        "subject": "Add staging EC2 auto-recovery and reboot alarm runbook",
+        "files": [
+          "automation/README.md",
+          "docs/RUNBOOK.md"
+        ]
+      },
+      {
+        "hash": "5bccb7849f57d328ddeddc1ed29916b09920629e",
+        "author": "yonathan",
+        "date": "2026-02-22",
+        "subject": "Route staging /api paths to backend in nginx",
+        "files": [
+          "automation/ssh/provision.sh"
+        ]
+      },
+      {
+        "hash": "d7dd3f070e70c859f1f784bb80e64cd064b7b1bf",
+        "author": "yonathan",
+        "date": "2026-02-22",
+        "subject": "Fix admin client layout, auth flows, and password policy",
+        "files": [
+          "connsura-ai-system/docs/context-check.md",
+          "connsura-backend/src/utils/passwordPolicy.js",
+          "connsura-frontend/src/components/settings/AuthenticatorPanel.jsx",
+          "connsura-frontend/src/pages/Admin.jsx",
+          "connsura-frontend/src/pages/ClientDashboard.jsx",
+          "connsura-frontend/src/pages/admin/AdminDetailPanel.jsx",
+          "connsura-frontend/src/utils/passwordPolicy.js"
+        ]
+      },
+      {
+        "hash": "b04ec00a8d602e805ba877d817a91f8ffa8f5a96",
+        "author": "yonathan",
+        "date": "2026-02-21",
+        "subject": "feat(auth-ui): add inline password requirement indicators",
+        "files": [
+          "connsura-frontend/src/components/navbar/AuthModal.jsx",
+          "connsura-frontend/src/components/ui/PasswordRequirements.jsx",
+          "connsura-frontend/src/pages/AccountRecovery.jsx",
+          "connsura-frontend/src/pages/ClientDashboard.jsx",
+          "connsura-frontend/src/utils/passwordPolicy.js"
+        ]
+      },
+      {
+        "hash": "4f7504db397469256874595d0403d734054313ed",
+        "author": "yonathan",
+        "date": "2026-02-21",
+        "subject": "security(auth): harden login/password flows and remove admin hash exposure",
+        "files": [
+          "connsura-backend/login_signup_system/auth.js",
+          "connsura-backend/src/routes/admin.js",
+          "connsura-backend/src/utils/loginRateLimit.js",
+          "connsura-backend/src/utils/passwordPolicy.js",
+          "connsura-backend/tests/admin-security.test.js",
+          "connsura-frontend/src/components/navbar/AuthModal.jsx",
+          "connsura-frontend/src/pages/AccountRecovery.jsx",
+          "connsura-frontend/src/pages/Admin.jsx",
+          "connsura-frontend/src/pages/ClientDashboard.jsx",
+          "connsura-frontend/src/pages/admin/AdminDetailPanel.jsx",
+          "connsura-frontend/src/utils/passwordPolicy.js"
+        ]
+      },
+      {
+        "hash": "d3b6a691c4e27ea225a091b6a83e18d4620318d8",
+        "author": "yonathan",
+        "date": "2026-02-20",
+        "subject": "feat(auth): add OTP account recovery and simplify signup consent",
+        "files": [
+          "connsura-backend/login_signup_system/auth.js",
+          "connsura-backend/src/utils/emailOtp.js",
+          "connsura-frontend/src/components/navbar/AuthModal.jsx",
+          "connsura-frontend/src/pages/AccountRecovery.jsx"
+        ]
+      },
+      {
+        "hash": "083abfcb1341ebee7570dd0f469565091172b824",
+        "author": "yonathan",
+        "date": "2026-02-20",
+        "subject": "chore(deploy): use same-origin /api for staging frontend",
+        "files": [
+          "automation/ssh/deploy.sh"
+        ]
+      },
+      {
+        "hash": "4e242d8018b4c20e1caeb7c5a2de47fa781bc86e",
+        "author": "yonathan",
+        "date": "2026-02-18",
+        "subject": "Use prisma migrate deploy in backend deploy entrypoint",
+        "files": [
+          "automation/ssh/deploy.sh",
+          "deploy/entrypoint.backend.sh"
+        ]
+      },
+      {
+        "hash": "619b4fe48b4be32ddf1d751ef031408a5a7646ed",
+        "author": "yonathan",
+        "date": "2026-02-16",
+        "subject": "Remove legacy Agent/Message tables and align global staging rules",
+        "files": [
+          "connsura-ai-system/docs/GLOBAL_RULES.md",
+          "connsura-backend/prisma/migrations/20260217103000_drop_legacy_agent_message_tables/migration.sql"
+        ]
+      },
+      {
+        "hash": "148f93cec99e1a0137084c4ed27f05e0e8a9e03d",
+        "author": "yonathan",
+        "date": "2026-02-16",
+        "subject": "Add form section load and admin OTP lookup",
+        "files": [
+          "connsura-backend/src/routes/customers.js",
+          "connsura-frontend/src/pages/Admin.jsx",
+          "connsura-frontend/src/pages/ClientDashboard.jsx",
+          "connsura-frontend/src/pages/CreateProfile.jsx",
+          "connsura-frontend/src/pages/admin/AdminOtpTab.jsx"
+        ]
+      },
+      {
+        "hash": "2debb27bfcccf9829c46ae90a21ddec85ec90959",
+        "author": "yonathan",
+        "date": "2026-02-15",
+        "subject": "chore(deploy): drop compose version field",
+        "files": [
+          "automation/ssh/deploy.sh"
+        ]
+      }
+    ]
+  }
+}

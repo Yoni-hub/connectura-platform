@@ -1,0 +1,114 @@
+{
+  "mode": "weekly",
+  "period": "Last 7 day(s) -> HEAD",
+  "summary": {
+    "total_commits": 12,
+    "authors": [
+      {
+        "name": "yonathan",
+        "count": 12
+      }
+    ],
+    "categories": {
+      "feature": 9,
+      "bugfix": 2,
+      "infra": 1
+    },
+    "top_files": [
+      {
+        "name": "connsura-frontend/src/pages/admin/AdminFormsTab.jsx",
+        "count": 5
+      },
+      {
+        "name": "connsura-frontend/src/components/passport/MyPassportFlow.jsx",
+        "count": 3
+      },
+      {
+        "name": "connsura-backend/src/my-insurance-passport/passportService.js",
+        "count": 2
+      },
+      {
+        "name": "connsura-backend/src/routes/admin.js",
+        "count": 2
+      },
+      {
+        "name": "connsura-backend/scripts/sync-forms-from-staging.js",
+        "count": 1
+      },
+      {
+        "name": "connsura-frontend/src/pages/Home.jsx",
+        "count": 1
+      },
+      {
+        "name": "automation/Invoke-ConnsuraSql.ps1",
+        "count": 1
+      },
+      {
+        "name": "automation/README.md",
+        "count": 1
+      },
+      {
+        "name": "connsura-frontend/src/index.css",
+        "count": 1
+      },
+      {
+        "name": "connsura-backend/login_signup_system/auth.js",
+        "count": 1
+      }
+    ],
+    "top_dirs": [
+      {
+        "name": "connsura-frontend",
+        "count": 11
+      },
+      {
+        "name": "connsura-backend",
+        "count": 10
+      },
+      {
+        "name": "automation",
+        "count": 3
+      }
+    ],
+    "risk_commits": [
+      {
+        "hash": "64e6ed09a60800e5b1733b9137bb4fcfa058898c",
+        "author": "yonathan",
+        "date": "2026-02-28",
+        "subject": "chore(scripts): add staging form sync helper",
+        "files": [
+          "connsura-backend/scripts/sync-forms-from-staging.js"
+        ]
+      },
+      {
+        "hash": "d4674a1f4e38bf9bcfa16d1d733d82cdfc330c2a",
+        "author": "yonathan",
+        "date": "2026-02-24",
+        "subject": "fix(mobile): prevent input auto-zoom and add SQL helper",
+        "files": [
+          "automation/Invoke-ConnsuraSql.ps1",
+          "automation/README.md",
+          "connsura-frontend/src/index.css"
+        ]
+      },
+      {
+        "hash": "761c45737538de6be2d262084a6b02729efb4b83",
+        "author": "yonathan",
+        "date": "2026-02-23",
+        "subject": "security(auth): add strict request rate limits for login and recovery endpoints",
+        "files": [
+          "connsura-backend/login_signup_system/auth.js"
+        ]
+      },
+      {
+        "hash": "ebebb3e5f26a12bd495d9770e7901f01832f59de",
+        "author": "yonathan",
+        "date": "2026-02-23",
+        "subject": "chore(staging): redirect api subdomain traffic to /api path",
+        "files": [
+          "automation/ssh/provision.sh"
+        ]
+      }
+    ]
+  }
+}

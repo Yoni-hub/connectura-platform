@@ -33,3 +33,9 @@
 - DB data dir: `/opt/connsura/postgres`
 - Backup: `sudo docker compose -f /opt/connsura/app/deploy/docker-compose.yml exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > /opt/connsura/postgres/connsura-$(date +%F).sql`
 - Uploads path: `/opt/connsura/uploads`
+
+## History analysis cadence
+- Weekly scan (Monday 09:00 ET): `powershell -NoProfile -ExecutionPolicy Bypass -File automation\history\run-weekly.ps1`
+- Install weekly scheduler task: `powershell -NoProfile -ExecutionPolicy Bypass -File automation\history\install-weekly-task.ps1`
+- Pre-release review (required before production deploy): `powershell -NoProfile -ExecutionPolicy Bypass -File automation\history\run-release-review.ps1 -RevRange "<last-prod-tag>..HEAD"`
+- Full SOP: `docs/history/HISTORY_ANALYSIS_SOP.md`
