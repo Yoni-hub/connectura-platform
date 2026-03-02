@@ -1,0 +1,62 @@
+﻿[
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\manifest.sha256.json",
+        "bytes":  2747,
+        "sha256":  "D6BBF0D21E909D5FF3675F1990D8C01A43048EFD56E912C0FE846661DD1B1EC4"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\README.txt",
+        "bytes":  785,
+        "sha256":  "5A2679EEF0DC8681B7D4F0B19A9DA839CDE08333F92F7AC23F1022B1BFDDCAAD"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\_export_local.js",
+        "bytes":  3256,
+        "sha256":  "6C821208A3D6AF9F401C213B86A5F9507D4A9FAE597D1706CE8927828D70905E"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5432\\full.sql",
+        "bytes":  1484226,
+        "sha256":  "1CBF6229AD102014E3D8B3E631EFD740D8D8DADAE18BD316A60032157D3E2F62"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5432\\key-tables.sql",
+        "bytes":  0,
+        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5432\\structured-export.json",
+        "bytes":  392234,
+        "sha256":  "BC65C3279F871EBCCBBAA786357CBEC0EA2492E629F493E3DF76682123A8E5A5"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5432\\summary.json",
+        "bytes":  244,
+        "sha256":  "C20B8545EAAB75E216EC3F9EC3115C7DBFD9E34DFF1ED5023F45BBE1E49BE750"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5433\\full.sql",
+        "bytes":  281304,
+        "sha256":  "C25BFF7B23598BFE0E0FA8001B66B6E829F33132E73663678F88ABDC6A066C3C"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5433\\structured-export.json",
+        "bytes":  222422,
+        "sha256":  "083F9C97A3DBB015FC726F9FF280E552B90B58A235CAC2B96035702D458AC6B8"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\local-5433\\summary.json",
+        "bytes":  243,
+        "sha256":  "7382E483954829591523C82DD36C86D010D93151AF5AACFFDF775AD94800837F"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\staging\\full.sql",
+        "bytes":  1441162,
+        "sha256":  "1D2EFBA403AA2338A72CDED2AE66D496FA3CD90265471D5DAF58AFA8335D2A7A"
+    },
+    {
+        "path":  "C:\\Users\\yonat\\OneDrive\\Desktop\\connsura\\backups\\db\\20260302-084647\\staging\\QuestionBank.json",
+        "bytes":  0,
+        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+]
