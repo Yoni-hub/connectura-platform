@@ -2,15 +2,15 @@
   "mode": "weekly",
   "period": "Last 7 day(s) -> HEAD",
   "summary": {
-    "total_commits": 12,
+    "total_commits": 13,
     "authors": [
       {
         "name": "yonathan",
-        "count": 12
+        "count": 13
       }
     ],
     "categories": {
-      "feature": 9,
+      "feature": 10,
       "bugfix": 2,
       "infra": 1
     },
@@ -32,27 +32,27 @@
         "count": 2
       },
       {
-        "name": "connsura-backend/scripts/sync-forms-from-staging.js",
+        "name": "automation/history/history_analysis.py",
         "count": 1
       },
       {
-        "name": "connsura-frontend/src/pages/Home.jsx",
+        "name": "automation/history/install-weekly-task.ps1",
         "count": 1
       },
       {
-        "name": "automation/Invoke-ConnsuraSql.ps1",
+        "name": "automation/history/run-full.ps1",
         "count": 1
       },
       {
-        "name": "automation/README.md",
+        "name": "automation/history/run-release-review.ps1",
         "count": 1
       },
       {
-        "name": "connsura-frontend/src/index.css",
+        "name": "automation/history/run-weekly.ps1",
         "count": 1
       },
       {
-        "name": "connsura-backend/login_signup_system/auth.js",
+        "name": "docs/RUNBOOK.md",
         "count": 1
       }
     ],
@@ -67,7 +67,11 @@
       },
       {
         "name": "automation",
-        "count": 3
+        "count": 8
+      },
+      {
+        "name": "docs",
+        "count": 8
       }
     ],
     "risk_commits": [
